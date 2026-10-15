@@ -28,7 +28,7 @@ export const AHD = {
   short: "A House Divided",
   base: "",
   site: "https://www.ahousedividedgame.com",
-  github: "https://github.com/Egg3901/AHDGame",
+  github: "https://github.com/lakesidegamedev/AHDGame",
   logo: "/ahd-logo.png",
   askGame: "ahd",
   live: true,
@@ -124,7 +124,7 @@ export const SATELLITES = [
     // download page, not the game — its docs describe the shop, not the sim.
     repo: gameRepo("metroforge-native"),
     site: "https://lakesidegames.net/games/metroforge/",
-    github: "https://github.com/Egg3901/metroforge-native",
+    github: "https://github.com/lakesidegamedev/metroforge-native",
     logo: null,
     askGame: "metroforge",
     tagline:
@@ -182,7 +182,7 @@ export const SATELLITES = [
     base: "/g/verdigris",
     repo: gameRepo("verdigris"),
     site: "https://lakesidegames.net/games/verdigris/",
-    github: "https://github.com/Egg3901/verdigris",
+    github: "https://github.com/lakesidegamedev/verdigris",
     logo: null,
     askGame: "verdigris",
     tagline:
@@ -278,7 +278,7 @@ export const EXTRAS = [
     short: "Desktop client",
     base: "/desktop",
     repo: gameRepo("ahd-client"),
-    site: "https://github.com/Egg3901/ahd-client/releases",
+    site: "https://github.com/lakesidegamedev/ahd-client/releases",
     github: null,
     logo: "assets/ahd-logo.png",
     askGame: "ahd",

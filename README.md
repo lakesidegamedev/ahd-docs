@@ -2,7 +2,7 @@
 
 <img src="https://docs.lakesidegames.net/ahd-logo.png" alt="" width="80" align="right">
 
-Design and engineering documentation for [A House Divided](https://github.com/Egg3901/AHDGame), published at [docs.lakesidegames.net](https://docs.lakesidegames.net).
+Design and engineering documentation for [A House Divided](https://github.com/lakesidegamedev/AHDGame), published at [docs.lakesidegames.net](https://docs.lakesidegames.net).
 
 - `design/` covers how every game system works: elections, legislation, parties, the economy, the world.
 - `engineering/` covers architecture, conventions, and contribution guides for the game codebase.

@@ -498,9 +498,9 @@ const glossJs = String.raw`
 // Live source-file viewer: fetch from GitHub raw at click time, highlight, line-link.
 const srcJs = String.raw`
 (function(){
-  var RAW='https://raw.githubusercontent.com/Egg3901/AHDGame/main/';
-  var GH='https://github.com/Egg3901/AHDGame/blob/main/';
-  var PR='https://github.com/Egg3901/AHDGame/pull/';
+  var RAW='https://raw.githubusercontent.com/lakesidegamedev/AHDGame/main/';
+  var GH='https://github.com/lakesidegamedev/AHDGame/blob/main/';
+  var PR='https://github.com/lakesidegamedev/AHDGame/pull/';
   var modal=document.getElementById('src-modal'); if(!modal) return;
   var metaEl=document.getElementById('src-meta');
   var META={}; try{META=JSON.parse(metaEl?metaEl.textContent:'{}');}catch(e){}
@@ -677,7 +677,7 @@ const shell = ({ title, body, activeHref, toc, desc, srcMeta }) => `<!doctype ht
 <div class="layout${toc ? " with-toc" : ""}">
 <nav class="side">${navHtml(activeHref)}</nav>
 <main>${body}
-<footer><span>© Lakeside Games</span><a href="https://github.com/Egg3901/AHDGame">Source on GitHub</a><a href="https://www.ahousedividedgame.com">ahousedividedgame.com</a></footer>
+<footer><span>© Lakeside Games</span><a href="https://github.com/lakesidegamedev/AHDGame">Source on GitHub</a><a href="https://www.ahousedividedgame.com">ahousedividedgame.com</a></footer>
 </main>
 ${toc || ""}</div>
 ${askFabHtml(askHref(AHD))}
@@ -710,7 +710,7 @@ ${askFabHtml(askHref(AHD))}
         <div class="sm-meta" id="sm-fresh"></div>
       </div>
       <div class="sm-actions">
-        <a id="sm-gh" class="sm-gh" href="https://github.com/Egg3901/AHDGame" target="_blank" rel="noopener">View on GitHub</a>
+        <a id="sm-gh" class="sm-gh" href="https://github.com/lakesidegamedev/AHDGame" target="_blank" rel="noopener">View on GitHub</a>
         <button type="button" id="sm-close" class="rm-ghost" aria-label="Close">Close</button>
       </div>
     </div>
@@ -881,7 +881,7 @@ const home = `
 <div><h1>A House Divided Docs</h1>
 <p>Everything about the multiplayer political and economic simulation, in one place: the player wiki, the design docs behind every mechanic, and the engineering guides for contributors.</p>
 <div class="cta"><a class="primary" href="https://www.ahousedividedgame.com">Play the game</a>
-<a class="ghost" href="https://github.com/Egg3901/AHDGame">Source on GitHub</a>
+<a class="ghost" href="https://github.com/lakesidegamedev/AHDGame">Source on GitHub</a>
 <a class="ghost" href="/api/public-v1.html">Public API</a></div></div></div>
 ${homeSec("wiki", "Player Wiki", "How to play: the same guides that ship inside the game, from your first character to advanced strategy.")}
 ${homeSec("design", "Game Design", "How every system works under the hood: elections, legislation, parties, the economy, and the world.")}
