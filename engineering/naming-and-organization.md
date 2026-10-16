@@ -44,7 +44,7 @@ This document captures naming conventions, explains confusing directory pairs, a
 | Item                              | Reason                                                                                                                                                                                                                                  |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Dual `candidateEnrichment.ts`** | One in `electionEngine/` (DB-fetch for vote calc), one in `elections/` (in-memory for API). Different roles; clarifying comment in each file is preferable to rename.                                                                   |
-| **Seed script naming**            | `seedBudgets.ts` (camelCase, lives in `src/app/api/admin/seed/handlers/`) vs `seed-*.ts` (kebab-case in `scripts/`). Low impact.                                                                                                        |
+| **Seed script naming**            | `seedBudgets.ts` (camelCase, lives in `src/lib/admin/seed/`) vs `seed-*.ts` (kebab-case in `scripts/`). Low impact.                                                                                                        |
 | **`src/lib/data/`**               | 8 files of historical election-results reference data (`1952ElectionResults.ts` through `2024ElectionResults.ts`, plus `historicalPresidentialMargins.ts`). Could move to `constants/` but is reference data, not tunables. Low impact. |
 
 ---
@@ -75,7 +75,7 @@ This document captures naming conventions, explains confusing directory pairs, a
 
 | Context              | Convention                                        | Example                                    |
 | -------------------- | ------------------------------------------------- | ------------------------------------------ |
-| Route handlers       | `route.ts` (Next.js App Router)                   | `src/app/api/elections/[id]/route.ts`      |
+| Route handlers       | `route.ts` (Next.js App Router)                   | `src/app/api/elections/[id]/campaigns/route.ts`      |
 | Turn phases          | camelCase                                         | `electionResolution.ts`, `campaignTurn.ts` |
 | DB types             | camelCase, matches collection                     | `electionCandidate.ts`                     |
 | Test files           | co-located `*.test.ts` or `*.integration.test.ts` | `electionResolution.test.ts`               |

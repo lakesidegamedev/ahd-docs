@@ -245,7 +245,7 @@ States without a `stateResourceCapacity` document are "uncapped" (legacy/pre-mig
 - `src/lib/constants/corporations.ts`, `RD_*` constants, `calcRdGrowth`, `calcRdScoreAfterTurn`
 - `src/lib/corporations/strengthProjection.ts`, net-change projection for the corp page header
 - `src/lib/api/schemas/corporations.ts`, settings validation (`rdBudget`)
-- `src/components/corporation/ceo/CeoBudgetSubtab.tsx`, CEO budget slider + projection readout
+- `src/components/corporation/ceo/CeoBudgetPanel.tsx` (inside the single-screen `CeoOfficeTab.tsx`), CEO budget slider + projection readout
 
 ### Production Policy (implemented)
 
