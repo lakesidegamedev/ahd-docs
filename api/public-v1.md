@@ -34,6 +34,7 @@ You can have up to 3 active keys per scope type. The full token is shown only on
 | Fund transfers          | 20 req/min per account                                       |
 | Forex trades            | 30 req/min per account                                       |
 | Key introspection       | 30 req/min per key (`GET /api/v1/key`)                       |
+| Key management          | 10 req/min per account (creating and rotating keys in Settings) |
 
 Read limits are counted per key owner and per endpoint bucket, so two keys on one account share an allowance, and polling `/game` does not use up the allowance for `/elections`. The Supporter+ and Supporter++ multipliers apply while the pledge is active; plain Supporter keeps the base allowance. A pledge change takes effect within one minute.
 
