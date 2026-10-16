@@ -121,7 +121,7 @@ After a successful PATCH, the server calls `emit({ type: "theme_changed", ... })
 
 ## No SSE Event Stream
 
-**`GET /api/events` is not an SSE endpoint.** It is a REST resource for the in-game "events" (crisis/random-event) system, `GET /api/events/active`, `GET /api/events/[id]`, unrelated to real-time client sync. There is no `text/event-stream` endpoint anywhere in the public API surface, and no `EventSource`-based integration is possible today.
+**`GET /api/events` is not an SSE endpoint.** It is a REST resource for the in-game "events" (crisis/random-event) system, `GET /api/events/active` and `POST /api/events/[id]/resolve`, unrelated to real-time client sync. There is no `text/event-stream` endpoint anywhere in the public API surface, and no `EventSource`-based integration is possible today.
 
 For turn updates, election results, and any other near-real-time state, **poll the relevant REST endpoint** (see Polling Recommendations below) rather than expecting a push channel.
 

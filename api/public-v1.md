@@ -26,12 +26,17 @@ You can have up to 3 active keys per scope type. The full token is shown only on
 
 ## Rate limits
 
-| Category       | Limit              |
-| -------------- | ------------------ |
-| Public read    | 60 req/min per key |
-| Fund transfers | 20 req/min per key |
-| Forex trades   | 30 req/min per key |
-| Key management | 10 req/min         |
+| Category                | Limit                                                        |
+| ----------------------- | ------------------------------------------------------------ |
+| Public read             | 60 req/min per account, per endpoint, for a base key          |
+| Public read (Supporter+)  | 90 req/min per account, per endpoint (1.5x)                 |
+| Public read (Supporter++) | 180 req/min per account, per endpoint (3x)                  |
+| Fund transfers          | 20 req/min per account                                       |
+| Forex trades            | 30 req/min per account                                       |
+| Key introspection       | 30 req/min per key (`GET /api/v1/key`)                       |
+| Key management          | 10 req/min per account (creating and rotating keys in Settings) |
+
+Read limits are counted per key owner and per endpoint bucket, so two keys on one account share an allowance, and polling `/game` does not use up the allowance for `/elections`. The Supporter+ and Supporter++ multipliers apply while the pledge is active; plain Supporter keeps the base allowance. A pledge change takes effect within one minute.
 
 Rate-limited responses return HTTP 429 with a `Retry-After` header (seconds).
 
@@ -637,6 +642,28 @@ curl -H "X-API-Key: $AHD_API_KEY" \
   https://ahousedividedgame.com/api/public/v1/openapi.json
 ```
 
+### GET /api/public/v1/cdn
+
+Machine-readable catalog of the public static asset CDN, so clients can build image URLs instead of hardcoding the bucket layout. The key gates this directory document only; the assets themselves are public files.
+
+Response: `ok`, `cdnBase`, `urlPattern` (`{cdnBase}/static/{category}/{slug}.{ext}`), `defaultExtension` (`webp`), `categories[]` of `{ name, description, urlTemplates[], slugs?, notes? }`, and `assets` with named, fully resolved URLs and slug sets. A category asserts the URL scheme, not that every possible slug exists.
+
+### GET /api/v1/leaderboard[?metric=influence|favorability|funds][&country=CODE][&limit=N][&playersOnly=true]
+
+Top politicians in one country by Political Influence (default), favorability or campaign funds. No key is required. `country` defaults to `US`; `limit` defaults to 10 (1 to 50). `funds` values are in that country's currency.
+
+Response: `metric`, `country`, `nativeCurrencyCode`, `playersOnly`, `limit`, and `entries[]` of `{ id, sequentialId, name, party, homeState, currentOffice, avatarUrl, value, isNPP }`.
+
+### GET /api/v1/leaderboard/legacy[?scope=all|current][&rankBy=legacy|netWorth]
+
+Cross-iteration career records: each account's strongest political or business career plus lifetime laws, contest results and achievements. No key is required; signed-in callers also get their own rank.
+
+### GET /api/v1/key
+
+Describes the key you send: works with any scope and only ever returns the presenting key. Rate limit 30 req/min per key, separate from transfer and forex quotas.
+
+Response: `success`, `key: { id, name, prefix, scope, createdAt, lastUsedAt, requestCount, revokeAt }`, `ownerUserId`, and `allowedOperations` (`["read"]` for public keys, `["read", "transfer", "forex"]` for private keys). `revokeAt` is set while a rotation grace window is running; the key stops working at that time.
+
 ## Private endpoints (send funds and forex)
 
 Require a **private** personal API key. All in-game restrictions apply identically to API requests.
@@ -673,7 +700,7 @@ Request body:
 { "fromCurrency": "USD", "toCurrency": "GBP", "amount": 1000 }
 ```
 
-Response: `success`, `trade.fromCurrency`, `trade.toCurrency`, `trade.fromAmount`, `trade.toAmount`, `trade.effectiveRate`, `trade.spreadCharged` (0.275% spread; 50% destroyed, 50% to central bank).
+Response: `success`, `trade.fromCurrency`, `trade.toCurrency`, `trade.fromAmount`, `trade.toAmount`, `trade.effectiveRate`, `trade.spreadCharged`. The base market spread is 1%, scaled by the source currency's central-bank spread strength (0.5x to 1.5x). Player trades also pay a size and liquidity adjustment: larger recent trading and thinly traded pairs cost more, and splitting a trade does not avoid it. Of the fee, 50% is destroyed and 50% goes to the central bank.
 
 Restrictions:
 
