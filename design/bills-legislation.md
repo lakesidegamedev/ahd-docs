@@ -203,7 +203,7 @@ The turn processor runs `processBillLifecycle()` every turn; all status transiti
 
 - Each **provision** has a legislation type with an optional `effectTarget` (metric category + metric id + scope). When the bill is signed, `applyLegislationEffect()` applies a small delta (see `getLegislationEffectDelta` in `shared/constants/formulas.ts`) to that metric for all states (national) or per-state.
 - Bills with multiple provisions apply each provision’s effect in sequence.
-- Legislation types are seeded via `scripts/seeds/legislationTypes.ts` (`npm run seed:legislation`). Base policy (national and state) is seeded via `scripts/seeds/basePolicies.ts` and `scripts/seed-policies.ts` (`npm run seed:policies` or `npm run seed:policies:reset`).
+- Legislation types are seeded via `scripts/seeds/legislationTypes.ts` (`npm run seed:legislation`). Base policy (national and state) is seeded via `scripts/seeds/basePolicies.ts` and `scripts/seed/seed-policies.ts` (`npm run seed:policies` or `npm run seed:policies:reset`).
 
 ### Archetype Approval Impacts
 

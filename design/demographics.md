@@ -257,7 +257,7 @@ Demographic turnout processing occurs in **sequential order** during turn proces
 
 - `src/lib/db/types/stateDemographicTurnout.ts`, StateDemographicTurnout type
 - `src/lib/db/types/partyBudget.ts`, PartyBudget type (discriminated union)
-- `src/lib/db/collections.ts`, Collection getters
+- `src/lib/db/collections/`, Collection getters
 
 **Tests**:
 
