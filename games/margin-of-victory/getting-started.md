@@ -8,15 +8,15 @@ https://lakesidegames.net/games/electioneer/
 
 The product page is https://lakesidegames.net/margin-of-victory/. Native phone and desktop apps are in development.
 
-Campaigns are saved in your browser as you play. Sign in with a Lakeside account to keep cloud saves, appear on leaderboards and use what you bought on every device.
+Campaigns are saved in your browser as you play. Sign in with a Lakeside account to keep cloud saves, appear on leaderboards and use your supporter access on every device.
 
 ## What it costs
 
 - **Free for everyone:** the 2024 and 2020 US elections and the daily challenge.
-- **Country bundles:** every other country, and the historical US elections, come as one-time bundles from the store. The Complete Collection unlocks all 49 elections.
-- **Supporters:** Supporter+ and Supporter++ members get the Complete Collection.
+- **Every election:** [Supporter+ and Supporter++](https://lakesidegames.net/store/#supporter-plans) unlock all 49 elections while the plan is active. Sign in with the same Lakeside account in the game.
+- **Earlier purchases:** bundles or codes you already have stay yours and keep working.
 
-There is no subscription to play. Locked elections show an Unlock prompt where you can buy the bundle or redeem a code.
+You never need to pay to play the free elections. Locked elections show an Unlock prompt where you can sign in or redeem a code.
 
 Store: https://lakesidegames.net/store/
 
