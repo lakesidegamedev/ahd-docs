@@ -108,8 +108,8 @@ export const SATELLITES = [
     base: "/g/grand-century",
     repo: gameRepo("grand-century"),
     site: "https://lakesidegames.net/games/grand-century/",
-    github: null,
-    // Its own icon; the others fall back to the Lakeside mark.
+    github: "https://github.com/lakesidegamedev/grand-century",
+    // Its own icon.
     logo: "public/icons/icon-192.png",
     logoName: "grand-century.png",
     askGame: "grand-century",
@@ -182,121 +182,38 @@ export const SATELLITES = [
     ],
   },
   {
-    slug: "metroforge",
-    name: "MetroForge",
-    short: "MetroForge",
-    base: "/g/metroforge",
-    // The game itself. The storefront repo (the "metroforge" checkout) is a
-    // download page, not the game — its docs describe the shop, not the sim.
-    repo: gameRepo("metroforge-native"),
-    site: "https://lakesidegames.net/games/metroforge/",
-    github: "https://github.com/lakesidegamedev/metroforge-native",
-    logo: null,
-    askGame: "metroforge",
+    slug: "margin-of-victory",
+    name: "Margin of Victory",
+    short: "Margin of Victory",
+    base: "/g/margin-of-victory",
+    // The game repo's docs tree is release, store and port planning, not player
+    // docs. The player guide lives here, sourced from the game's README,
+    // CHANGELOG, in-game guide and scenario registry. The web game keeps its
+    // old /games/electioneer/ address for saves and purchases.
+    repo: DOCS_REPO,
+    site: "https://lakesidegames.net/games/electioneer/",
+    github: "https://github.com/lakesidegamedev/MOVGame",
+    logo: "games/margin-of-victory/logo.png",
+    // Ask still keys this game by its old id and shows it as Margin of Victory.
+    askGame: "electioneer",
     tagline:
-      "A native 3D transit builder: place stations, draw track, run routes, balance a budget, and watch a city grow around the network you build.",
-    // Rejected: RELEASE-NOTES-*.md and KNOWN-ISSUES.md (point-in-time, not how
-    // the game works), and the storefront repo's PLAN.md / WEB_TOY.md, which
-    // were plans rather than documentation.
-    excluded: ["docs/RELEASE-NOTES-0.5.0.md", "docs/KNOWN-ISSUES.md"],
-    sections: [
-      {
-        key: "systems",
-        label: "Game Systems",
-        groups: [
-          {
-            label: "The Network",
-            files: [
-              "docs/systems/demand-and-ridership.md",
-              "docs/systems/modes-and-infrastructure.md",
-            ],
-          },
-          {
-            label: "The City",
-            files: [
-              "docs/systems/city-growth.md",
-              "docs/systems/economy.md",
-            ],
-          },
-        ],
-      },
-      {
-        key: "engineering",
-        label: "Engineering",
-        groups: [
-          {
-            label: "Contributing",
-            files: [
-              "docs/ARCHITECTURE.md",
-              "docs/PROTOCOL.md",
-              "docs/DEVELOPMENT.md",
-            ],
-          },
-        ],
-      },
-      {
-        key: "reference",
-        label: "Reference",
-        groups: [{ label: "Overview", files: ["README.md", "CHANGELOG.md"] }],
-      },
-    ],
-  },
-  {
-    slug: "verdigris",
-    name: "Verdigris",
-    short: "Verdigris",
-    base: "/g/verdigris",
-    repo: gameRepo("verdigris"),
-    site: "https://lakesidegames.net/games/verdigris/",
-    github: "https://github.com/lakesidegamedev/verdigris",
-    logo: null,
-    askGame: "verdigris",
-    tagline:
-      "A living 1890s city district that brings its troubles to your desk. You are the alderman: you never place a building, you answer the people who come to you, and the ledger judges what the city actually did.",
-    // Every file in this repo's docs tree is player or contributor facing and
-    // was written for publication, so nothing is rejected. The repo is public,
-    // which is why the whole tree can be listed rather than curated.
+      "A single-player, turn-based election campaign game: 49 real elections across six countries, 1951 to 2027. You are the campaign manager.",
     excluded: [],
     sections: [
       {
         key: "playing",
         label: "Playing",
-        groups: [{ label: "The alderman's day", files: ["docs/PLAYING.md"] }],
+        groups: [
+          {
+            label: "Start here",
+            files: [
+              "games/margin-of-victory/overview.md",
+              "games/margin-of-victory/getting-started.md",
+              "games/margin-of-victory/elections.md",
+            ],
+          },
+        ],
       },
-      {
-        key: "systems",
-        label: "Game Systems",
-        groups: [{ label: "The simulation", files: ["docs/SIMULATION.md"] }],
-      },
-      {
-        key: "engineering",
-        label: "Engineering",
-        groups: [{ label: "Contributing", files: ["docs/ARCHITECTURE.md", "CONTRIBUTING.md"] }],
-      },
-      {
-        key: "reference",
-        label: "Reference",
-        groups: [{ label: "Overview", files: ["README.md"] }],
-      },
-    ],
-  },
-  {
-    slug: "electioneer",
-    name: "Electioneer",
-    short: "Electioneer",
-    base: "/g/electioneer",
-    repo: gameRepo("ahd-sim"),
-    site: "https://sim.ahousedividedgame.com",
-    github: null,
-    logo: null,
-    askGame: "electioneer",
-    tagline:
-      "A single-player, turn-based election campaign simulator: 20 historical elections across six countries, 1974 to 2027.",
-    // Rejected: docs/productize-plan.md (an internal handoff naming the deploy
-    // script and systemd timer) and docs/UK_EXPANSION.md (a plan, superseded by
-    // the systems docs below).
-    excluded: ["docs/productize-plan.md", "docs/UK_EXPANSION.md"],
-    sections: [
       {
         key: "systems",
         label: "Game Systems",
@@ -304,28 +221,23 @@ export const SATELLITES = [
           {
             label: "Campaigning",
             files: [
-              "docs/systems/the-campaign-week.md",
-              "docs/systems/campaign-actions.md",
+              "games/margin-of-victory/the-campaign-week.md",
+              "games/margin-of-victory/campaign-actions.md",
             ],
           },
           {
-            label: "The Model",
+            label: "The vote",
             files: [
-              "docs/systems/the-vote-model.md",
-              "docs/systems/polling.md",
+              "games/margin-of-victory/voter-blocs.md",
+              "games/margin-of-victory/polls-and-scoring.md",
             ],
           },
         ],
       },
       {
-        key: "engineering",
-        label: "Engineering",
-        groups: [{ label: "Builds", files: ["docs/desktop.md"] }],
-      },
-      {
         key: "reference",
         label: "Reference",
-        groups: [{ label: "Overview", files: ["README.md"] }],
+        groups: [{ label: "History", files: ["games/margin-of-victory/changelog.md"] }],
       },
     ],
   },
@@ -374,6 +286,17 @@ export const EXTRAS = [
       },
     ],
   },
+];
+
+/**
+ * Old /g/<slug>/ paths that no longer build. build-game.mjs deletes their output
+ * and the web server redirects them: retired games go to the docs home, renamed
+ * games go to their new path.
+ */
+export const RETIRED = [
+  { slug: "metroforge", to: "/" },
+  { slug: "verdigris", to: "/" },
+  { slug: "electioneer", to: "/g/margin-of-victory/" },
 ];
 
 /** Everything built by build-game.mjs. */
