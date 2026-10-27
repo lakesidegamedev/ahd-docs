@@ -113,8 +113,13 @@ function writeLogo(game, dir) {
     console.warn(`[${game.slug}] logo missing at ${src}, using the Lakeside mark`);
   }
   // The switcher builds every mark URL as <base>/logo.png, so the shared SVG is
-  // rasterised rather than served with a lying extension.
-  execFileSync("convert", ["-background", "none", "-density", "384", LAKESIDE_MARK, "-resize", "192x192", dest]);
+  // rasterised rather than served with a lying extension. librsvg first: the
+  // ImageMagick renderer drops gradients inside clip paths and paints them black.
+  try {
+    execFileSync("rsvg-convert", ["-w", "192", "-h", "192", "-o", dest, LAKESIDE_MARK], { stdio: ["ignore", "ignore", "pipe"] });
+  } catch {
+    execFileSync("convert", ["-background", "none", "-density", "384", LAKESIDE_MARK, "-resize", "192x192", dest]);
+  }
 }
 
 function buildGame(game) {

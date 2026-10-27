@@ -8,6 +8,7 @@ Design and engineering documentation for [A House Divided](https://github.com/la
 - `engineering/` covers architecture, conventions, and contribution guides for the game codebase.
 - `api/` covers the public REST API.
 - `site-build/` is the static site generator.
+- `games/` holds player docs written here for other Lakeside games whose own repos have no player-facing docs, published at `/g/<slug>/` (Corporate Warfare).
 
 The published site also includes the player wiki, which lives in the game repo (`src/lib/seeds/wiki/`) so the in-game wiki and the site share one source. The build pulls it in automatically.
 
