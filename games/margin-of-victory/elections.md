@@ -1,6 +1,6 @@
 # Elections
 
-Margin of Victory has 49 elections in six countries. Each one has its own candidates, parties, map, starting position and historical events. The 2024 and 2020 US elections are free; the rest come in country bundles (see [Getting started](getting-started.md)).
+Margin of Victory has 49 elections in six countries. Each one has its own candidates, parties, map, starting position and historical events. The 2024 and 2020 US elections are free; the rest unlock with Supporter+ (see [Getting started](getting-started.md)).
 
 ## United States (17)
 
