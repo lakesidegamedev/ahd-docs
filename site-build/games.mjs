@@ -18,8 +18,13 @@ const REPO_ROOT = process.env.LAKESIDE_REPO_ROOT
   || new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const gameRepo = (name) => `${REPO_ROOT}/${name}`;
 
+// The Lakeside Docs mark, used as the logo for any game without its own icon.
 export const LAKESIDE_MARK = process.env.LAKESIDE_MARK
-  || new URL("./assets/lakeside-mark.svg", import.meta.url).pathname;
+  || new URL("./assets/docs-mark.svg", import.meta.url).pathname;
+
+// Docs written for publication in this repo, for games whose own repo has no
+// player-facing docs tree.
+const DOCS_REPO = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
 /** A House Divided. Built by build.mjs; listed here so the switcher can link it. */
 export const AHD = {
@@ -35,6 +40,67 @@ export const AHD = {
 };
 
 export const SATELLITES = [
+  {
+    slug: "corporate-warfare",
+    name: "Corporate Warfare",
+    short: "Corporate Warfare",
+    base: "/g/corporate-warfare",
+    // The game repo's docs tree is design rules and planning, written for the
+    // engine rather than for players, and its README is out of date. The player
+    // guide lives here instead, sourced from the game's CHANGELOG.
+    repo: DOCS_REPO,
+    site: "https://lakesidegames.net/download/corporate-warfare/",
+    github: "https://github.com/lakesidegamedev/corporate-warfare",
+    logo: "games/corporate-warfare/logo.png",
+    askGame: "corporate-warfare",
+    tagline:
+      "An offline, single-player economic strategy game. Build a holding company, fight named rivals for every market, and ride business cycles, elections and world commodity prices across four historical scenarios. Free while in development.",
+    excluded: [],
+    sections: [
+      {
+        key: "playing",
+        label: "Playing",
+        groups: [
+          {
+            label: "Start here",
+            files: [
+              "games/corporate-warfare/overview.md",
+              "games/corporate-warfare/getting-started.md",
+              "games/corporate-warfare/scenarios.md",
+            ],
+          },
+        ],
+      },
+      {
+        key: "systems",
+        label: "Game Systems",
+        groups: [
+          { label: "Your companies", files: ["games/corporate-warfare/companies.md"] },
+          {
+            label: "The economy",
+            files: [
+              "games/corporate-warfare/regions-and-labour.md",
+              "games/corporate-warfare/commodity-exchange.md",
+              "games/corporate-warfare/freight.md",
+            ],
+          },
+          {
+            label: "The world",
+            files: [
+              "games/corporate-warfare/rivals.md",
+              "games/corporate-warfare/governments.md",
+              "games/corporate-warfare/currencies.md",
+            ],
+          },
+        ],
+      },
+      {
+        key: "reference",
+        label: "Reference",
+        groups: [{ label: "History", files: ["games/corporate-warfare/changelog.md"] }],
+      },
+    ],
+  },
   {
     slug: "grand-century",
     name: "Grand Century",
