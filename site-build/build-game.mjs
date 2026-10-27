@@ -14,7 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { css, baseJs, searchJsFor, reportJs, switcherHtml, askFabHtml } from "./theme.mjs";
-import { ALL_GAMES, EXTRAS, BUILDABLE, LAKESIDE_MARK, askHref } from "./games.mjs";
+import { ALL_GAMES, EXTRAS, BUILDABLE, RETIRED, LAKESIDE_MARK, askHref } from "./games.mjs";
 
 const OUT = process.env.DOCS_OUT || "/srv/lakeside-docs";
 const SITE = "https://docs.lakesidegames.net";
@@ -326,4 +326,10 @@ if (wanted.length && targets.length !== wanted.length) {
   throw new Error(`unknown game(s): ${wanted.filter(w => !targets.some(t => t.slug === w)).join(", ")} — known: ${known}`);
 }
 const built = targets.map(buildGame).filter(Boolean);
+// Retired and renamed games no longer build; delete their old output so nothing
+// stale is served if the web server's redirect for them is ever dropped.
+for (const r of RETIRED) {
+  const old = path.join(OUT, "g", r.slug);
+  if (fs.existsSync(old)) { fs.rmSync(old, { recursive: true, force: true }); console.log(`[${r.slug}] retired, removed ${old}`); }
+}
 console.log(`built ${built.length} game(s): ${built.map(b => `${b.slug}(${b.pages})`).join(" ")}`);
