@@ -34,6 +34,10 @@ A rival you raid, bid for or squeeze out of a freight lane holds a **grudge**. A
 
 Each week a grudge loses 1 percent of its strength plus 1 point. It counts as active at 1,000 or more and is forgotten below 150. A grudge from a one-block raid (3,600) stays active for about 125 weeks and is forgotten after about 290. A big one from a full-strength episode lasts years, not one year.
 
+![Line chart of grudge strength over weeks from three starting values, with the active line at 1,000, the forgotten line at 150, and an alliance held at 4,000 during a venture.](images/rivals-grudge-decay.svg)
+
+![Diagram: raids, failed raids, hostile bids and lane lockouts feed a grudge; joint ventures and friendly deals feed an alliance; an alliance halves grudges; rival AI spares a firm at alliance 5,000 or more.](images/rivals-grudges-flow.svg)
+
 **Allies** are the other side of the ledger. A joint venture partner starts with an alliance of 5,000 and is held at no less than 4,000 while the venture runs. A friendly deal adds 2,500. An alliance of 1,000 or more shows as an ally, and rivals ask old partners first to share a project. A rival skips raiding or bidding for a firm only while the alliance is 5,000 or more, so the protection is strongest just after a venture is formed or a deal is closed. Friends forgive: forming an alliance halves existing grudges between the two, and a betrayal cools an alliance.
 
 A rival's dossier, on its stock page or a region board, lists its grudges, its friends and its recent moves.
@@ -41,6 +45,10 @@ A rival's dossier, on its stock page or a region board, lists its grudges, its f
 ### Raids
 
 A raid is a marketing campaign against a rival's division in a market you both serve, to take some of its plants.
+
+![Line chart of raid success chance and share of the division at stake against the attack to defence ratio.](images/rivals-raid-odds.svg)
+
+*The chance falls past a ratio of about 1.6 because a bigger attack takes a bigger share, and that share drags the odds down.*
 
 1. You choose the rival's division and a budget.
 2. **Attack strength** is your budget plus 13 weeks of your standing marketing. **Defence** is 13 weeks of the defender's marketing plus 5 percent of its division's quarterly output value.

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Division overhead as a share of weekly revenue against number of divisions">
+<title>Division overhead as a share of weekly revenue against number of divisions</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="298" y2="298" stroke="#e4e4e7"/><text x="50" y="302" font-size="11" text-anchor="end" fill="#52525b">0</text>
+<line x1="56" x2="624" y1="202.7" y2="202.7" stroke="#e4e4e7"/><text x="50" y="206.7" font-size="11" text-anchor="end" fill="#52525b">1</text>
+<line x1="56" x2="624" y1="107.3" y2="107.3" stroke="#e4e4e7"/><text x="50" y="111.3" font-size="11" text-anchor="end" fill="#52525b">2</text>
+<line x1="56" x2="624" y1="12" y2="12" stroke="#e4e4e7"/><text x="50" y="16" font-size="11" text-anchor="end" fill="#52525b">3</text>
+<line x1="187.1" x2="187.1" y1="298" y2="12" stroke="#f4f4f5"/><text x="187.1" y="314" font-size="11" text-anchor="middle" fill="#52525b">10</text>
+<line x1="332.7" x2="332.7" y1="298" y2="12" stroke="#f4f4f5"/><text x="332.7" y="314" font-size="11" text-anchor="middle" fill="#52525b">20</text>
+<line x1="478.4" x2="478.4" y1="298" y2="12" stroke="#f4f4f5"/><text x="478.4" y="314" font-size="11" text-anchor="middle" fill="#52525b">30</text>
+<line x1="624" x2="624" y1="298" y2="12" stroke="#f4f4f5"/><text x="624" y="314" font-size="11" text-anchor="middle" fill="#52525b">40</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<line x1="56" x2="624" y1="202.7" y2="202.7" stroke="#a1a1aa" stroke-dasharray="5 4"/><text x="620" y="198.7" font-size="11" text-anchor="end" fill="#52525b">1% of revenue</text>
+<polyline points="56,297.8 70.6,297.3 85.1,296.5 99.7,295.3 114.3,293.7 128.8,291.8 143.4,289.6 157.9,287 172.5,284.1 187.1,280.8 201.6,277.2 216.2,273.3 230.8,269 245.3,264.4 259.9,259.4 274.5,254.1 289,248.4 303.6,242.4 318.2,236.1 332.7,229.4 347.3,222.3 361.8,214.9 376.4,207.2 391,199.2 405.5,190.8 420.1,182 434.7,172.9 449.2,163.5 463.8,153.7 478.4,143.6 492.9,133.1 507.5,122.3 522.1,111.1 536.6,99.6 551.2,87.8 565.7,75.6 580.3,63.1 594.9,50.2 609.4,37 624,23.4" fill="none" stroke="#dc2626" stroke-width="2"  stroke-linejoin="round"/>
+<polyline points="56,297.9 70.6,297.4 85.1,296.7 99.7,295.7 114.3,294.5 128.8,292.9 143.4,291.1 157.9,289 172.5,286.6 187.1,283.9 201.6,281 216.2,277.7 230.8,274.2 245.3,270.4 259.9,266.3 274.5,262 289,257.3 303.6,252.4 318.2,247.2 332.7,241.7 347.3,235.9 361.8,229.9 376.4,223.6 391,216.9 405.5,210.1 420.1,202.9 434.7,195.4 449.2,187.7 463.8,179.7 478.4,171.4 492.9,162.8 507.5,153.9 522.1,144.8 536.6,135.3 551.2,125.6 565.7,115.6 580.3,105.4 594.9,94.8 609.4,84 624,72.9" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Divisions you own</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Overhead (% of weekly revenue)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#dc2626" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">No logistics divisions</text>
+<line x1="226.2" x2="248.2" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="253.2" y="350" font-size="11" fill="#27272a">3 owned logistics divisions</text>
+
+</svg>

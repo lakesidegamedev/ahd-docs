@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Applicants drawn per open position against the wage offered">
+<title>Applicants drawn per open position against the wage offered</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="298" y2="298" stroke="#e4e4e7"/><text x="50" y="302" font-size="11" text-anchor="end" fill="#52525b">0</text>
+<line x1="56" x2="624" y1="226.5" y2="226.5" stroke="#e4e4e7"/><text x="50" y="230.5" font-size="11" text-anchor="end" fill="#52525b">20</text>
+<line x1="56" x2="624" y1="155" y2="155" stroke="#e4e4e7"/><text x="50" y="159" font-size="11" text-anchor="end" fill="#52525b">40</text>
+<line x1="56" x2="624" y1="83.5" y2="83.5" stroke="#e4e4e7"/><text x="50" y="87.5" font-size="11" text-anchor="end" fill="#52525b">60</text>
+<line x1="56" x2="624" y1="12" y2="12" stroke="#e4e4e7"/><text x="50" y="16" font-size="11" text-anchor="end" fill="#52525b">80</text>
+<line x1="56" x2="56" y1="298" y2="12" stroke="#f4f4f5"/><text x="56" y="314" font-size="11" text-anchor="middle" fill="#52525b">60</text>
+<line x1="198" x2="198" y1="298" y2="12" stroke="#f4f4f5"/><text x="198" y="314" font-size="11" text-anchor="middle" fill="#52525b">80</text>
+<line x1="340" x2="340" y1="298" y2="12" stroke="#f4f4f5"/><text x="340" y="314" font-size="11" text-anchor="middle" fill="#52525b">100</text>
+<line x1="482" x2="482" y1="298" y2="12" stroke="#f4f4f5"/><text x="482" y="314" font-size="11" text-anchor="middle" fill="#52525b">120</text>
+<line x1="624" x2="624" y1="298" y2="12" stroke="#f4f4f5"/><text x="624" y="314" font-size="11" text-anchor="middle" fill="#52525b">140</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<line x1="198" x2="198" y1="298" y2="12" stroke="#dc2626" stroke-dasharray="5 4"/><text x="202" y="26" font-size="11" fill="#52525b">Below 80%: nobody applies</text>
+<polyline points="56,298 59.6,298 63.1,298 66.7,298 70.2,298 73.8,298 77.3,298 80.9,298 84.4,298 88,298 91.5,298 95.1,298 98.6,298 102.2,298 105.7,298 109.3,298 112.8,298 116.4,298 119.9,298 123.5,298 127,298 130.6,298 134.1,298 137.6,298 141.2,298 144.8,298 148.3,298 151.9,298 155.4,298 159,298 162.5,298 166.1,298 169.6,298 173.1,298 176.7,298 180.3,298 183.8,298 187.4,298 190.9,298 194.5,298 198,298 198,237.2 201.5,235.4 205.1,233.7 208.7,231.9 212.2,230.1 215.8,228.3 219.3,226.5 222.9,224.7 226.4,222.9 230,221.1 233.5,219.4 237.1,217.6 240.6,215.8 244.2,214 247.7,212.2 251.3,210.4 254.8,208.6 258.4,206.8 261.9,205.1 265.5,203.3 269,201.5 272.5,199.7 276.1,197.9 279.7,196.1 283.2,194.3 286.8,192.5 290.3,190.8 293.9,189 297.4,187.2 301,185.4 304.5,183.6 308,181.8 311.6,180 315.2,178.2 318.7,176.5 322.3,174.7 325.8,172.9 329.4,171.1 332.9,169.3 336.5,167.5 340,165.7 343.6,163.9 347.1,162.2 350.7,160.4 354.2,158.6 357.8,156.8 361.3,155 364.8,153.2 368.4,151.4 372,149.6 375.5,147.9 379.1,146.1 382.6,144.3 386.2,142.5 389.7,140.7 393.3,138.9 396.8,137.1 400.3,135.3 403.9,133.6 407.5,131.8 411,130 414.6,128.2 418.1,126.4 421.7,124.6 425.2,122.8 428.8,121 432.3,119.3 435.9,117.5 439.4,115.7 443,113.9 446.5,112.1 450.1,110.3 453.6,108.5 457.2,106.7 460.7,105 464.3,103.2 467.8,101.4 471.4,99.6 474.9,97.8 478.5,96 482,94.2 485.6,92.4 489.1,90.7 492.7,88.9 496.2,87.1 499.8,85.3 503.3,83.5 506.9,81.7 510.4,79.9 514,78.1 517.5,76.4 521.1,74.6 524.6,72.8 528.2,71 531.7,69.2 535.3,67.4 538.8,65.6 542.3,63.8 545.9,62.1 549.5,60.3 553,58.5 556.6,56.7 560.1,54.9 563.7,53.1 567.2,51.3 570.8,49.5 574.3,47.8 577.9,46 581.4,44.2 585,42.4 588.5,40.6 592.1,38.8 595.6,37 599.2,35.2 602.7,33.4 606.3,31.7 609.8,29.9 613.4,28.1 616.9,26.3 620.5,24.5 624,22.7" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Wage offered (% of the going wage)</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Pull per open position (% of going wage)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">Share of applicants a job attracts</text>
+
+</svg>

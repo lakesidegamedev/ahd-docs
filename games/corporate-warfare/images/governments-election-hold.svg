@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Chance the governing party keeps power against approval">
+<title>Chance the governing party keeps power against approval</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="298" y2="298" stroke="#e4e4e7"/><text x="50" y="302" font-size="11" text-anchor="end" fill="#52525b">0</text>
+<line x1="56" x2="624" y1="240.8" y2="240.8" stroke="#e4e4e7"/><text x="50" y="244.8" font-size="11" text-anchor="end" fill="#52525b">20</text>
+<line x1="56" x2="624" y1="183.6" y2="183.6" stroke="#e4e4e7"/><text x="50" y="187.6" font-size="11" text-anchor="end" fill="#52525b">40</text>
+<line x1="56" x2="624" y1="126.4" y2="126.4" stroke="#e4e4e7"/><text x="50" y="130.4" font-size="11" text-anchor="end" fill="#52525b">60</text>
+<line x1="56" x2="624" y1="69.2" y2="69.2" stroke="#e4e4e7"/><text x="50" y="73.2" font-size="11" text-anchor="end" fill="#52525b">80</text>
+<line x1="56" x2="624" y1="12" y2="12" stroke="#e4e4e7"/><text x="50" y="16" font-size="11" text-anchor="end" fill="#52525b">100</text>
+<line x1="56" x2="56" y1="298" y2="12" stroke="#f4f4f5"/><text x="56" y="314" font-size="11" text-anchor="middle" fill="#52525b">0</text>
+<line x1="169.6" x2="169.6" y1="298" y2="12" stroke="#f4f4f5"/><text x="169.6" y="314" font-size="11" text-anchor="middle" fill="#52525b">20</text>
+<line x1="283.2" x2="283.2" y1="298" y2="12" stroke="#f4f4f5"/><text x="283.2" y="314" font-size="11" text-anchor="middle" fill="#52525b">40</text>
+<line x1="396.8" x2="396.8" y1="298" y2="12" stroke="#f4f4f5"/><text x="396.8" y="314" font-size="11" text-anchor="middle" fill="#52525b">60</text>
+<line x1="510.4" x2="510.4" y1="298" y2="12" stroke="#f4f4f5"/><text x="510.4" y="314" font-size="11" text-anchor="middle" fill="#52525b">80</text>
+<line x1="624" x2="624" y1="298" y2="12" stroke="#f4f4f5"/><text x="624" y="314" font-size="11" text-anchor="middle" fill="#52525b">100</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<polyline points="56,283.7 61.7,283.7 67.4,283.7 73,280.8 78.7,278 84.4,275.1 90.1,272.3 95.8,269.4 101.4,266.5 107.1,263.7 112.8,260.8 118.5,258 124.2,255.1 129.8,252.2 135.5,249.4 141.2,246.5 146.9,243.7 152.6,240.8 158.2,237.9 163.9,235.1 169.6,232.2 175.3,229.4 181,226.5 186.6,223.6 192.3,220.8 198,217.9 203.7,215.1 209.4,212.2 215,209.3 220.7,206.5 226.4,203.6 232.1,200.8 237.8,197.9 243.4,195 249.1,192.2 254.8,189.3 260.5,186.5 266.2,183.6 271.8,180.7 277.5,177.9 283.2,175 288.9,172.2 294.6,169.3 300.2,166.4 305.9,163.6 311.6,160.7 317.3,157.9 323,155 328.6,152.1 334.3,149.3 340,146.4 345.7,143.6 351.4,140.7 357,137.8 362.7,135 368.4,132.1 374.1,129.3 379.8,126.4 385.4,123.5 391.1,120.7 396.8,117.8 402.5,115 408.2,112.1 413.8,109.2 419.5,106.4 425.2,103.5 430.9,100.7 436.6,97.8 442.2,94.9 447.9,92.1 453.6,89.2 459.3,86.4 465,83.5 470.6,80.6 476.3,77.8 482,74.9 487.7,72.1 493.4,69.2 499,66.3 504.7,63.5 510.4,60.6 516.1,57.8 521.8,54.9 527.4,52 533.1,49.2 538.8,46.3 544.5,43.5 550.2,40.6 555.8,37.7 561.5,34.9 567.2,32 572.9,29.2 578.6,26.3 584.2,26.3 589.9,26.3 595.6,26.3 601.3,26.3 607,26.3 612.6,26.3 618.3,26.3 624,26.3" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Government approval (%)</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Chance the party keeps power (%)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">Approval + 3 points, held between 5% and 95%</text>
+
+</svg>

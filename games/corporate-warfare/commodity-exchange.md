@@ -12,6 +12,8 @@ Each week, before plants run, the exchange does this for every good:
 4. The seller receives its asking price. The buyer pays the freight to the carrier. Goods arrive within the week.
 5. Whatever is not filled is a shortage, and your plant runs below capacity.
 
+![Flow chart: a buyer need collects offers with freight added, sorts them by delivered price, fills the cheapest first, and turns any leftover into a shortage; the gateway offer at 115 percent of world price is the last resort.](images/commodity-exchange-matching-flow.svg)
+
 The outside market is made of **gateways**: finite import and export offers at world price minus or plus 15 percent. A gateway sells to you at 115 percent of the world price and buys from you at 85 percent, so selling to it is a last resort too. Its capacity is limited, but it grows by 1 percent for every week your region's exports filled it.
 
 ### Key numbers
@@ -34,6 +36,8 @@ The outside market is made of **gateways**: finite import and export offers at w
 
 A good's price is set by its seller. On automatic pricing it follows sell-through:
 
+![Line chart: the price a seller wants rises from 70 to 130 percent of reference as buyer shortage grows from minus 5 to plus 5 weeks.](images/commodity-exchange-pricing.svg)
+
 - If buyers are left short of the stock they want to keep, the seller raises its ask by 6 percent for every week of their use they lack.
 - If the seller holds more unsold stock than its target (2 weeks of sales, 1 week for perishables), it cuts its ask by 6 percent for every week over.
 - The price closes one sixth of the gap to that target each week and never moves more than 2 percent in a week, so it follows the market over about six weeks.
@@ -43,6 +47,10 @@ Local sellers therefore sit under the import price once freight is added, and lo
 ### World prices
 
 Eleven families of goods have a world price that moves every week: oil and fuel, natural gas, coal, iron ore and metals, steel, grain and farm output, fertilizer, chemicals and plastics, timber, rare earths and building materials. In Silicon Valley, chips and electronics follow a path too. The world price sets what gateways charge and pay. The path is chosen when you start a game:
+
+![Four small line charts of world price indices by family over the quarters of each scenario, with oil and steel highlighted.](images/commodity-exchange-world-prices.svg)
+
+*Authored historical paths. Day one is 100. Variance mode shifts and rescales these shapes.*
 
 | Mode | What it does |
 | --- | --- |
@@ -59,6 +67,8 @@ Plants can make several products at once. Oil is a real chain: wells pump crude 
 ### Storage
 
 Goods take up space, and storage comes in four classes: warehouse (steel, consumer goods and other dry goods), tank farm (oil, gas, chemicals), silo (grain, ore, coal, fertilizer, building materials) and cold store (food, livestock, pharmaceuticals).
+
+![Line chart of stock remaining against weeks stored for food, livestock and grain, with and without owned storage.](images/commodity-exchange-storage.svg)
 
 Each operating plant brings a free yard that holds 6 weeks of its inputs and outputs. Stock beyond your yard and your own storage sits in the region's outside storage and pays a weekly fee per lot. Goods are never refused or destroyed for lack of room. Stock beyond the yard also pays a small holding cost, a weekly share of the good's reference value. Perishable goods spoil each week, and owned storage cuts the loss by 80 percent for the stock that fits in it.
 

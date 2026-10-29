@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Delivered cost per lot over distance by freight mode">
+<title>Delivered cost per lot over distance by freight mode</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="298" y2="298" stroke="#e4e4e7"/><text x="50" y="302" font-size="11" text-anchor="end" fill="#52525b">0</text>
+<line x1="56" x2="624" y1="240.8" y2="240.8" stroke="#e4e4e7"/><text x="50" y="244.8" font-size="11" text-anchor="end" fill="#52525b">5</text>
+<line x1="56" x2="624" y1="183.6" y2="183.6" stroke="#e4e4e7"/><text x="50" y="187.6" font-size="11" text-anchor="end" fill="#52525b">10</text>
+<line x1="56" x2="624" y1="126.4" y2="126.4" stroke="#e4e4e7"/><text x="50" y="130.4" font-size="11" text-anchor="end" fill="#52525b">15</text>
+<line x1="56" x2="624" y1="69.2" y2="69.2" stroke="#e4e4e7"/><text x="50" y="73.2" font-size="11" text-anchor="end" fill="#52525b">20</text>
+<line x1="56" x2="624" y1="12" y2="12" stroke="#e4e4e7"/><text x="50" y="16" font-size="11" text-anchor="end" fill="#52525b">25</text>
+<line x1="56" x2="56" y1="298" y2="12" stroke="#f4f4f5"/><text x="56" y="314" font-size="11" text-anchor="middle" fill="#52525b">0</text>
+<line x1="159.3" x2="159.3" y1="298" y2="12" stroke="#f4f4f5"/><text x="159.3" y="314" font-size="11" text-anchor="middle" fill="#52525b">200</text>
+<line x1="262.5" x2="262.5" y1="298" y2="12" stroke="#f4f4f5"/><text x="262.5" y="314" font-size="11" text-anchor="middle" fill="#52525b">400</text>
+<line x1="365.8" x2="365.8" y1="298" y2="12" stroke="#f4f4f5"/><text x="365.8" y="314" font-size="11" text-anchor="middle" fill="#52525b">600</text>
+<line x1="469.1" x2="469.1" y1="298" y2="12" stroke="#f4f4f5"/><text x="469.1" y="314" font-size="11" text-anchor="middle" fill="#52525b">800</text>
+<line x1="572.4" x2="572.4" y1="298" y2="12" stroke="#f4f4f5"/><text x="572.4" y="314" font-size="11" text-anchor="middle" fill="#52525b">1000</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<line x1="417.5" x2="417.5" y1="298" y2="12" stroke="#a1a1aa" stroke-dasharray="5 4"/><text x="421.5" y="26" font-size="11" fill="#52525b">Truck reach 700 km</text>
+<polyline points="56,298 417.5,57.8" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<polyline points="56,298 624,46.3" fill="none" stroke="#dc2626" stroke-width="2"  stroke-linejoin="round"/>
+<polyline points="56,298 624,184.7" fill="none" stroke="#52525b" stroke-width="2" stroke-dasharray="2 3" stroke-linejoin="round"/>
+<polyline points="56,298 624,209.9" fill="none" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Distance (km); legend shows cents per lot-km</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Cost per lot ($)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">Truck 3 c</text>
+<line x1="146.9" x2="168.9" y1="346" y2="346" stroke="#dc2626" stroke-width="2.5" /><text x="173.9" y="350" font-size="11" fill="#27272a">Rail 2 c</text>
+<line x1="231.7" x2="253.7" y1="346" y2="346" stroke="#52525b" stroke-width="2.5" stroke-dasharray="2 3"/><text x="258.7" y="350" font-size="11" fill="#27272a">Pipeline 0.9 c</text>
+<line x1="353.09999999999997" x2="375.09999999999997" y1="346" y2="346" stroke="#0f766e" stroke-width="2.5" stroke-dasharray="6 4"/><text x="380.09999999999997" y="350" font-size="11" fill="#27272a">Ship 0.7 c</text>
+
+</svg>

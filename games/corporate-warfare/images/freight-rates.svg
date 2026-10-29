@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Lane rate against how full the lane is">
+<title>Lane rate against how full the lane is</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="298" y2="298" stroke="#e4e4e7"/><text x="50" y="302" font-size="11" text-anchor="end" fill="#52525b">60</text>
+<line x1="56" x2="624" y1="216.3" y2="216.3" stroke="#e4e4e7"/><text x="50" y="220.3" font-size="11" text-anchor="end" fill="#52525b">80</text>
+<line x1="56" x2="624" y1="134.6" y2="134.6" stroke="#e4e4e7"/><text x="50" y="138.6" font-size="11" text-anchor="end" fill="#52525b">100</text>
+<line x1="56" x2="624" y1="52.9" y2="52.9" stroke="#e4e4e7"/><text x="50" y="56.9" font-size="11" text-anchor="end" fill="#52525b">120</text>
+<line x1="56" x2="56" y1="298" y2="12" stroke="#f4f4f5"/><text x="56" y="314" font-size="11" text-anchor="middle" fill="#52525b">0</text>
+<line x1="169.6" x2="169.6" y1="298" y2="12" stroke="#f4f4f5"/><text x="169.6" y="314" font-size="11" text-anchor="middle" fill="#52525b">20</text>
+<line x1="283.2" x2="283.2" y1="298" y2="12" stroke="#f4f4f5"/><text x="283.2" y="314" font-size="11" text-anchor="middle" fill="#52525b">40</text>
+<line x1="396.8" x2="396.8" y1="298" y2="12" stroke="#f4f4f5"/><text x="396.8" y="314" font-size="11" text-anchor="middle" fill="#52525b">60</text>
+<line x1="510.4" x2="510.4" y1="298" y2="12" stroke="#f4f4f5"/><text x="510.4" y="314" font-size="11" text-anchor="middle" fill="#52525b">80</text>
+<line x1="624" x2="624" y1="298" y2="12" stroke="#f4f4f5"/><text x="624" y="314" font-size="11" text-anchor="middle" fill="#52525b">100</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<line x1="56" x2="624" y1="93.7" y2="93.7" stroke="#dc2626" stroke-dasharray="5 4"/><text x="620" y="89.7" font-size="11" text-anchor="end" fill="#dc2626">Common carrier cap 110%</text>
+<line x1="56" x2="624" y1="175.4" y2="175.4" stroke="#a1a1aa" stroke-dasharray="5 4"/><text x="620" y="171.4" font-size="11" text-anchor="end" fill="#52525b">Contracted lots 90%</text>
+<line x1="56" x2="624" y1="277.6" y2="277.6" stroke="#a1a1aa" stroke-dasharray="5 4"/><text x="620" y="273.6" font-size="11" text-anchor="end" fill="#52525b">Own carrier 65%</text>
+<polyline points="56,134.6 67.4,134.5 78.7,134.4 90.1,134.2 101.4,133.9 112.8,133.6 124.2,133.1 135.5,132.6 146.9,132 158.2,131.3 169.6,130.5 181,129.6 192.3,128.7 203.7,127.7 215,126.6 226.4,125.4 237.8,124.1 249.1,122.8 260.5,121.3 271.8,119.8 283.2,118.2 294.6,116.6 305.9,114.8 317.3,113 328.6,111 340,109 351.4,107 362.7,104.8 374.1,102.5 385.4,100.2 396.8,97.8 408.2,95.3 419.5,92.7 430.9,90.1 442.2,87.3 453.6,84.5 465,81.6 476.3,78.6 487.7,75.6 499,72.4 510.4,69.2 521.8,65.9 533.1,62.5 544.5,59 555.8,55.5 567.2,51.8 578.6,48.1 589.9,44.3 601.3,40.4 612.6,36.5 624,32.4" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<circle cx="624" cy="32.4" r="4" fill="#fff" stroke="#2563eb" stroke-width="2"/><text x="616" y="48.4" font-size="11" fill="#27272a" text-anchor="end">Outside carriers 125%</text>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Lane fill (%)</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Rate (% of base rate)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">Rate other owners charge</text>
+
+</svg>
