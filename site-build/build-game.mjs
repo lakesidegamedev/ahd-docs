@@ -140,7 +140,7 @@ function buildGame(game) {
         const fallback = slugOf(rel).replace(/-/g, " ");
         pages.push({
           section: section.key, sectionLabel: section.label, group: group.label,
-          slug: slugOf(rel), rel,
+          slug: slugOf(rel), rel, absDir: path.dirname(abs),
           title: titleOf(md, fallback.charAt(0).toUpperCase() + fallback.slice(1)),
           desc: firstPara(md), md,
           updated: lastUpdated(game.repo, rel),
@@ -224,6 +224,21 @@ ${askFabHtml(askHref(game))}
     // Relative links between the game's own markdown files resolve to built pages.
     html = html.replace(/href="(?:\.\/|docs\/)?([\w.-]+\.md)(#[\w-]*)?"/g, (m, name, hash) =>
       bySlug.has(name) ? `href="${bySlug.get(name).href}${hash || ""}"` : m);
+    // Images that sit beside a page (screenshots, charts, diagrams) are copied
+    // into <base>/media/ and the src rewritten. Absolute and remote URLs are
+    // left alone; a missing file drops the image rather than shipping a 404.
+    html = html.replace(/<img([^>]*?)src="(?!https?:|\/|data:)([\w./-]+\.(?:png|svg|jpe?g|webp|gif))"([^>]*)>/g, (m, pre, src, post) => {
+      const from = path.resolve(p.absDir, src);
+      if (!from.startsWith(game.repo) || !fs.existsSync(from)) {
+        console.warn(`[${game.slug}] ${p.rel}: missing image ${src}, dropped`);
+        return "";
+      }
+      const rel = path.relative(game.repo, from).replace(/[\\/]/g, "-");
+      const to = path.join(dir, "media", rel);
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.copyFileSync(from, to);
+      return `<img${pre}src="${base}/media/${rel}" loading="lazy"${post}>`;
+    });
 
     const h2s = [...p.md.matchAll(/^##\s+(.+)$/gm)].map(m => m[1].replace(/[*`]/g, ""));
     const toc = h2s.length >= 2
