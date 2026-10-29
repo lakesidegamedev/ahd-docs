@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Stock remaining against weeks stored, with and without owned storage">
+<title>Stock remaining against weeks stored, with and without owned storage</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="298" y2="298" stroke="#e4e4e7"/><text x="50" y="302" font-size="11" text-anchor="end" fill="#52525b">0</text>
+<line x1="56" x2="624" y1="240.8" y2="240.8" stroke="#e4e4e7"/><text x="50" y="244.8" font-size="11" text-anchor="end" fill="#52525b">20</text>
+<line x1="56" x2="624" y1="183.6" y2="183.6" stroke="#e4e4e7"/><text x="50" y="187.6" font-size="11" text-anchor="end" fill="#52525b">40</text>
+<line x1="56" x2="624" y1="126.4" y2="126.4" stroke="#e4e4e7"/><text x="50" y="130.4" font-size="11" text-anchor="end" fill="#52525b">60</text>
+<line x1="56" x2="624" y1="69.2" y2="69.2" stroke="#e4e4e7"/><text x="50" y="73.2" font-size="11" text-anchor="end" fill="#52525b">80</text>
+<line x1="56" x2="624" y1="12" y2="12" stroke="#e4e4e7"/><text x="50" y="16" font-size="11" text-anchor="end" fill="#52525b">100</text>
+<line x1="56" x2="56" y1="298" y2="12" stroke="#f4f4f5"/><text x="56" y="314" font-size="11" text-anchor="middle" fill="#52525b">0</text>
+<line x1="165.2" x2="165.2" y1="298" y2="12" stroke="#f4f4f5"/><text x="165.2" y="314" font-size="11" text-anchor="middle" fill="#52525b">5</text>
+<line x1="274.5" x2="274.5" y1="298" y2="12" stroke="#f4f4f5"/><text x="274.5" y="314" font-size="11" text-anchor="middle" fill="#52525b">10</text>
+<line x1="383.7" x2="383.7" y1="298" y2="12" stroke="#f4f4f5"/><text x="383.7" y="314" font-size="11" text-anchor="middle" fill="#52525b">15</text>
+<line x1="492.9" x2="492.9" y1="298" y2="12" stroke="#f4f4f5"/><text x="492.9" y="314" font-size="11" text-anchor="middle" fill="#52525b">20</text>
+<line x1="602.2" x2="602.2" y1="298" y2="12" stroke="#f4f4f5"/><text x="602.2" y="314" font-size="11" text-anchor="middle" fill="#52525b">25</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<line x1="56" x2="624" y1="155" y2="155" stroke="#a1a1aa" stroke-dasharray="5 4"/><text x="620" y="151" font-size="11" text-anchor="end" fill="#52525b">Half gone</text>
+<polyline points="56,12 77.8,23.4 99.7,34.4 121.5,45 143.4,55.1 165.2,64.8 187.1,74.1 208.9,83.1 230.8,91.7 252.6,99.9 274.5,107.9 296.3,115.5 318.2,122.8 340,129.8 361.8,136.5 383.7,143 405.5,149.2 427.4,155.1 449.2,160.8 471.1,166.3 492.9,171.6 514.8,176.6 536.6,181.5 558.5,186.2 580.3,190.6 602.2,194.9 624,199" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<polyline points="56,12 77.8,14.3 99.7,16.6 121.5,18.8 143.4,21 165.2,23.3 187.1,25.5 208.9,27.6 230.8,29.8 252.6,31.9 274.5,34.1 296.3,36.2 318.2,38.3 340,40.4 361.8,42.4 383.7,44.5 405.5,46.5 427.4,48.5 449.2,50.5 471.1,52.5 492.9,54.4 514.8,56.4 536.6,58.3 558.5,60.2 580.3,62.1 602.2,64 624,65.9" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="2 3" stroke-linejoin="round"/>
+<polyline points="56,12 77.8,20.6 99.7,28.9 121.5,37 143.4,44.8 165.2,52.4 187.1,59.8 208.9,66.9 230.8,73.8 252.6,80.6 274.5,87.1 296.3,93.4 318.2,99.6 340,105.5 361.8,111.3 383.7,116.9 405.5,122.3 427.4,127.6 449.2,132.7 471.1,137.7 492.9,142.5 514.8,147.1 536.6,151.7 558.5,156.1 580.3,160.3 602.2,164.4 624,168.5" fill="none" stroke="#dc2626" stroke-width="2"  stroke-linejoin="round"/>
+<polyline points="56,12 77.8,13.7 99.7,15.4 121.5,17.1 143.4,18.8 165.2,20.5 187.1,22.1 208.9,23.8 230.8,25.4 252.6,27.1 274.5,28.7 296.3,30.3 318.2,31.9 340,33.5 361.8,35.1 383.7,36.7 405.5,38.3 427.4,39.8 449.2,41.4 471.1,42.9 492.9,44.4 514.8,46 536.6,47.5 558.5,49 580.3,50.5 602.2,51.9 624,53.4" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="2 3" stroke-linejoin="round"/>
+<polyline points="56,12 77.8,16.3 99.7,20.5 121.5,24.7 143.4,28.8 165.2,32.8 187.1,36.8 208.9,40.7 230.8,44.6 252.6,48.4 274.5,52.1 296.3,55.8 318.2,59.4 340,63 361.8,66.5 383.7,70 405.5,73.4 427.4,76.8 449.2,80.1 471.1,83.4 492.9,86.6 514.8,89.8 536.6,92.9 558.5,96 580.3,99 602.2,102 624,104.9" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polyline points="56,12 77.8,12.9 99.7,13.7 121.5,14.6 143.4,15.4 165.2,16.3 187.1,17.1 208.9,18 230.8,18.8 252.6,19.6 274.5,20.5 296.3,21.3 318.2,22.1 340,23 361.8,23.8 383.7,24.6 405.5,25.4 427.4,26.2 449.2,27.1 471.1,27.9 492.9,28.7 514.8,29.5 536.6,30.3 558.5,31.1 580.3,31.9 602.2,32.7 624,33.5" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="2 3" stroke-linejoin="round"/>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Weeks stored (dotted = with owned storage)</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Stock remaining (%)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">Food 4%/wk</text>
+<line x1="153" x2="175" y1="346" y2="346" stroke="#dc2626" stroke-width="2.5" /><text x="180" y="350" font-size="11" fill="#27272a">Livestock 3%/wk</text>
+<line x1="280.5" x2="302.5" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="6 4"/><text x="307.5" y="350" font-size="11" fill="#27272a">Grain 1.5%/wk</text>
+
+</svg>

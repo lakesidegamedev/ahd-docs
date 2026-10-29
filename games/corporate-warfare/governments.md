@@ -8,15 +8,21 @@ The economy runs on a business cycle, a central bank and a government that chang
 
 Output runs above or below its trend with momentum and small random shocks. Good times and cheap money build up credit, and the more credit there is, the likelier a bust that leaves borrowers paying debt down for months. Inflation rises when the economy runs hot. Household demand, loan rates, wages and import prices all follow the cycle. A collapse in world commodity prices feeds in as a demand shock (see [The commodity exchange](commodity-exchange.md)).
 
+![Flow diagram: business cycle, central bank every 6 weeks, rates, approval, an election every 208 weeks, a new programme 13 weeks later, and the laws that feed tax, wage floor, mergers, freight, quotas, reserve and rescue.](images/governments-economy-flow.svg)
+
 ### The central bank
 
 The central bank meets every 6 weeks and moves its policy rate in quarter-point steps (half a point when it is a full point or more off its target) toward a rule that weighs inflation and output. Its chair, one of the game's named characters, leans dovish or hawkish, and that tilts every decision. A hawk weighs inflation more and runs a little tighter. At the end of a four-year term the government reappoints the chair or names a new one. A chair who kept inflation within a point of target without a recession is reappointed 60 percent of the time, otherwise 25 percent.
+
+![Step chart of the central bank rate move at a meeting: 0 below 25 basis points from target, 25 up to 99, 50 from 100.](images/governments-rate-step.svg)
 
 Two rates matter to you. The **prime lending rate** is the policy rate plus 3 points plus a lending premium. The **ten-year yield** prices corporate bonds (see [Your holding company](companies.md)).
 
 ### Government and elections
 
 Two parties compete in an election every 208 weeks (four years). The outcome is decided by the economy: approval drifts toward a level set by growth above trend, inflation above target and high interest rates, and a recession hurts most. On election week the governing party holds on with a chance equal to its approval plus 3 points, between 5 and 95 percent.
+
+![Line chart of the chance the governing party keeps power against approval, approval plus 3 points held between 5 and 95 percent.](images/governments-election-hold.svg)
 
 A new government announces its programme at once and it takes effect 13 weeks (a quarter) later. The programme sets:
 
@@ -65,6 +71,8 @@ A new government announces its programme at once and it takes effect 13 weeks (a
 - **React to a rate rise.** Loans and new bonds reprice with it, so lock in term funding before a hiking cycle if your credit allows.
 - **Plan around elections.** A tax or wage change reaches you 13 weeks after the vote, and the news feed announces the programme the day it is won, so act in that window.
 - **Use or avoid the laws.** Under common carrier law, do not count on locking a lane. Under quotas, do not build new extraction capacity in a capped state. If you run a strategic firm, keep profit positive, because that is what qualifies it for a rescue.
+
+![The Markets screen economy card: business cycle phase, growth, inflation, central bank rate and chair, the government, and laws in force.](images/governments-economy-card.png)
 
 Tip: a deal that would take you near the review share waits 4 weeks for review, so plan large mergers before an election that could lower the threshold.
 

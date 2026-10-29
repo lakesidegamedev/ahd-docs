@@ -13,6 +13,8 @@ When a shipment is needed, the engine:
 3. Prices each lane. Your own carriers come first, at cost. Then lanes you hold contracts on. Then other firms' carriers at a rate that rises as the lane fills. Outside carriers take whatever is left at a premium, so goods never stop. Pipelines have no outside carriers: a shipment either fits or has to take another mode.
 4. Charges the shipper once. The shipper's cash pays exactly what carriers receive.
 
+![Flow chart: need, shipping policy, route of up to three legs, then carriers offered in order: own carrier at 65 percent, contracted lots at 90, other owners by fill, outside carriers at 125.](images/freight-routing-flow.svg)
+
 ### Modes
 
 | Mode | Cost per lot per km | Speed (km a week) | Smallest load (lots) | Reach (km) | Needs | Carries |
@@ -23,6 +25,8 @@ When a shipment is needed, the engine:
 | Ship | 0.7 cents | 450 | 50 | Any distance on one sea system | Port at both ends | Dry, liquid, bulk |
 
 Cold goods (food, livestock, pharmaceuticals) go by truck or rail only. Services are never shipped.
+
+![Line chart of delivered cost per lot over distance for truck, rail, pipeline and ship, with truck stopping at 700 km.](images/freight-modes.svg)
 
 ### Rates
 
@@ -37,6 +41,8 @@ All rates are shares of the mode's base rate above.
 | Outside carriers | 125 percent |
 
 An owner's price climbs along a smooth curve with the lane's fill: 100 percent at empty, about 106 percent at half full, 116 percent at 80 percent full, 125 percent when full. There is no cliff where owners meet the outside price.
+
+![Line chart of lane rate against lane fill, rising from 100 to 125 percent of base, with the 110 percent common carrier cap and the own, contract and outside rates marked.](images/freight-rates.svg)
 
 **Worked example.** You ship 100 lots of steel 600 km. By truck, at the base rate that is 100 x 600 x 3 cents = $1,800, taking 2 weeks. By rail at the base rate it is 100 x 600 x 2 cents = $1,200, taking 1 week, but both ends need a rail terminal. On your own rail carrier it costs 65 percent of $1,200, $780. On an outside carrier it would cost 125 percent, $1,500. If a rival owns the rail lane and it is 80 percent full, you pay 116 percent, $1,392. Owning the carrier saves $720 on each such shipment against an outside carrier, and that saving is what a carrier plant has to repay.
 

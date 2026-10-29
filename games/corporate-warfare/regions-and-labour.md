@@ -14,9 +14,13 @@ Plants managed from outside their company's home region pay more for inputs: 2.5
 
 Goods, retail, leases and electricity clear in their own region (goods move between regions by [freight](freight.md)). Services that reach customers across a state, such as software, telecoms, advertising and construction, clear statewide, so a plant anywhere in the state can serve any of its regions.
 
+![Diagram: goods, retail, leases and electricity clear inside a region, services clear across the state, and input premiums are 100, 102.5 and 105 percent by origin.](images/regions-and-labour-clearing.svg)
+
 ### Labour
 
 Every region has three worker pools by skill tier (low, medium and high). Firms, rivals and background employers hire from the same pools by offering wages.
+
+![Line chart of applicant pull against wage offered as a share of the going wage; nobody applies below 80 percent.](images/regions-and-labour-applicant-pull.svg)
 
 1. Each week, 2 percent of staffed workers look for a new job, along with everyone unemployed.
 2. They go to the offers that pay most above the **reservation wage**, the least they will accept, which is 70 percent of the going wage. An offer below 80 percent of the going wage draws no applicants at all.
@@ -27,6 +31,8 @@ Every region has three worker pools by skill tier (low, medium and high). Firms,
 Mothballing a plant releases its whole workforce back to the pool. Reopening costs 5 percent of the plant's capital cost (at least $1,000) and rehires through the labour market.
 
 Farms run seasonal crews: output is 80 percent in the first quarter, 110 in the second, 130 in the third and 80 in the fourth, and crews follow it. A government can set a low-skill wage floor and union law, and wages and demand follow the business cycle.
+
+![Bar chart of farm output by quarter: 80, 110, 130 and 80 percent of normal.](images/regions-and-labour-farm-seasons.svg)
 
 ### Key numbers
 

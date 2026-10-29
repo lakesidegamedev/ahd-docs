@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Pegged currency band against the Deutsche Mark in Ruhr and Rhine 1991">
+<title>Pegged currency band against the Deutsche Mark in Ruhr and Rhine 1991</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="244.4" y2="244.4" stroke="#e4e4e7"/><text x="50" y="248.4" font-size="11" text-anchor="end" fill="#52525b">-10</text>
+<line x1="56" x2="624" y1="155" y2="155" stroke="#e4e4e7"/><text x="50" y="159" font-size="11" text-anchor="end" fill="#52525b">0</text>
+<line x1="56" x2="624" y1="65.6" y2="65.6" stroke="#e4e4e7"/><text x="50" y="69.6" font-size="11" text-anchor="end" fill="#52525b">10</text>
+<line x1="56" x2="56" y1="298" y2="12" stroke="#f4f4f5"/><text x="56" y="314" font-size="11" text-anchor="middle" fill="#52525b">0</text>
+<line x1="137.1" x2="137.1" y1="298" y2="12" stroke="#f4f4f5"/><text x="137.1" y="314" font-size="11" text-anchor="middle" fill="#52525b">52</text>
+<line x1="218.3" x2="218.3" y1="298" y2="12" stroke="#f4f4f5"/><text x="218.3" y="314" font-size="11" text-anchor="middle" fill="#52525b">104</text>
+<line x1="299.4" x2="299.4" y1="298" y2="12" stroke="#f4f4f5"/><text x="299.4" y="314" font-size="11" text-anchor="middle" fill="#52525b">156</text>
+<line x1="380.6" x2="380.6" y1="298" y2="12" stroke="#f4f4f5"/><text x="380.6" y="314" font-size="11" text-anchor="middle" fill="#52525b">208</text>
+<line x1="461.7" x2="461.7" y1="298" y2="12" stroke="#f4f4f5"/><text x="461.7" y="314" font-size="11" text-anchor="middle" fill="#52525b">260</text>
+<line x1="542.9" x2="542.9" y1="298" y2="12" stroke="#f4f4f5"/><text x="542.9" y="314" font-size="11" text-anchor="middle" fill="#52525b">312</text>
+<line x1="624" x2="624" y1="298" y2="12" stroke="#f4f4f5"/><text x="624" y="314" font-size="11" text-anchor="middle" fill="#52525b">364</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<rect x="193.3" y="12" width="81.1" height="286" fill="#dc2626" opacity="0.08"/><text x="233.9" y="52" font-size="11" text-anchor="middle" fill="#dc2626">Crisis window</text>
+<polyline points="56,155 624,155" fill="none" stroke="#27272a" stroke-width="1.5"  stroke-linejoin="round"/>
+<polyline points="56,134.9 624,134.9" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<polyline points="56,175.1 624,175.1" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<polyline points="56,20.9 624,20.9" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polyline points="56,289.1 624,289.1" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Weeks since January 1991</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Rate against the mark (% from parity)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#27272a" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">Parity</text>
+<line x1="128.6" x2="150.6" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="155.6" y="350" font-size="11" fill="#27272a">Normal band +/-2.25%</text>
+<line x1="286.6" x2="308.6" y1="346" y2="346" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="6 4"/><text x="313.6" y="350" font-size="11" fill="#27272a">Band after a crisis +/-15%</text>
+
+</svg>

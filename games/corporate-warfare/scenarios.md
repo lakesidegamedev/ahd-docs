@@ -6,6 +6,10 @@ A scenario is a starting world: a map, a cast of rival firms, a starting positio
 
 Start with **Great Lakes, 2000**. It has the fewest rivals (30), one currency, an ordinary economy and a plain start: a farm in central Ohio. The others add a sharper problem each: a bust you must see coming (Texas), a bubble and its crash (Silicon Valley), and several currencies (Ruhr and Rhine). All four are fully playable on every difficulty.
 
+![Great Lakes, 2000 map](images/scenarios-great-lakes-2000.png) ![Texas Oil Patch, 1981 map](images/scenarios-texas-1981.png) ![Silicon Valley, 1995 map](images/scenarios-silicon-valley-1995.png) ![Ruhr and Rhine, 1991 map](images/scenarios-ruhr-rhine-1991.png)
+
+*The four scenario maps: Great Lakes, Texas, Silicon Valley, Ruhr and Rhine.*
+
 | | Great Lakes 2000 | Texas Oil Patch 1981 | Silicon Valley 1995 | Ruhr and Rhine 1991 |
 | --- | --- | --- | --- | --- |
 | Start year | 2000 | 1981 | 1995 | 1991 |
@@ -18,6 +22,8 @@ Start with **Great Lakes, 2000**. It has the fewest rivals (30), one currency, a
 | Feel | Steady, broad | Boom then bust | Bubble then crash | Complex, hawkish central bank |
 
 Your starting capital depends on difficulty: $8,000,000 on Easy, $5,000,000 on Standard, $3,000,000 on Hard (see [Rivals](rivals.md) for what difficulty does to rivals). You cannot mix scenarios in one game.
+
+![Line chart of the default oil price index for each scenario over its length, plus chips and electronics for Silicon Valley.](images/scenarios-oil-paths.svg)
 
 ## Great Lakes, 2000
 

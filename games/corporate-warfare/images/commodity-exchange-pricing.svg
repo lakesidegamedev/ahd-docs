@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="The price a seller wants against how short buyers are or how much stock is unsold">
+<title>The price a seller wants against how short buyers are or how much stock is unsold</title>
+<rect x="0.5" y="0.5" width="639" height="359" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="56" x2="624" y1="250.3" y2="250.3" stroke="#e4e4e7"/><text x="50" y="254.3" font-size="11" text-anchor="end" fill="#52525b">80</text>
+<line x1="56" x2="624" y1="155" y2="155" stroke="#e4e4e7"/><text x="50" y="159" font-size="11" text-anchor="end" fill="#52525b">100</text>
+<line x1="56" x2="624" y1="59.7" y2="59.7" stroke="#e4e4e7"/><text x="50" y="63.7" font-size="11" text-anchor="end" fill="#52525b">120</text>
+<line x1="112.8" x2="112.8" y1="298" y2="12" stroke="#f4f4f5"/><text x="112.8" y="314" font-size="11" text-anchor="middle" fill="#52525b">-4</text>
+<line x1="226.4" x2="226.4" y1="298" y2="12" stroke="#f4f4f5"/><text x="226.4" y="314" font-size="11" text-anchor="middle" fill="#52525b">-2</text>
+<line x1="340" x2="340" y1="298" y2="12" stroke="#f4f4f5"/><text x="340" y="314" font-size="11" text-anchor="middle" fill="#52525b">0</text>
+<line x1="453.6" x2="453.6" y1="298" y2="12" stroke="#f4f4f5"/><text x="453.6" y="314" font-size="11" text-anchor="middle" fill="#52525b">2</text>
+<line x1="567.2" x2="567.2" y1="298" y2="12" stroke="#f4f4f5"/><text x="567.2" y="314" font-size="11" text-anchor="middle" fill="#52525b">4</text>
+<rect x="56" y="12" width="568" height="286" fill="none" stroke="#a1a1aa"/>
+<line x1="56" x2="624" y1="155" y2="155" stroke="#a1a1aa" stroke-dasharray="5 4"/><text x="620" y="151" font-size="11" text-anchor="end" fill="#52525b">Reference price</text>
+<polyline points="56,298 70.2,290.9 84.4,283.7 98.6,276.6 112.8,269.4 127,262.3 141.2,255.1 155.4,248 169.6,240.8 183.8,233.7 198,226.5 212.2,219.4 226.4,212.2 240.6,205.1 254.8,197.9 269,190.8 283.2,183.6 297.4,176.5 311.6,169.3 325.8,162.2 340,155 354.2,147.9 368.4,140.7 382.6,133.6 396.8,126.4 411,119.3 425.2,112.1 439.4,105 453.6,97.8 467.8,90.7 482,83.5 496.2,76.4 510.4,69.2 524.6,62.1 538.8,54.9 553,47.8 567.2,40.6 581.4,33.4 595.6,26.3 609.8,19.2 624,12" fill="none" stroke="#2563eb" stroke-width="2"  stroke-linejoin="round"/>
+<circle cx="340" cy="155" r="4" fill="#fff" stroke="#dc2626" stroke-width="2"/><text x="350" y="141" font-size="11" fill="#27272a" text-anchor="start">Real price closes 1/6 of the gap a week, max 2%</text>
+<text x="340" y="332" font-size="12" text-anchor="middle" fill="#27272a">Weeks of buyer shortage (right) or unsold stock over target (left)</text>
+<text transform="translate(14 155) rotate(-90)" font-size="12" text-anchor="middle" fill="#27272a">Wanted price (% of reference)</text>
+<line x1="56" x2="78" y1="346" y2="346" stroke="#2563eb" stroke-width="2.5" /><text x="83" y="350" font-size="11" fill="#27272a">Price the seller wants</text>
+
+</svg>

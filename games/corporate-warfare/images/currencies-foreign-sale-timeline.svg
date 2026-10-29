@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" width="640" height="240" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="Timeline of a foreign sale from booking to cash collection">
+<title>Timeline of a foreign sale from booking to cash collection</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#52525b"/></marker></defs>
+<rect x="0.5" y="0.5" width="639" height="239" fill="#ffffff" stroke="#d4d4d8"/>
+<line x1="40" y1="120" x2="600" y2="120" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<circle cx="100" cy="120" r="6" fill="#2563eb"/><text x="100" y="148" font-size="12" font-weight="600" text-anchor="middle" fill="#27272a">Week 0</text>
+<circle cx="480" cy="120" r="6" fill="#2563eb"/><text x="480" y="148" font-size="12" font-weight="600" text-anchor="middle" fill="#27272a">Week 2</text>
+<rect x="20" y="30" width="170" height="60" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="105" y="56.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Sale booked</text><text x="105" y="71.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">receivable in the seller's books</text>
+<rect x="395" y="30" width="190" height="60" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="490" y="56.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Cash collected</text><text x="490" y="71.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">at that day's exchange rate</text>
+<rect x="300" y="170" width="300" height="50" rx="6" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5" /><text x="450" y="191.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Difference goes to other income</text><text x="450" y="206.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">as an FX gain or loss</text>
+<line x1="100" y1="90" x2="100" y2="114" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="480" y1="90" x2="480" y2="114" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="480" y1="126" x2="480" y2="170" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<text x="290" y="108" font-size="11"  text-anchor="middle" fill="#52525b">rate can move meanwhile</text>
+</svg>

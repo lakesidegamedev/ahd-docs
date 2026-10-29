@@ -2,6 +2,8 @@
 
 Corporate Warfare is an offline, single-player economic strategy game. You are an investor at the head of a holding company. You build plants, open divisions, float subsidiaries, sign joint ventures, ship goods over a freight network and fight named rival firms for every market, while business cycles, central banks, elections and world commodity prices move under you.
 
+![The Map screen on the Great Lakes scenario with a division selected in the left panel.](images/overview-map.png)
+
 The game is free while in development and needs no account. It runs on Windows, Linux and Android today. iPhone, iPad and Mac versions are waiting on App Store approval. There is no multiplayer: every rival is run by the game.
 
 ## What you do
@@ -17,6 +19,10 @@ One tick is one game week. You can play a week at a time or let the clock run at
 ## How the systems connect
 
 Plants need workers and inputs. Workers come from regional labour pools (regions and labour). Inputs come from the commodity exchange, priced as delivered, so freight decides who can sell to whom. What you make sells on the same exchange to other plants and to households. The business cycle and the central bank set demand, loan rates and wages. Governments change the rules on tax, mergers, freight and prices. Rivals compete for the same pools, lanes and markets, and your group structure decides how much control, tax and risk you carry.
+
+![Diagram of how the main systems connect: business cycle, governments, rivals and labour drive plants; plants trade on the commodity exchange; freight links them; group structure and currencies sit around the edge.](images/overview-systems-map.svg)
+
+*Arrows point from the driving system to the driven one.*
 
 ## How long a game is and how you score
 

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 440" width="640" height="440" font-family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' role="img" aria-label="How the main systems of Corporate Warfare connect">
+<title>How the main systems of Corporate Warfare connect</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#52525b"/></marker></defs>
+<rect x="0.5" y="0.5" width="639" height="439" fill="#ffffff" stroke="#d4d4d8"/>
+<rect x="250" y="180" width="140" height="56" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5" /><text x="320" y="204.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Plants</text><text x="320" y="219.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">what you build</text>
+<rect x="20" y="180" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="90" y="204.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Labour pools</text><text x="90" y="219.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">wages, skills</text>
+<rect x="480" y="180" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="550" y="204.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Commodity exchange</text><text x="550" y="219.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">goods and prices</text>
+<rect x="480" y="300" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="550" y="324.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Freight</text><text x="550" y="339.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">lanes and carriers</text>
+<rect x="20" y="30" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="90" y="54.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Business cycle</text><text x="90" y="69.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">and central bank</text>
+<rect x="250" y="30" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="320" y="54.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Governments</text><text x="320" y="69.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">and laws</text>
+<rect x="480" y="30" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="550" y="54.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Rivals</text><text x="550" y="69.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">raids, bids, grudges</text>
+<rect x="250" y="320" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="320" y="344.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Group structure</text><text x="320" y="359.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">holding, subsidiaries</text>
+<rect x="20" y="320" width="140" height="56" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" /><text x="90" y="344.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#27272a">Currencies</text><text x="90" y="359.5" font-size="12" font-weight="400" text-anchor="middle" fill="#27272a">pegs and FX</text>
+<line x1="90" y1="90" x2="90" y2="176" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="164" y1="82.13043478260869" x2="476" y2="183.8695652173913" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="246" y1="58" x2="164" y2="58" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="320" y1="90" x2="320" y2="176" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="164" y1="208" x2="246" y2="208" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="394" y1="208" x2="476" y2="208" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="550" y1="240" x2="550" y2="296" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="488.6666666666667" y1="296" x2="381.3333333333333" y2="240" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="500.93333333333334" y1="90" x2="369.06666666666666" y2="176" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="320" y1="240" x2="320" y2="316" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="164" y1="325.47826086956525" x2="476" y2="230.52173913043478" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<line x1="246" y1="348" x2="164" y2="348" stroke="#52525b" stroke-width="1.5"  marker-end="url(#a)"/>
+<text x="20" y="425" font-size="11"  text-anchor="start" fill="#52525b">Arrows point from the system that drives to the system that is driven.</text>
+</svg>

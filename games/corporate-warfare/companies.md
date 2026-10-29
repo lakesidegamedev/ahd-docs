@@ -8,11 +8,17 @@ You play an investor. Your money and your shares sit in a portfolio above your c
 
 A company opens a **division** the first time it builds a plant of a sector type in a region. Opening costs a $100,000 entry fee, and the founding plant is built at half its strategy's capital cost. Later plants in that region and sector join the division and must run its strategy. **Retooling** moves the whole division to another strategy of the same sector for a quarter of the new strategy's capital cost per block and a third of its build time (at least 4 weeks). A division cannot change sector.
 
+![Diagram of a group: investor portfolio, holding company, subsidiaries, divisions and plants, with carve out, list and spin off, and a joint venture between two groups.](images/companies-group-structure.svg)
+
 Three costs rise as you grow:
 
 - **Dominance.** Expanding an existing division past 50 percent of a local market multiplies its capital cost, up to 3 times at a 100 percent share with four or more rivals in the market. With no rival it tops out at 1.7 times. Opening a division never pays this.
 - **Sprawl.** Overhead is paid on weekly revenue and grows with the square of the division count, not the plant count. See the table below.
 - **Construction capacity.** You build at normal speed and price while blocks under construction stay within 40 plus a tenth of the blocks you already run (at most 400). Beyond that, each capacity's worth of excess adds 50 percent to cost (at most 2.5 times) and a full base build time to the lead time (at most 3 times).
+
+![Line chart of expansion cost multiplier against local market share from 50 to 100 percent, for 0, 1, 2 and 4 or more rivals.](images/companies-dominance.svg)
+
+![Line chart of division overhead as a share of weekly revenue against number of divisions, with and without three owned logistics divisions.](images/companies-sprawl.svg)
 
 Each division has a **reputation** from 0 to 10,000, starting at 2,500. Quality, marketing and brand lift it, a raid knocks it down, and it is earned faster than it is lost. It scales how customers see your quality in every market, by up to plus 15 percent at 10,000 and minus 5 percent at 0, which acts as a price premium and as loyalty.
 
@@ -103,6 +109,8 @@ Tips: to get control back after dilution, buy shares on the exchange until you p
 - [Freight](freight.md): carriers you own run lanes that rivals use.
 - [Governments and market laws](governments.md): your market share can trigger merger review.
 - [Currencies](currencies.md): a firm founded abroad keeps books in another currency.
+
+![Diagram: rivals, freight, labour and the central bank drive your company; your company affects the commodity exchange, currencies and rivals.](images/companies-connections.svg)
 
 ## Status
 

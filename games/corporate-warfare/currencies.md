@@ -13,7 +13,11 @@ Each week the rates move:
 3. The farther the underlying rate presses against the band, the likelier a crisis in any week. A crisis widens the band, as happened to the European exchange rate mechanism in 1992 and 1993. It can happen only once per currency.
 4. Gateway prices and background wages follow each country's money.
 
+![Chart of the peg band around parity at plus and minus 2.25 percent, the widened 15 percent band after a crisis, and the crisis window from week 88 to 140 in Ruhr and Rhine 1991.](images/currencies-peg-band.svg)
+
 A sale paid in another currency books a receivable and is collected 2 weeks later at the rate on the day it is collected. The difference between the booked value and the money you actually receive is an **FX gain or loss**, booked to other income.
+
+![Timeline: a foreign sale is booked as a receivable at week 0 and collected at week 2 at that day's rate, with the difference booked as an FX gain or loss.](images/currencies-foreign-sale-timeline.svg)
 
 ### Key numbers
 
