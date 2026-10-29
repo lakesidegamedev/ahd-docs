@@ -16,6 +16,8 @@ The published site also includes the player wiki, which lives in the game repo (
 
 Docs suffixed `-as-shipped` are grounded in the current code and supersede older design docs where they disagree. Older docs describe intent at the time of writing; when a doc and the code disagree, the code wins. Formulas and constants should cite the file they come from. A constant that doesn't match the code is a bug in the doc: PRs fixing those are the most useful contribution here.
 
+Every page explaining a game mechanic, in any game on this site, follows the [documentation standard](./engineering/docs-standard.md): a linked player page and technical page, required sections, and the checklist audits use.
+
 Style: plain direct prose, `##` sections, real file paths in backticks, real constant values, no em or en dashes. Any `-as-shipped` doc shows the pattern. Player wiki changes go to the game repo, not here.
 
 ## Building the site

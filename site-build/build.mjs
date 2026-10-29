@@ -107,7 +107,7 @@ const DESIGN_GROUPS = [
 ];
 const ENGINEERING_GROUPS = [
   ["Architecture", ["repo-operating-map", "architecture-boundaries", "turn-processor-as-shipped", "type-and-schema-contracts", "seed-bootstrap-call-graph", "shadow-ledger", "performance-hotspots"]],
-  ["Conventions", ["best-practices", "naming-and-organization", "comment-standards", "domain-reuse-guidelines", "shared-utility-guidelines", "ui-reuse-guidelines", "mongodb-access-guidelines", "api-route-checklist"]],
+  ["Conventions", ["docs-standard", "best-practices", "naming-and-organization", "comment-standards", "domain-reuse-guidelines", "shared-utility-guidelines", "ui-reuse-guidelines", "mongodb-access-guidelines", "api-route-checklist"]],
   ["Design System", ["design-system", "design-system-components", "design-system-themes"]],
   ["Workflow & Testing", ["developer-workflow", "test-architecture-and-gaps"]],
 ];
