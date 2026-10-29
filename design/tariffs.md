@@ -254,8 +254,8 @@ await db.collection<Tariff>("tariffs").updateOne(
 | `src/lib/tariffs/tariffEffects.ts`      | All tariff effect calculations            |
 | `src/lib/tariffs/ftaOverrides.ts`       | Free trade agreement pair loading + lookup |
 | `src/lib/budget/fiscalYear.ts`          | Tariff rate application in budget context |
-| `src/lib/billEnactment.ts`              | Tariff provision enactment (routes to `applyTariffProvision`) |
-| `src/lib/legislationEffects.ts`         | Legislation effects on enactment          |
+| `src/lib/legislationEffects.ts`         | Routes enacted tariff provisions to `applyTariffProvision` |
+| `src/lib/tariffs/reconcileTariffs.ts`   | Reapplies enacted tariff provisions in bulk |
 
 ## Related Documentation
 
