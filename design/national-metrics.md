@@ -82,7 +82,7 @@ Each turn the vote pool for a race is scaled by `(1 + (approvalDecimal - 0.5) * 
 
 ### What moves a metric
 
-State metrics change from enacted laws (policy effects), demographic shifts, the metric engine's own links between nodes, cabinet orders and settings, the budget and economic model, decay toward baseline, and events such as crises. Players move them by passing laws, running cabinet actions and managing the budget. They cannot edit a metric directly.
+State metrics change from enacted laws (policy effects), demographic shifts, the metric engine's own links between nodes, cabinet orders and settings, the budget and economic model, decay toward baseline, and events such as crises. Players move them by passing laws, running cabinet actions and managing the budget. They cannot edit a metric directly. GDP growth is the exception to the direct writers: the metric engine recomputes `economic.gdpGrowth` from the sector signal every turn with no inertia and no policy delta, so a cabinet order or cabinet building that lists a GDP growth effect does not move it. Crisis shocks reach it only through `economic.sectorGrowth`. See [Economic Systems](./economic-systems.md).
 
 ## Data
 
@@ -271,12 +271,12 @@ Gaps: there is no test that every playable country appears in `NATIONAL_SCOPE`, 
 
 ## Known issues and history
 
-- **Weighting differs between the page and the stored document.** The rollup weights unemployment by labour force and GDP growth by GDP, while `loadNationalMetrics` weights every metric by covered population. For the trace inputs the page shows unemployment 5.0 and GDP growth 3.0 against stored 4.842 and 2.4. The player guide describes the rollup weighting.
+- **Weighting differs between the page and the stored document.** The rollup weights unemployment by labour force and GDP growth by GDP, while `loadNationalMetrics` weights every metric by covered population. For the trace inputs the page shows unemployment 5.0 and GDP growth 3.0 against stored 4.842 and 2.4. The Economy page and the budget use the GDP-weighted figure (`budget.economicFactors.gdpGrowth`).
 - **Two approval paths.** The metrics page and approval chart can show slightly different numbers: the chart history reflects whatever the snapshot computed at turn time, and the live route is a lighter fallback.
 - **Earlier version of this page described a global baseline.** The metrics endpoint used to compare a country against an average across all countries. It no longer does: regions are scored against the country's own population-weighted average. Corrected 2026-10-29.
 - **Earlier version of this page described a single document store.** Political categories now live on the board and the national rollup writes only the macro half. The legacy `stateMetrics` read shape remains for consumers; corrected 2026-10-29.
 - **DD national scope.** `dd_national` was missing from `NATIONAL_SCOPE` after DD became playable (#3488), so East Germany had no national row and no economy chart entry. Now registered.
 - **Cabinet order cap.** `MAX_PER_METRIC_MODIFIER_PER_TURN` was raised from 0.05 to 0.08 in #0800 after a runaway `gdpGrowth` bug (#0571) showed the need for a hard cap.
-- **Wiki and design mismatch, none found for the rollup.** The player guide's unemployment and GDP growth weighting matches `src/lib/nationalMetrics/rules.ts`.
+- **Wiki and design.** The player guide's unemployment and GDP growth weighting matches `src/lib/nationalMetrics/rules.ts`, and it now also states that the Metrics page population-weights every metric, growth included (`src/lib/country/nationalMetrics.ts`), so its growth figure can differ from the GDP-weighted figure on the Economy page and in the budget. This matches the weighting known issue above.
 
 Last checked: 2026-10-29, version 1.18.0

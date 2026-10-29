@@ -257,7 +257,7 @@ The coefficients of those additional terms are in the Other pressures table abov
 
 #### Sector-Driven Growth, Not Okun's Law
 
-GDP growth is not derived from unemployment. The headline rate is the `economic.gdpGrowth` node (`src/lib/metricEngine/registry/economic.ts`), which is the measured real output growth from the `economic.sectorGrowth` node: the revenue-weighted sector rate (trailing revenue trend and constant-price output), adjusted by the consumption-tax wedge and a net-exports impulse.
+GDP growth is not derived from unemployment. The headline rate is the `economic.gdpGrowth` node (`src/lib/metricEngine/registry/economic.ts`), which passes through the `economic.sectorGrowth` node. That node's sector signal depends on the market stage. Below the plants stage it is the revenue-weighted average of sector `currentGrowthRate`, with unowned sectors at `DEFAULT_UNOWNED_GROWTH_RATE = 0.5`. At the plants stage it is the trailing host-currency realized-revenue trend deflated by lagged inflation (falling back to the one-turn realized delta, then the legacy average), with the constant-price output signal blended in by `(historySpan - 8) / 40` (`blendOutputGrowthSignal`, `src/lib/metricEngine/rules/outputVolume.ts`). The signal is then adjusted by the consumption-tax wedge and a net-exports impulse.
 
 ```typescript
 sectorImpulse = sectorGrowth - taxGap × SALES_TAX_GROWTH_COEFFICIENT
@@ -290,9 +290,13 @@ Worked example: a sector signal of 3.0, total sales tax 2 points above neutral, 
 GDP growth uses its own inertia constant to prevent volatile swings. The smoothing sits on the `sectorGrowth` node (inertia `INERTIA`, policy-delta cap `MAX_POLICY_DELTA`, bounds -10 to 15); the `gdpGrowth` node itself has inertia 0 and passes the smoothed value through, bounded to -15..15:
 
 ```typescript
-smoothedGdpGrowth = INERTIA × previousGdpGrowth + (1 - INERTIA) × calculatedGdpGrowth
+baseline = clamp(INERTIA × previousBaseline + (1 - INERTIA) × target, -10, 15)
+sectorGrowth = baseline + clamp(policyDelta, -4, +4) × 0.9
 // INERTIA = 0.4 in src/lib/turn/gdpGrowth.ts (separate from inflation.ts's INERTIA = 0.35)
+// evaluated by the shared node evaluator in src/lib/metricEngine/coexistence.ts
 ```
+
+The smoothing runs on the stored baseline (`economic.sectorGrowth.simBaseline`), not on last turn's displayed value. International organization nudges are added to the target before smoothing. The headline `gdpGrowth` node has inertia 0 and `maxPolicyDelta` 0, so any write to `economic.gdpGrowth.value` before the engine runs is overwritten that turn (see Known issues).
 
 This creates gradual economic cycles rather than turn-to-turn volatility. Crisis rate shocks land on the `sectorGrowth` node as a policy delta capped at `MAX_POLICY_DELTA` that erodes 10 percent per turn after the crisis ends (see [Crisis System](./crisis-system.md)).
 
@@ -339,7 +343,7 @@ Worked example (fallback path): previous unemployment 5.0, GDP growth 1.0 agains
 | --- | --- |
 | How do I reduce inflation? | Raise the prime rate above neutral (1.2 pp off per 1 pp, lagged 12 turns), run a smaller deficit or a surplus (0.15 per point of deficit), lower tariffs above 3.0 (0.05 per point), and let wage growth cool toward 2.5 (0.15 per point). The prime rate is set by the central bank chair. |
 | Why is inflation not moving after a rate hike? | 30 percent of the rate acts at once, the rest over 12 turns, and inflation itself closes only a fixed share of its gap to the turn target each turn (`STEP_ALPHA = 1 - (1 - 0.08) × 0.35 = 0.678`), bounded by the 1.5 pp limit. Expect several turns. |
-| Why did real GDP fall? | GDP growth follows what sectors actually produce, so falling sector revenue, higher consumption taxes (0.05 per point above neutral) or weak trade growth pull it down. |
+| Why did real GDP fall? | GDP growth follows the sectors: their growth rates below the plants stage, their inflation-adjusted sales and physical output at the plants stage. Falling sector revenue, higher consumption taxes (0.05 per point above neutral), weak trade growth (0.15 per point below 2.5) or a crisis shock pull it down. Interest rates and public investment move potential growth, not the headline. |
 | Why is unemployment rising? | Employment counts fell, or on the fallback path growth is below trend (0.25 per point). Unemployment moves slowly because of its 85 percent inertia. |
 | What is the prime rate? | The central bank's policy rate. It is set by the chair (`src/lib/turn/centralBankChairTurn.ts`), see [Currency Exchange](./currency-exchange.md) and [Monetary System](./monetary-system-as-shipped.md). |
 
@@ -367,13 +371,13 @@ Worked example (fallback path): previous unemployment 5.0, GDP growth 1.0 agains
 
 ### Currency storage (v0.2.6)
 
-Inflation, GDP-growth, and unemployment math reads and writes money fields in each entity's **native currency** (country currency for budgets, `liquidCurrencyCode` for corporations). Cross-entity aggregation (global GDP, global debt-to-GDP, commodity flows) anchor-normalizes via `readCorpEconomicAnchor` and the anchor rate map before arithmetic, so a 2% inflation shock against one country doesn't pollute another's base via mixed-currency sums.
+Inflation, GDP-growth, and unemployment math reads and writes money fields in each entity's **native currency** (country currency for budgets, `liquidCurrencyCode` for corporate balances, host-state currency for sector revenue). Cross-entity aggregation (global GDP, global debt-to-GDP, commodity flows) anchor-normalizes via `readCorpEconomicAnchor` and the anchor rate map before arithmetic, so a 2% inflation shock against one country doesn't pollute another's base via mixed-currency sums.
 
 | Dimension                                              | Storage                                                                  |
 | ------------------------------------------------------ | ------------------------------------------------------------------------ |
 | `FederalBudget.gdp`, `StateBudget.stateGdp`            | country's `currencyCode`                                                 |
 | Tax bases (`corporateProfits`, `taxableSales`, etc.)   | country's `currencyCode`                                                 |
-| Corporate revenue/income inputs to GDP growth          | corp's `liquidCurrencyCode` (anchor-normalized when summed across corps) |
+| Corporate revenue/income inputs to GDP growth          | host state's currency; the plants signal compares host-to-host sums so FX moves cannot read as growth |
 | Inflation multipliers / coefficients / ratios          | dimensionless, storage-agnostic                                          |
 | Cross-country totals (global GDP, global money supply) | computed in ₳ by converting each value through the anchor rate map; displayed via wallet preference         |
 
@@ -473,7 +477,7 @@ Smoothing: `0.35 × 2.0 + 0.65 × 1.75 = 1.8375`. Mean reversion: `+0.08 × (2.0
 
 **Effective prime rate.** The bank holds 3.0 for eleven turns, then moves the spot rate to 4.0 (history window of 12, latest entry 4.0). Weights are `max(1/12, turnsAgo/12)`: the newest entry weighs 1/12, older entries weigh 1/12 through 11/12; total weight is 67/12 = 5.5833. Weighted sum is `(3.0 × 66 + 4.0 × 1) / 12 = 16.8333`, so the trailing average is 3.0149. Effective rate is `0.3 × 4.0 + 0.7 × 3.0149 = 3.3105`. The monetary term is `(3.0 - 3.3105) × 1.2 = -0.37`, not the -1.20 the full 4.0 would give. A 1 pp hike therefore acts with about 31 percent of its eventual force on the first turn.
 
-**GDP growth.** Sector signal 3.0, sales tax gap +2, trade growth 1.0 above baseline: node input `3.0 - 2 × 0.05 + 0.15 × 1.0 = 3.05`. With a previous `sectorGrowth` of 2.0 and no policy delta, smoothing gives `0.4 × 2.0 + 0.6 × 3.05 = 2.63`. At `realOutputBlendWeight` 1 the `gdpGrowth` node equals 2.63 (inside -15..15).
+**GDP growth.** Sector signal 3.0, sales tax gap +2, trade growth 1.0 above baseline: node input `3.0 - 2 × 0.05 + 0.15 × 1.0 = 3.05`. With a previous `sectorGrowth` baseline of 2.0 and no policy delta, smoothing gives `0.4 × 2.0 + 0.6 × 3.05 = 2.63`. At `realOutputBlendWeight` 1 the `gdpGrowth` node equals 2.63 (inside -15..15).
 
 **Unemployment, employment path.** A region with structural rate 4.5 (no programmes) and an output gap of +2: `cyclicalRate = 4.5 - 0.4 × 2 = 3.7`. At workforce skill 50 the background economy closes `1 - 0.5^(1/24) = 2.85` percent of its remaining gap each turn (half-life 24 turns) and companies fill `1 - 0.5^0.5 = 29.3` percent of open positions per turn. Unemployment therefore slides toward 3.7 over a few dozen turns rather than jumping.
 
@@ -494,7 +498,7 @@ Smoothing: `0.35 × 2.0 + 0.65 × 1.75 = 1.8375`. Mean reversion: `+0.08 × (2.0
 - **Unemployment bounds**: 1.0 to 15.0 on the Okun fallback path; the employment-driven value is bounded below by `UNEMPLOYMENT_MIN` and above by 100. Employment cannot exceed 99 percent of the labour force.
 - **Okun is asymmetric**: a boom lowers unemployment more slowly (0.2) than a slump raises it (0.25).
 - **GDP growth bounds**: the `sectorGrowth` signal is held to -10..15 and the headline to -15..15, so no shock or policy delta can exceed those.
-- **Deliberate exclusions**: GDP growth has no pull toward a calibrated potential; potential growth is a displayed supply-side indicator only. Housing cost no longer moves inflation after the 2026 deflation spiral. Household prices follow inflation but never feed back into it.
+- **Deliberate exclusions**: GDP growth has no pull toward a calibrated potential. Potential growth (`0.66 × labour-force growth + 0.34 × capital-stock growth + TFP`) is written as `economic.potentialGrowth`, seeds a new region's output trend, serves as the Okun reference and the legacy blend input during the cutover, and does not set the headline at blend weight 1. Interest rates and government spending reach growth only through capital and potential or through corporate revenue; tariffs only through trade growth. Housing cost no longer moves inflation after the 2026 deflation spiral. Household prices follow inflation but never feed back into it.
 
 ## Invariants
 
@@ -564,8 +568,9 @@ Gaps: no test pins the database wrapper defaults (wage 3.0, previous inflation 2
 - **Annual inflation recompute.** `processFiscalYear` (`src/lib/budget/fiscalYear.ts`) still calls `calculateCountryInflation` once a year with commodity, forex, savings, policy stance and money supply all zero and writes the result to `economicFactors.inflationRate`. `inflationRecalc` then steps from that value in the same turn, so the annual boundary can briefly pull inflation toward a zero-pressure estimate, limited by the 1.5 pp step. It does not gate the per-turn calculation.
 - **Stale interface comment.** The `forexPressure` doc comment in `inflation.ts` describes `rate / baseRate - 1`; the live signal is the annualised bounded 12-turn change from `calculateFxInflationPressure`. Earlier text of this page repeated the stale form.
 - **Database defaults differ from pure defaults.** See Edge cases; the database wrapper uses wage growth 3.0 and previous inflation 2.5 where the pure function defaults to 2.5 and the target.
+- **Cabinet growth effects are dead.** Cabinet orders and cabinet infrastructure (Freight Corridor, Airport Upgrade, `src/lib/constants/cabinetInfra.ts`) `$inc` `economic.gdpGrowth.value` in `ministerialOrders` (`src/lib/turn/ministerialOrderProcessing.ts`), which runs before `metricEngine` in the same turn. The headline node has no inertia and no policy delta, so the engine overwrites the increment and the listed GDP growth lift has no effect. Fix options: route these effects to `economic.sectorGrowth` as crises do (`src/lib/crises/rules/metricPath.ts`), or drop the effect and its in-game description. Owner decision, not changed.
 - **Mean-reversion comment.** The code comment names `BASE_TARGET` as the anchor, but the live anchor is the country's `targetInflation`.
 - **Player wiki.** National Metrics and Central Banks agree with the code on every number checked (35 percent inertia, 1.5 point step, -2.0 floor, 1.2 against 0.8 monetary asymmetry, 0.4 per point output gap on unemployment, 24-turn background half-life, Okun 0.2 and 0.25 with 85 percent inertia). One omission: the wiki says rate changes "feed in gradually over 12 turns" but does not say that 30 percent of the spot rate acts at once.
-- **History.** `INERTIA` raised from 0.2 to 0.35 to stop elevated inputs becoming a permanent floor. `MONETARY_COEFF_LOW` raised from 0.4 to 0.8. A deflation spiral (t1165 and t1166, July 2026) restored the -2.0 floor and led to retiring the housing term (coefficient 0) and the era-keyed cost-of-living neutral index. Currency storage moved to native currency per entity in v0.2.6. GDP growth moved from a potential-growth pull to measured real output, and unemployment from pure Okun to the employment stock; both keep a blend or fallback for live worlds.
+- **History.** `INERTIA` raised from 0.2 to 0.35 to stop elevated inputs becoming a permanent floor. `MONETARY_COEFF_LOW` raised from 0.4 to 0.8. A deflation spiral (t1165 and t1166, July 2026) restored the -2.0 floor and led to retiring the housing term (coefficient 0) and the era-keyed cost-of-living neutral index. Currency storage moved to native currency per entity in v0.2.6. GDP growth moved from a potential-growth pull to measured real output, and unemployment from pure Okun to the employment stock; both keep a blend or fallback for live worlds. 2026-10-29: the sector signal description is now mode-dependent (below plants versus plants), the smoothing formula is the baseline EMA plus a capped, decaying policy delta, and GDP growth inputs are in host-state currency, not the owner's `liquidCurrencyCode`.
 
 Last checked: 2026-10-29, version 1.18.0
