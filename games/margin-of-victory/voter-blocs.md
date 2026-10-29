@@ -1,6 +1,6 @@
 # Voter blocs
 
-Every state is divided into voter blocs. Each bloc has its own issues, a starting lean and a likelihood of turning out. Actions reach blocs separately, so a rally in Pennsylvania moves suburban women there more than it moves evangelical voters.
+Every state is divided into voter blocs. Each bloc has its own issues, a starting lean and a likelihood of turning out. Actions reach blocs separately, so a rally in Pennsylvania moves suburban women there more than it moves seniors.
 
 These are the blocs in a US campaign.
 
@@ -13,4 +13,4 @@ These are the blocs in a US campaign.
 | Hispanic voters | Swing | Economy, immigration, healthcare, jobs | Concentrated in some states. Varies by state. |
 | Young voters (18 to 29) | Democratic | Climate, student debt, jobs, social issues | Often stay home. Get-out-the-vote and enthusiasm matter most. |
 | Seniors (65 and over) | Slightly Republican | Healthcare, Social Security, stability, economy | Vote reliably, hard to persuade. Value experience. |
-| Evangelical Christians | Republican | Culture, abortion, religious liberty, judges | Vote very reliably, hard to persuade. |
+| Asian American and other voters | Democratic | Economy, healthcare, immigration | Lower turnout than most blocs. |

@@ -13,11 +13,11 @@ Rival firms are run by named chief executives drawn from a cast of fictional peo
 - **Builders** build.
 - **Cautious** firms keep a bigger cash cushion and rarely start fights.
 
-A rival that loses money for six four-week periods in a row can replace its chief executive with someone of a different approach. Difficulty changes only how sharp and how aggressive rivals are.
+A rival that loses money for six four-week periods in a row can replace its chief executive with someone of a different approach, but never within 52 weeks of the last appointment. Difficulty changes only how sharp and how aggressive rivals are.
 
 ## Grudges and allies
 
-A rival you raid, bid for or squeeze out of a freight lane holds a **grudge** and comes after you. Grudges fade over about a year. Joint venture partners and the two sides of a friendly deal become **allies**, who are never raided or bid for. A rival's dossier, on its stock page or a region board, lists its grudges, its friends and its recent moves.
+A rival you raid, bid for or squeeze out of a freight lane holds a **grudge** and comes after you. Grudges lose 1 percent of their strength each week (a half-life of about 69 weeks), so a big one lasts for years, and one is forgotten once it falls below 1.5 percent of the maximum. Joint venture partners and the two sides of a friendly deal become **allies**, who are never raided or bid for. A rival's dossier, on its stock page or a region board, lists its grudges, its friends and its recent moves.
 
 ## Raids
 

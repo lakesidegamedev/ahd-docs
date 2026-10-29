@@ -14,7 +14,7 @@ Actions resolve in order from day 1 to day 7, so order matters. Setting up a mov
 ## What limits you
 
 - **Cash.** Spent on ads, surrogates, field offices, get-out-the-vote and opposition research. Fundraising brings more in.
-- **Actions.** A weekly pool of 7 plus half your candidate's energy. Every move costs one action, with at most 3 per day. The pool refills each week.
+- **Actions.** A weekly pool of 7 plus your candidate's energy divided by 20 (rounded up), plus any running mate bonus and a difficulty bonus (Easy +5, Normal +1). Every move costs one action, with at most 3 per day. The pool refills each week.
 - **Staff capacity.** A hard cap on how many field offices you can run. It does not refill.
 - **Momentum.** National and per state. It drives poll movement and makes fundraising easier. It can turn negative.
 
