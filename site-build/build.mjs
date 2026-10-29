@@ -736,8 +736,32 @@ fs.copyFileSync(LOGO_SRC, path.join(OUT, "ahd-logo.png"));
 // build image URLs without knowing each game's asset naming.
 fs.copyFileSync(LOGO_SRC, path.join(OUT, "logo.png"));
 
+// In-game wiki widgets are fenced blocks (```wiki-chart, ```guide-screenshot,
+// ```favorability-decay ...) rendered by React in the game. This site cannot run
+// them, so screenshots load from the game host and every other widget becomes a
+// link to the same page in the in-game wiki, where it is interactive.
+const WIKI_WIDGETS = (() => {
+  try {
+    const src = fs.readFileSync(`${GAME}/src/lib/wiki/componentRegistry.ts`, "utf8");
+    return new Set([...src.matchAll(/^\s*"([a-z0-9-]+)":/gm)].map(m => m[1]));
+  } catch { return new Set(); }
+})();
+let currentWikiSlug = "";
+const words = s => s.replace(/[-_]+/g, " ").trim();
+
 marked.use({
   renderer: {
+    code(text, lang) {
+      const key = (lang || "").trim();
+      if (!WIKI_WIDGETS.has(key)) return false;
+      const body = String(text || "").trim().split(/\s+/)[0] || "";
+      if (key === "guide-screenshot" && /^[a-z0-9][a-z0-9-]*$/i.test(body)) {
+        return `<p><img src="${GAME_SITE}/wiki-images/guides/${body}.png" alt="Screenshot: ${esc(words(body))}" loading="lazy"></p>`;
+      }
+      const label = key === "wiki-chart" ? `chart: ${words(body)}` : `diagram: ${words(key)}`;
+      const href = currentWikiSlug ? `${GAME_SITE}/wiki/${currentWikiSlug}` : GAME_SITE;
+      return `<p class="widget-link" style="border:1px solid var(--line,#d4d4d8);border-radius:8px;padding:.6rem .8rem">Interactive ${esc(label)}. <a href="${href}">Open it in the in-game wiki</a>.</p>`;
+    },
     heading(text, level) {
       if (level === 1) return "";
       const id = anchor(text);
@@ -763,8 +787,10 @@ const xrefsHtml = p => {
 
 for (let i = 0; i < pages.length; i++) {
   const p = pages[i];
+  currentWikiSlug = p.kind === "wiki" ? p.slug : "";
   let html = marked.parse(p.md);
   html = html
+    .replace(/src="\/wiki-images\//g, `src="${GAME_SITE}/wiki-images/`)
     .replace(/href="\/wiki\/([\w-]+)"/g, (m, s) => byWikiSlug.has(s) ? `href="/wiki/${s}.html"` : `href="https://www.ahousedividedgame.com/wiki/${s}"`)
     .replace(/href="(\.\/)?([\w-]+)\.md(#[\w-]*)?"/g, (m, _d, name, h) =>
       byDocFile.has(name + ".md") ? `href="${byDocFile.get(name + ".md").href}${h || ""}"` : m)
