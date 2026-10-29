@@ -24,25 +24,42 @@ Not every page is a mechanic page. The audit applies the full checklist only to 
 
 ## Player page
 
-Sections in this order, with these headings or close equivalents.
+A player page is written for this system, not filled into a template. It must contain the content below, but its headings, order and shape follow the subject: name sections after what the player is doing or deciding ("Setting wages", "When a strike starts", "Losing a confidence vote"), not after a generic slot. Two pages about different systems should not read alike.
 
-1. **Summary** (no heading, first paragraph). Two or three sentences: what the system is and why a player should care.
-2. **How it works.** Plain cause and effect, in steps where order matters. Include a **key numbers table** with the caps, cooldowns, costs, thresholds and durations a player would plan around. At most one formula, and only when knowing it changes how you play.
-3. **What you can do.** The actions available, who can take them, where to find them in the game, and one to three tips.
-4. **Connections.** Two lists, each item a link plus one line saying which way the effect runs:
-   - **Driven by:** systems that change this one.
-   - **Affects:** systems this one changes.
-5. **Status.** Whether the mechanic is live in every world, or depends on game mode, era, country or scenario. Then a `Last checked:` line with the date the page was verified against the game and the game version or build.
-6. **Technical detail.** A link to the technical page.
+Required content, in whatever shape fits:
+
+- **Opening.** The first paragraph says what the system is and why a player should care, in words specific to it. No stock opening line shared with other pages.
+- **The numbers that matter.** The caps, cooldowns, costs, thresholds and durations a player plans around, usually as a table placed where the reader first needs them. At most one formula, and only when knowing it changes how you play.
+- **What you can do.** The actions, who can take them, and where they are in the game. This can be its own section, woven through the page step by step, or both.
+- **An example with real numbers.** Told as a situation a player would actually be in, not as a generic "Worked example" block bolted on at the end.
+- **Connections.** What drives this system and what it affects, with the direction of each effect, linked. Where it reads naturally, put a link in the sentence that explains the effect; keep a short list only for links that do not fit the prose. Connections must still be two-way across the wiki.
+- **Footer.** One closing line covering where the system applies (if it depends on era, country, mode or scenario), when the page was last checked and against which version, and the link to the technical page. Example: `Applies in every era. Last checked 2026-10-29, version 1.18.0. Exact rules: [Labour (design)](...)`.
+
+### Avoiding the template feel
+
+- Do not default to the headings "How it works", "What you can do", "Connections", "Status" or "Technical detail". Use them only when nothing more specific fits.
+- Vary how pages open. Lead with the decision, the stakes, or the moment a player first meets the system.
+- Answer common questions where they arise in the text; avoid a "Common questions" dump unless the page really is a list of questions.
+- Cut filler that every page could carry ("This system is an important part of the game").
+- A short page for a small system is fine. Do not pad to fill slots.
 
 ## Technical page
 
+Technical pages are reference material and use a fixed structure, so a reader can find the same thing in the same place on every page. Use these headings in this order.
+
 1. **Summary** and a link back to the player page.
 2. **Rules.** Every constant with its real value and the source file it lives in, in backticks. Full formulas.
-3. **Timing.** When it runs: which turn phase, tick or event, and in what order relative to related systems.
-4. **Edge cases and limits.** Caps, floors, clamps, what happens at zero, and what is deliberately excluded and why.
-5. **Connections.** The same two lists as the player page, naming the code path where the effect passes between systems.
-6. **Last checked** line, as above.
+3. **Data.** The collections, documents and fields the system reads and writes, and which of them are player-visible.
+4. **Configuration.** Every setting that changes behaviour (game config fields, era or country presets, scenario overrides, flags), with its default and where it is set.
+5. **Timing.** When it runs: which turn phase, tick or event, and in what order relative to related systems. A diagram when it spans more than one phase or more than two source files.
+6. **Worked trace.** One concrete input followed through every formula to the stored result, with the intermediate numbers.
+7. **Edge cases and limits.** Caps, floors, clamps, what happens at zero, missing data, era and country variants, and what is deliberately excluded and why.
+8. **Invariants.** What must always hold (money conserved, totals sum, values stay in range), and which tests or checks enforce it.
+9. **Failure and recovery.** How it can go wrong in production, what it looks like, and how it is repaired (a heal, a reseed, a rerun), without operational secrets or internal hosts.
+10. **Connections.** Driven by and Affects lists, naming the code path where the effect passes between systems.
+11. **Tests.** The test files that cover it and any known gaps.
+12. **Known issues and history.** Open defects, behaviour that differs from the player page or real-world expectation, and dated notes on major changes.
+13. **Last checked** line with date and version.
 
 ## Quality and depth
 
@@ -85,16 +102,17 @@ The audit marks each check pass, fail or not applicable.
 
 | ID | Check |
 | --- | --- |
-| P1 | Opens with a two or three sentence summary saying what it is and why it matters |
-| P2 | Has a How it works section in plain language |
-| P3 | Has a key numbers table with the decision-relevant values |
+| P1 | Opening says what the system is and why it matters, in words specific to it |
+| P2 | Explains cause and effect in plain language, structured around the player's decisions |
+| P3 | Gives the decision-relevant numbers, usually as a table where they are first needed |
 | P4 | Has no more than one formula, and any formula changes play |
-| P5 | Has a What you can do section naming the actions and where they are |
-| P6 | Has Connections split into Driven by and Affects, each item with a direction line |
-| P7 | Connections are two-way: every page listed links back in the opposite list |
-| P8 | Has a Status section covering mode, era or scenario dependence |
+| P5 | Names the actions, who can take them and where they are |
+| P6 | Covers what drives the system and what it affects, with direction, linked |
+| P7 | Connections are two-way across the wiki |
+| P8 | Says where the system applies when it depends on era, country, mode or scenario |
 | P9 | Has a Last checked date and version |
 | P10 | Links to its technical page |
+| P11 | Reads as written for this system: headings named after its subject, no generic template headings unless nothing fits, no stock opening or filler |
 
 ### Technical page
 
@@ -107,6 +125,14 @@ The audit marks each check pass, fail or not applicable.
 | T5 | Covers edge cases and limits |
 | T6 | Every number on the player page also appears here with its source |
 | T7 | Has a Last checked date |
+| T8 | Lists the data the system reads and writes |
+| T9 | Lists every setting that changes behaviour, with defaults and where it is set |
+| T10 | Has a worked trace from input to stored result with intermediate numbers |
+| T11 | States the invariants and what enforces them |
+| T12 | Describes failure modes and how each is repaired |
+| T13 | Names the tests that cover it and known gaps |
+| T14 | Records known issues and dated major changes |
+| T15 | Uses the fixed technical headings in order |
 
 ### Quality and visuals
 
@@ -122,7 +148,7 @@ The audit marks each check pass, fail or not applicable.
 | Q8 | Has a constants-generated chart wherever a value changes over a range or time |
 | Q9 | Has a diagram for multi-step flows or three or more connections |
 
-Q1 to Q6 apply to mechanic and guide pages. Q7 to Q9 apply to player mechanic and guide pages; technical pages are checked for the phase-order diagram under T4.
+Q1 to Q6 apply to mechanic and guide pages; on technical pages Q2 is replaced by T10. Q7 to Q9 apply to player mechanic and guide pages; technical pages are checked for the phase-order diagram under T4.
 
 ### Hard rules
 
@@ -149,7 +175,7 @@ Audit findings are ranked for fixing in this order.
 
 1. **Critical.** A wrong number or claim a player would act on, or anything failing R3.
 2. **High.** Stale behaviour, a mechanic with no player page, or a player page showing material players cannot act on (R2).
-3. **Medium.** Missing required sections, one-way connections, missing technical layer, a mechanic page that fails Q1 or Q2, or a missing chart or screenshot the page clearly needs.
+3. **Medium.** Missing required content, a player page that reads as a template (P11), one-way connections, missing technical layer, a mechanic page that fails Q1 or Q2, or a missing chart or screenshot the page clearly needs.
 4. **Low.** Style, dashes, missing Last checked line, broken non-critical links, readability (Q5), and other missing visuals.
 
 Within a severity band, pages players visit most come first.
