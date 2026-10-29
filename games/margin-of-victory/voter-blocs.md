@@ -61,7 +61,6 @@ Young voters gain about 39% more than seniors from the same push. That is before
 - **Use issue pivots to win a bloc.** Moving your position toward a bloc's ideal on an issue it cares about raises your appeal there, and costs you with groups that preferred your old position.
 - **Watch the big blocs.** Working-class white voters are 30% of the electorate nationally and take the largest share of any state-wide ad, so a small move in them is worth more than a large move in a 5% bloc.
 
-![The state detail panel for Pennsylvania in the 2020 campaign, listing each bloc with its modeled votes, turnout, and Biden and Trump split.](images/voter-blocs-state-detail.png)
 
 Common questions: *Which bloc decides the state?* The one with the most votes (size times turnout) that is still close to 50-50. A huge bloc at 90% or 10% is decided already; a mid-sized bloc near the middle is where the margin is made. *Why did my rally barely move anyone?* A rally is small per bloc (about 0.05) and strong leans resist, so it works through momentum and enthusiasm more than direct persuasion.
 
