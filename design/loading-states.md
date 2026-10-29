@@ -1,5 +1,7 @@
 # Loading State Standardization Plan
 
+Historical record: this page describes work as of May 2026 (plan) and 2026-08-11 (completed). No separate mechanic doc covers loading behaviour; this is a completed plan verified against code on 2026-08-11, and the current state is the `loading.tsx` skeleton files under `src/app/`.
+
 **Author:** Hermes Agent  
 **Date:** 2026-05-27  
 **Status:** Completed - verified against code 2026-08-11  
@@ -336,3 +338,5 @@ With a skeleton that matches the legislature page layout.
 3. Layout shift between loading and loaded states is visually reduced.
 4. Mobile views display skeletons correctly at all breakpoints.
 5. This plan document is detailed enough for another agent to continue the work later.
+
+Last checked: 2026-10-29, version 1.18.0

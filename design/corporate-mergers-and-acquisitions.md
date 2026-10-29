@@ -1,6 +1,58 @@
 # Corporate Mergers and Acquisitions
 
-Players can offer to buy another player-run corporation outright. The acquirer's CEO proposes an all-in price; the target's CEO accepts or rejects. On acceptance, the target's shareholders are cashed out, its cash and sectors move to the acquirer, and the target corporation is deleted. If the combined firm would hold too large a share of a national industry, the deal is referred to a named cabinet officeholder for competition review before it can complete. The whole subsystem is gated by the `corpDealsEnabled` game flag.
+Player guide: [Corporate Mergers & Acquisitions](https://www.ahousedividedgame.com/wiki/corporate-mergers)
+
+Players can offer to buy another non-state-owned corporation outright, whether a player or an AI (NPP) runs it. The acquirer's CEO proposes an all-in price and an outcome, **merge** or **keep as subsidiary**. A player-run target's CEO accepts or rejects; an AI-run target resolves automatically against its asking price. On a merge, the target's shareholders are cashed out, its cash and sectors move to the acquirer, and the target corporation is deleted. On a subsidiary outcome the shareholders are cashed out but the target survives with the acquirer as its only shareholder. If the combined firm would hold too large a share of a national industry, the deal is referred to a named cabinet officeholder for competition review before it can complete. The whole subsystem is gated by the `corpDealsEnabled` game flag.
+
+## Rules
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `ACQUISITION_OFFER_DURATION_TURNS` | 24 turns | `src/lib/corporations/commands/acquisitions/acquisitionOffers.ts` |
+| `NPP_ACQUISITION_PREMIUM_MULTIPLIER` | 1.1 (AI-run target asking price = ceil(reference valuation x 1.1)) | `src/lib/corporations/commands/acquisitions/rules.ts` |
+| `MERGER_REVIEW_THRESHOLD_PERCENT` | level 0 off, 1: 75, 2: 60, 3: 50, 4: 40 | `src/lib/corporations/mergerReview/constants.ts` |
+| `MERGER_REVIEW_TURNS` | 6 turns for the seat to rule | `src/lib/corporations/mergerReview/constants.ts` |
+| `MERGER_REVIEW_REMEDY_MARGIN_PERCENT` | 5 points above threshold: auto-clears with remedy | `src/lib/corporations/mergerReview/constants.ts` |
+| `MERGER_REVIEW_BLOCK_MARGIN_PERCENT` | 15 points above threshold: auto-blocks | `src/lib/corporations/mergerReview/constants.ts` |
+| `MERGER_REMEDY_TURNS` | 12 turns to divest after the deal commits | `src/lib/corporations/mergerReview/constants.ts` |
+| `MERGER_REMEDY_OVERDUE_FINE_RATE` | 0.05 of controlled-group revenue in the ordered industry, per turn | `src/lib/corporations/mergerReview/constants.ts` |
+| Deals route rate limit | 10 requests per 60 seconds per user | `src/app/api/corporations/[id]/deals/route.ts` |
+| `corpDealsEnabled` default | `true` | `src/lib/seeds/reference/featureFlagDefaults.ts` |
+
+## Timing
+
+- **Offers** are player-driven requests, not a turn phase. Proposal, accept, reject and withdraw take effect immediately when the API call is made. An offer expires when `currentTurn > expiresAtTurn` (24 turns after proposal).
+- **Merger review sweep** runs inside the `corporationTurn` phase (`src/lib/turn/corporation/index.ts`), after subsidiary cleanup so the controlled-group measurement reads settled ownership: first `resolveDueMergerReviews` (reviews past `decideByTurn`), then `fineOverdueDivestitures`, then antitrust compliance. It is best-effort and cannot fail the turn.
+- **Gate timing:** review is checked at the instant two corporations would combine (`executeAgreedAcquisition`, and the hostile-takeover squeeze-out), not when shares are bought.
+- **Remedy attach:** the divestiture obligation is attached only after the merge commits, and the 12-turn clock starts then.
+
+## Worked example
+
+An acquirer offers 5,000,000 for a target whose reference valuation is 4,000,000 (share price x shares, or cash plus plant book value as described below). The target's country has antitrust level 2 (threshold 60%). In the target's lead industry the acquirer holds 35% and the target 30%.
+
+1. If the target is AI-run, its asking price is ceil(4,000,000 x 1.1) = 4,400,000. The 5,000,000 offer meets it and auto-accepts. An offer of 4,300,000 would be recorded as rejected.
+2. Combined share is 65%, which is 5 points above the 60% threshold. A review opens: `decideByTurn` = current turn + 6.
+3. If nobody rules, the margin is 5, which reaches `MERGER_REVIEW_REMEDY_MARGIN_PERCENT`, so it auto-resolves as cleared with remedy. (A margin of 15 or more, a combined share of 75% or more here, would auto-block; under 5 would clear.)
+4. The deal commits: the acquirer pays 5,000,000 to the target's shareholders, the target's own cash joins the acquirer, its sectors move, and the target is deleted.
+5. The divestiture is attached with a due turn 12 turns later. If the acquirer's controlled group still holds the flagged share after that turn and earns 2,000,000 per turn from the ordered industry, it is fined 0.05 x 2,000,000 = 100,000 each turn until it sells down, and new acquisitions are barred meanwhile.
+
+## Edge cases and limits
+
+- **Blocked is permanent** for that acquirer and target pair; a cleared pair does not need a second referral.
+- **Pending review blocks with a 409**, naming the decision deadline.
+- **Level 0 antitrust (threshold `null`) means review is off**, not "unreachable".
+- **No overlapping industry means no review**, whatever the sizes of the firms.
+- **Concentration counts only sectors physically in the target's home country**, for both sides.
+- **State-owned and command-economy cases are excluded:** a state-owned side makes the deal an act of the state, and in a command economy the state already owns the firms, so review is inert there rather than a gap.
+- **No live seat holder in the current era means no review** (`resolveMergerAuthority` returns null).
+- **Remedy sector is fixed.** The officeholder cannot choose a different sector than `leadSectorType`.
+- **Spin-off does not discharge a remedy.** The controlled group (acquirer plus corporations it controls at more than 50% voting power) is measured, so moving the business into a subsidiary changes nothing.
+- **Fine failure is not escalated.** If the corporation cannot pay in a turn the debit fails and the order stands; there is no partial payment.
+- **AI-run target under a controlling parent cannot be bought** by an outsider; the parent decides.
+- **Bonded or cross-holding targets (merge outcome only):** a target with any un-matured bond, or one holding shares in another corporation, is refused for a merge. A subsidiary outcome has no such obstacle because the target survives, but chaining subsidiaries, ownership cycles and putting one player in charge of both parent and subsidiary are refused.
+- **Banked targets** cannot be merged, since the bank charter sits on the target and deleting the shell would delete the bank.
+- **A completed settlement replays.** A crash after commit returns the recorded result; the offer goes to `failed` on a terminal failure and is not returned to `pending`.
+- **Why the review exists:** it stops a player rolling up a whole national industry through offers, and it hands the call to a named officeholder with published fallback bands, so a vacant seat is neither a loophole nor a coin flip.
 
 ## Feature Flag
 
@@ -19,7 +71,7 @@ Rejected up front if:
 - The acquirer is under an **overdue** divestiture order (`acquisitionsBarredByDivestiture`, see Divestiture section below), a still-current order does not bar new offers, only one that has run past its due turn.
 - The acquirer already has a `pending` offer open against the same target (409).
 
-Target discovery uses `GET /api/corporations/buyer-search?q=...&exclude=<corpId>`, a name search across player-run, non-state-owned corporations in **any country** (cross-border acquisitions are intentional, per code comment referencing issue #106). A corp counts as player-run via `PLAYER_RUN_CEO_FILTER`.
+Target discovery uses `GET /api/corporations/buyer-search?q=...&exclude=<corpId>`, a name search across player-run and AI-run (`ceoType: "npp"`), non-state-owned corporations in **any country** (cross-border acquisitions are intentional, per code comment referencing issue #106). A corp counts as player-run via `PLAYER_RUN_CEO_FILTER`.
 
 On success, an `AcquisitionOffer` document is inserted into the `acquisitionOffers` collection:
 
@@ -27,11 +79,14 @@ On success, an `AcquisitionOffer` document is inserted into the `acquisitionOffe
 |---|---|
 | `priceAnchor` | Agreed all-in price for the whole target, in anchor currency (₳), rounded |
 | `targetValuationAnchor` | Reference valuation captured at propose time (see below), rounded |
-| `status` | `"pending" \| "accepted" \| "rejected" \| "withdrawn" \| "expired"` |
+| `status` | `"pending" \| "accepted" \| "rejected" \| "withdrawn" \| "expired" \| "failed"` |
+| `outcome` | `"subsidiary"` when the offer keeps the target as a subsidiary; absent for a merge |
 | `createdAtTurn` / `expiresAtTurn` | Offer lasts `ACQUISITION_OFFER_DURATION_TURNS = 24` turns |
 | `proposedByCharacterId` / `proposedByUserId` | Who proposed, for authorization on withdraw |
 
 If the target has a player CEO (`target.userId` set), a `corp_vote_opened`-type notification is sent pointing them to the Deals tab.
+
+If the target is genuinely AI-run (`ceoType: "npp"` with no player caretaker, `isNppAutoResolvableTarget`), no human can press Accept: the offer resolves immediately. A price at or above `nppAcquisitionMinimumPrice` (reference valuation x 1.1, rounded up) auto-accepts and executes; a lower price is stored as `"rejected"`. Caretaker-run corporations stay player property and follow the normal pending-offer flow.
 
 ### Reference Valuation
 
@@ -58,13 +113,15 @@ whole-corp value = computeWholeCorpValuation({
 
 ## Executing an Accepted Acquisition
 
-`acceptAcquisitionOffer()` claims the offer, then calls `executeAgreedAcquisition()` (`src/lib/corporations/commands/acquisitions/executeAgreedAcquisition.ts`). If execution throws or returns `ok: false`, the offer is rolled back to `"pending"` (claim released) so it can be retried.
+`acceptAcquisitionOffer()` claims the offer, then calls `executeAgreedAcquisition()` (`src/lib/corporations/commands/acquisitions/executeAgreedAcquisition.ts`). Settlement is recorded in an `acquisitionSettlements` document claimed before money moves; each payout leg applies as an atomic credit-plus-stamp write, so a retry resumes from the record and never pays a holder twice. If execution returns `ok: false` before any money moves, the claim is released so the offer can be retried; a permanently unpayable leg refunds only the undelivered remainder and the offer goes to `"failed"`.
 
 ### v1 Scope Guards
 
 Two acquisition types are blocked outright with an error rather than being mishandled:
 - Target has any un-matured bond (`bonds` collection, `matured: false`), bond assumption is deferred.
 - Target holds equity in another corporation (`shareholders.corporationId` match), cross-holding transfer / acquiring a corporate parent is deferred.
+
+Both guards apply to the **merge** outcome only. Under the **subsidiary** outcome the target survives with its bonds and holdings, and `checkSubsidiaryAcquisition` instead refuses chaining, circular ownership and one player running both parent and subsidiary.
 
 ### Merger Review Gate (runs before any money moves)
 
@@ -91,7 +148,7 @@ Code: `src/lib/corporations/mergerReview/{constants,gate,authority,concentration
 Gating is on **ownership and marketization**, never a country allow-list (explicit design note in `constants.ts`, referencing spec `ahd-b4-scrutiny-rework-spec`):
 - Both acquirer and target must be privately owned, if either side is state-owned, the deal is an act of the state, not a reviewable transaction.
 - The target's country must not be a command economy (`loadCommandEconomyBlockedCountries`), in a command economy the state already owns the firms, so review is deliberately inert, not a gap.
-- The target's country must have an antitrust law mapped in `ANTITRUST_LAW_BY_COUNTRY` (explicit entries for `US`, `UK`, `RU`, `DD`; other countries review under their Competition Act from `mechanicalLaws`, or a carried law, and have a reviewing seat in `MERGER_AUTHORITY_SEAT_BY_COUNTRY`, see mapping below), with an enacted level whose threshold is not `null` (level 0 = "No Antitrust Enforcement" = off).
+- The target's country must have an antitrust law: an explicit entry in `ANTITRUST_LAW_BY_COUNTRY` for `US`, `UK`, `RU`, `DD`, or, for every other legislature, its Competition Act from `mechanicalLaws` (or a carried law, such as the GDR competition primary that DE inherits on reunification), and a reviewing seat in `MERGER_AUTHORITY_SEAT_BY_COUNTRY` (see mapping below), with an enacted level whose threshold is not `null` (level 0 = "No Antitrust Enforcement" = off).
 - The reviewing country must currently have a live officeholder seat for that law (`resolveMergerAuthority` returns non-null; a seat that doesn't exist yet in the current era means no review).
 
 Two call sites trigger the gate, both at the instant two corporations would actually become one: `executeAgreedAcquisition` (trigger `"agreedAcquisition"`) and the hostile-takeover squeeze-out route (trigger `"hostileTakeover"`, not documented here). Reviewing at share-purchase time would be too early, per the code's own reasoning, until absorption the two firms are still measured separately.
@@ -174,6 +231,21 @@ If a review resolves `clearedWithRemedy`, the obligation is **not** attached at 
 - An overdue corp is also barred from opening **new** acquisitions (`acquisitionsBarredByDivestiture`, checked at the propose step, current turn > `dueTurn`).
 - A notification is sent to the corp's owning user each time it's fined.
 
+## Connections
+
+**Driven by:**
+
+- [Corporations](./corporations.md): share price, cash and sector values feed the reference valuation (`referenceValuationAnchor`, `sectorExitValueAnchor` in `src/lib/bonds/sectorExitBasis.ts`) and the concentration measure (`loadIndustryBasis`).
+- [Policy System](./policy-system.md): the target country's enacted competition-law level sets the review threshold, and the cabinet seat that rules is read from the live cabinet.
+- [Corporate Bond Defaults](./corporate-bond-defaults.md): outstanding bonds block a merge outcome.
+
+**Affects:**
+
+- [Corporations](./corporations.md): a merge moves sectors and cash and deletes the target (`executeAgreedAcquisition`); a divestiture order forces sector sales and fines revenue.
+- [Subsidiary Corporations](./subsidiary-corporations.md): the subsidiary outcome creates a formal parent and subsidiary link.
+- [Stock Market](./stock-market.md): the target's shareholders are cashed out and its market activity cleaned up.
+- National treasury of the reviewing country: overdue-divestiture fines are credited through `creditTreasuryProceeds`.
+
 ## API Surface
 
 | Route | Method | Purpose |
@@ -215,3 +287,5 @@ If a review resolves `clearedWithRemedy`, the obligation is **not** attached at 
 - `src/app/api/merger-reviews/queue/route.ts`, officeholder queue
 - `src/app/api/merger-reviews/[id]/route.ts`, officeholder decision
 - `src/components/corporation/DealsTab.tsx`, `src/components/corporation/MergerReviewPanel.tsx`, `src/components/mergerReview/MergerReviewCard.tsx`, UI
+
+Last checked: 2026-10-29, version 1.18.0

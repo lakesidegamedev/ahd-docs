@@ -1,5 +1,9 @@
 # Policy System
 
+How policy positions work at two levels, a character's personal stance and the enacted status quo per legislation type, and how enacted policy moves state and national metrics and demographics every turn.
+
+Player guide: [Policy Effects](https://www.ahousedividedgame.com/wiki/policy-effects) (enacted policy and metric effects). For two-axis party positions see [Party Ideology](https://www.ahousedividedgame.com/wiki/party-ideology). No wiki page is dedicated to the personal policy shift action.
+
 ## Overview
 
 The policy system tracks where characters and the game world stand on policy issues across two dimensions: **economic** (fiscal/regulatory spectrum) and **social** (cultural/rights spectrum). These positions are stored at two levels:
@@ -41,14 +45,14 @@ Players shift their policy position one step at a time via `POST /api/settings/p
 
 | Resource            | Cost                                        |
 | ------------------- | ------------------------------------------- |
-| Actions             | 15                                          |
+| Actions             | 15 (`POLICY_SHIFT_ACTION_COST`)             |
 | Political Influence | −5% (floor 0; `Math.floor(current × 0.95)`) |
 | National Influence  | −5% (same formula)                          |
-| Infamy              | +5                                          |
+| Infamy              | +5 (`POLICY_SHIFT_INFAMY_COST`)             |
 
 The new value is clamped to −5..+5; requests that would go out of bounds are rejected with a 400 error.
 
-A shift can instead be paid with one position update voucher, which costs 0 actions and 0 infamy (`src/lib/positionUpdateVouchers/rules.ts`). A `policy_shift` achievement is awarded on the first successful shift.
+The 15, 5 and 0.95 values are `POLICY_SHIFT_ACTION_COST`, `POLICY_SHIFT_INFAMY_COST` and `POLICY_SHIFT_INFLUENCE_MULTIPLIER` in `src/lib/positionUpdateVouchers/rules.ts`. A shift can instead be paid with one position update voucher, which costs 0 actions, 0 infamy and no influence loss (multiplier 1). Vouchers are granted one at a time (`POSITION_UPDATE_VOUCHER_GRANT_AMOUNT = 1`). A `policy_shift` achievement is awarded on the first successful shift.
 
 ### Changing Positions - Bill Votes
 
@@ -186,6 +190,8 @@ export function getFederalMultiplier(countryId: string): number {
 }
 ```
 
+**Source:** `FEDERAL_MULTIPLIER`, `UK_FEDERAL_MULTIPLIER`, `JP_FEDERAL_MULTIPLIER`, `DE_FEDERAL_MULTIPLIER` in `shared/constants/formulas.ts`. This multiplier governs the per-turn tick path (`metricEffects`). The exponential-decay path is normalized separately: any national law (scope below 1) uses `NATIONAL_LAW_DECAY_MULTIPLIER = 0.21` per region (`nationalDecayScope`), so a strong national law moves its main metric about the same amount whether the country has 12 or 50 regions. State and regional laws (scope 1) keep full strength. `MAX_EFFECT_PER_LAW = 12` caps the decay-path points one law can move a metric before the scope multiplier. Metrics with a range above 100 are scaled by their reference value divided by 100 (`metricRangeScale`).
+
 **Rationale:** The sum of per-region effects equals the intended national total. Prevents a single federal bill from dominating state metrics.
 
 ### Time-Based Effect Decay
@@ -290,8 +296,6 @@ if (bulkOps.length > 0) {
 
 ---
 
----
-
 ## API
 
 ### `GET /api/policy`
@@ -352,8 +356,56 @@ Shifts the authenticated character's policy position. See [Player Policy Positio
 
 ---
 
+## Timing
+
+Both engines run inside the hourly turn, in the state effects phase (`src/simulation/phases/stateEffectsPhase.ts`): `policyEffects` is one sub-phase there, and `processAllStateDemographics` is dispatched in the same phase's later parallel group, so demographics read the same turn's policy records. Within `processStatePolicyEffects` (`src/lib/policyEffects.ts`) the order is: exponential decay toward target, then direct tick rates, then natural decay of metrics with no active policy. Enactment itself happens when a bill resolves, outside this pass; a new `statePolicies` record takes effect from the next turn. See [Turn Processing](./turn-processing.md).
+
+## Constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| Character position range | -5 to +5 | `src/lib/db/types/character.ts` |
+| `statePolicies` range | -3 to +3 | `src/lib/db/types/legislation.ts` |
+| `POLICY_SHIFT_ACTION_COST` | 15 | `src/lib/positionUpdateVouchers/rules.ts` |
+| `POLICY_SHIFT_INFAMY_COST` | 5 | `src/lib/positionUpdateVouchers/rules.ts` |
+| `POLICY_SHIFT_INFLUENCE_MULTIPLIER` | 0.95 | `src/lib/positionUpdateVouchers/rules.ts` |
+| `VOTE_SHIFT_STEP` | 0.25 | `src/lib/policyShift.ts` |
+| `POLICY_TAU` | 139 turns | `shared/constants/formulas.ts` |
+| `MAX_EFFECT_PER_LAW` | 12 | `shared/constants/formulas.ts` |
+| `NATIONAL_LAW_DECAY_MULTIPLIER` | 0.21 | `shared/constants/formulas.ts` |
+| `SHIFT_RATE_PER_TURN` | 0.1 (percent) | `src/lib/demographicEffects.ts` |
+| Natural metric decay | 0.25% per turn | `src/lib/policyEffects.ts` |
+| `APPEAL_POSITION_EXPONENT` | 1.5 | `src/lib/utils/demographicAppeal.ts` |
+
+## Edge cases and limits
+
+- **Bounds.** A shift past -5 or +5 is rejected with 400; the filter is atomic, so the character is not charged.
+- **Floors.** Political and National Influence use `floor(current x 0.95)`, so 0 stays 0 and the cost is zero on an empty balance.
+- **Rate limit.** The shift endpoint allows 30 requests per 60 seconds per user.
+- **Votes.** A vote never moves a voter past the bill's own position, and a bill with no stance on an axis (or a stance of 0) leaves that axis alone.
+- **No policy active.** Metrics decay 0.25% per turn toward baseline, so a repealed or expired law does not leave a permanent mark.
+- **Adaptation.** `adjustmentHalfLife` shrinks a policy's contribution over time since enactment, so one-off shocks fade.
+- **Unmatched option.** The API reports the nearest option by Manhattan distance when no option matches the pair exactly.
+- **Missing seeds.** A state with no `statePolicies` records shows an empty laws tab.
+- **Why the scope split.** Without the federal multiplier one federal bill would move every state by its full amount, and without the normalized decay scope a federal law would be weak in countries with many regions.
+
+## Connections
+
+**Driven by**
+- [Bills & Legislation](./bills-legislation.md): enacted bills write `statePolicies` records and bill votes shift personal positions (`src/lib/policyShift.ts`).
+- [Player Progression](./player-progression.md): the shift action spends actions and influence.
+- [Stats & Actions](./stats-actions.md): action and infamy costs.
+
+**Affects**
+- [National Metrics](./national-metrics.md): per-turn policy effects write `stateMetrics` and national metrics (`src/lib/policyEffects.ts`).
+- [Election Mechanics](./elections.md): personal positions set demographic appeal (`src/lib/utils/demographicAppeal.ts`).
+- [Demographics](./demographics.md): enacted policy shifts group populations (`src/lib/demographicEffects.ts`).
+- [Player Policies](./player-policies.md): the player-facing view of personal positions.
+
 ## Display
 
 - **National Policy page** (`/policy`): Lists all national policies grouped by domain. Shows current policy option name and economic/social positions per type.
 - **State page - State Laws & Policy tab**: State-level policy records for the selected state. Empty if `seed:legislation` and `seed:policies` have not been run.
 - **Character profile**: Shows the character's personal economic and social positions on the −5 to +5 scale.
+
+Last checked: 2026-10-29, version 1.18.0

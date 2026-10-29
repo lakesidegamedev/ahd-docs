@@ -2,9 +2,11 @@
 
 Twelve countries run as one-party states: CN, RU, DD, PL, CS, HU, RO, BG, YU, UKR, BLR and BAL. In those countries one party rules by right, other parties are tolerated or banned rather than competitive, and the head of government answers to the party rather than to the electorate. Two scalars drive everything: ruling-party confidence in the leader, and popular legitimacy. When they fall far enough the regime walks a four-stage escalation chain that can end in the country converting to a parliamentary or presidential republic, permanently. Where the command-economy flag is on, the same countries also run a planned economy with administered prices, a wage-fund throttle on cash, and a monetary overhang that feeds back into political legitimacy.
 
+Player guide: [One-Party States](https://www.ahousedividedgame.com/wiki/one-party-states)
+
 ## Which countries, and what runs for them
 
-`governmentType: "onePartyState"` is set on twelve entries in `src/lib/constants/countries.ts`. The runtime value lives on the `countryState` collection, not in config, so a country that converts mid-game stops behaving as a one-party state on the very next turn.
+`governmentType: "onePartyState"` is set on twelve entries in the country seed (`src/lib/constants/countryRuntimeSeed.ts`; the type itself is in `src/lib/constants/countriesCore.ts`). The runtime value lives on the `countryState` collection, not in config, so a country that converts mid-game stops behaving as a one-party state on the very next turn.
 
 Each country registers a per-turn bill-lifecycle binding in `src/lib/turn/onePartyBillLifecycle.ts`: `processCNBillLifecycle`, `processRUBillLifecycle`, `processDDBillLifecycle`, then `PL`, `CS`, `HU`, `RO`, `BG`, `YU`, `UKR`, `BLR`, `BAL`. All of them call `processOnePartyBillLifecycleForCountry(countryId, now)`, which re-reads `governmentType` from `countryState` and returns immediately if the country is no longer one-party.
 
@@ -112,7 +114,7 @@ The anti-corruption purge records a `minor` `anticorruption` purge event rather 
 
 ## Elections, vote multipliers and NPPs
 
-Elections still run in one-party states, but they are weighted. `resolveRegimeMultiplier` in `src/lib/turn/onePartyConstraints.ts` reads `countryState.opsVoteMultipliers`, defaulting to `DEFAULT_OPS_VOTE_MULTIPLIERS`: ruling 3.0, approved 0.375, independent 0.0, banned 0.0. Independents (no party document) are weighted like banned parties.
+Elections still run in one-party states, but they are weighted. `resolveRegimeMultiplier` in `src/lib/turn/onePartyConstraints.ts` reads `countryState.opsVoteMultipliers`, defaulting to `DEFAULT_OPS_VOTE_MULTIPLIERS` (`src/lib/constants/countriesCore.ts`): ruling 3.0, approved 0.375, independent 0.0, banned 0.0. Independents (no party document) are weighted like banned parties.
 
 The same module holds the hard gates:
 
@@ -170,3 +172,55 @@ Three player seats operate the planned economy, mapped in `src/lib/constants/com
 `src/lib/economy/commandEconomyState.ts` accumulates the monetary overhang: the excess of nominal income over real goods, scaled by `plannedShare`, divided by `TURNS_PER_YEAR` (48) because the growth inputs are annual, plus any monetized directed credit (`CREDIT_OVERHANG_SCALE = 1.0`), less what the second economy absorbs. It persists at `OVERHANG_DECAY = 0.99` per turn (roughly a two-year horizon) and is capped at `OVERHANG_CAP = 100`. The black-market premium is capped at `MAX_BLACK_MARKET_PREMIUM = 2.0` (plus 200 percent over official) and the second economy at `MAX_SECOND_ECONOMY_SHARE = 0.6` of activity, tracking its target at 0.25 per turn. The readouts land on `FederalBudget.economicFactors` as `monetaryOverhang`, `shortageIndex`, `blackMarketPremium` and `secondEconomyShare`, and the dashboard presenter (`src/lib/economy/commandEconomyDashboard.ts`) turns them into the marketization gauge alongside SOE plan fulfillment and the government's policy stance.
 
 Politics and economics meet through the drift collectors in `src/lib/turn/popularLegitimacyDriverCollectors.ts`: shortages and economic performance feed popular legitimacy, repression intensity feeds it the other way, and the resulting number is what walks the regime up the escalation chain.
+
+## Timing
+
+Everything regime-related runs inside the per-country bill lifecycle binding
+(`processCountryBills` in `src/lib/turn/onePartyBillLifecycle.ts`), once per
+turn per one-party country. In order: ensure the leader-state row exists, run
+the bill engine, popular-legitimacy drift, ruling-party confidence drift,
+regime escalation tick (which also advances the decision queue, convention
+phases and forced-conversion checks). Reform actions and purges are
+player or admin triggered between turns and are folded in by the next tick.
+Elections are resolved by the normal election phases using the regime
+multipliers; the post-conversion election marker is consumed by the election
+engine. The parliamentary side (PM votes, freeze) is covered in
+[parliamentary-government.md](./parliamentary-government.md).
+
+## Edge cases and limits
+
+- Confidence is clamped 0..95 and popular legitimacy 0..100; neither can be
+  pushed outside by purges or reforms.
+- Stages never regress on recovery, only by decision. Stage 4 is reachable
+  only from `internalChallenge`.
+- Starting a convention is blocked in `collapse` and while another convention
+  is running, because it would race the forced conversion.
+- A country that converts stops being one-party on the next turn: the bill
+  binding re-reads `governmentType` and returns early. Conversion is permanent;
+  no rows are deleted.
+- Banning deletes the party's `electedOfficials` and leaves seats empty until
+  the next regular cycle, because the game has no by-election machinery.
+  Unbanning restores the status, not the seats.
+- NPP-held seats cannot defect in a faction split (null `characterId`).
+- An official with no axis position scores 0 divergence, so imported officials
+  are not purged first.
+- Without `commandEconomyEnabled` the whole command-economy section is inert,
+  and the 12 countries still run the political regime.
+- The constitutional amendment reform is one-time and permanently lowers the
+  renewal bump from 5 to 2.
+
+## Connections
+
+**Driven by:**
+
+- [Ruling-party confidence](./ruling-party-confidence.md): the confidence drift in `rulingPartyConfidenceTurn`.
+- [Parties](./parties.md): party tiers (ruling, approved, banned) in `onePartyConstraints.ts`.
+- [NPPs](./npp-system.md): NPP brain operates the planned economy where no player directive exists.
+
+**Affects:**
+
+- [Parliamentary government](./parliamentary-government.md): one-party states count as parliamentary through `isParliamentarySystem`.
+- [Constitutional convention](./constitutional-convention.md): the voluntary exit path to conversion.
+- Elections: vote multipliers applied in `src/lib/electionEngine/candidateEnrichment.ts`.
+
+Last checked: 2026-10-29, version 1.18.0

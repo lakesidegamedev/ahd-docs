@@ -2,6 +2,22 @@
 
 This covers three related pieces of the private banking system: the interbank market and central-bank margin line (`src/lib/banking/interbank.ts`), what happens to a bank's outstanding loan book after it fails (`src/lib/banking/deadBankLoans.ts`), and the NPP-run banks that seed into every eligible country (`src/lib/banking/npcBanks.ts`). All three sit inside the wider private banking system in `src/lib/banking/`, which also covers charters, deposits, reserves, capital adequacy, the discount window, and deposit insurance (not documented here). Every path in this doc is gated behind the `privateBankingEnabled` flag on `gameConfig` (`src/lib/banking/featureFlag.ts`).
 
+Player guide: [Interbank Lending](https://www.ahousedividedgame.com/wiki/interbank-lending) (NPC banks and the wider banking system: [Private Banking](https://www.ahousedividedgame.com/wiki/private-banking))
+
+## Constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `INTERBANK_MAX_SHARE_OF_LENDABLE` | 0.5 (provisional) | `src/lib/banking/rules/decide.ts` |
+| `CB_MARGIN_SPREAD_PP` | 1.5 percentage points over prime (provisional) | `src/lib/banking/rules/decide.ts` |
+| `CB_MARGIN_COLLATERAL_FRACTION` | 0.5 of prop book mark value (provisional) | `src/lib/banking/rules/decide.ts` |
+| `ARREARS_DEFAULT_TURNS` | 8 | `src/lib/banking/rules/loans.ts` |
+| `TURNS_PER_YEAR` | 48 | `src/lib/constants/calendar.ts` |
+| `NPC_BANKS_PER_COUNTRY` | 2 (provisional) | `src/lib/banking/npcBanks.ts` |
+| `NPC_BANK_CAPITAL_BUFFER_MULTIPLIER` | 3 (provisional) | `src/lib/banking/npcBanks.ts` |
+| NPC deposit-offset target | lower quartile of the corridor: `min + 0.25 * (max - min)` | `src/lib/banking/npcBanks.ts` (`corridorDepositTarget`) |
+| NPC lending-offset target | corridor midpoint | `src/lib/banking/npcBanks.ts` |
+
 ## Feature Flags
 
 `src/lib/banking/featureFlag.ts` defines three flags read off `gameConfig._id: "default"`:
@@ -51,14 +67,14 @@ The write sequence is: insert loan -> debit lender `bankCharter.cashReserves` (c
 
 Repays principal only, capped at `min(amount, loan.outstanding)`. Cash moves borrower -> lender; `bankCharter.interbankDebt` and `loan.outstanding` both decrease by the repaid amount. If the lender-credit step fails after the borrower has already been debited, the code compensates by crediting the cash and debt back onto the borrower rather than losing it. Loan status flips to `"repaid"` once `outstanding <= 0`; `arrearsTurns` resets to 0 on any repayment.
 
-### Interest servicing (turn-phase, `bankingTurn.ts`)
+### Interest servicing (turn-phase)
 
-`serviceInterbankAndCbMargin` runs every banking turn (idempotent via `lastProcessedTurn !== turn`), independent of whether any deposit-taking bank needs a servicing pass. It processes every `InterbankLoan` with `status: "current"`.
+`serviceInterbankAndCbMargin` (`src/lib/turn/bankingInterbankTurn.ts`) runs every banking turn (idempotent via `lastProcessedTurn !== turn`), independent of whether any deposit-taking bank needs a servicing pass. It processes every `InterbankLoan` (collection `interbankLoans`) with `status: "current"`, and only when prop trading is enabled.
 
-Per loan (`serviceOneInterbankLoan`):
+Per loan (`serviceOneInterbankLoan`, `src/lib/banking/serviceInterbankLoan.ts`; the pure decision is `decideInterbankService` in `src/lib/banking/rules/interbankServicing.ts`). Cash legs and the loan-record update land together as one journaled transition keyed per loan per turn, so a retried turn cannot pay twice:
 
 ```
-interestDue = outstanding x (ratePercent / 100) / TURNS_PER_YEAR   // TURNS_PER_YEAR = 48
+interestDue = outstanding x (ratePercent / 100) / TURNS_PER_YEAR   // perTurnInterestOn, TURNS_PER_YEAR = 48
 payment = min(interestDue, borrower's available cashReserves)
 ```
 
@@ -67,7 +83,7 @@ payment = min(interestDue, borrower's available cashReserves)
   - If `arrearsTurns >= ARREARS_DEFAULT_TURNS` (= 8, in `src/lib/banking/rules/loans.ts`, same constant used for player loan defaults), the loan is written off: no cash moves for the remaining principal, the borrower's `bankCharter.interbankDebt` is reduced by the outstanding amount, and loan status becomes `"defaulted"`.
   - Below that threshold, only `arrearsTurns` and `lastProcessedTurn` update; the loan stays `"current"`.
 
-Interest payments are logged via `emitTx`/`payInterbankInterest` moving cash on both bank charters' `cashReserves`.
+Interest moves cash from the borrower's to the lender's `bankCharter.cashReserves`. Principal is never collected here, only through `repayInterbank`.
 
 ### Lender-side failure (bankSolvencyTurn.ts)
 
@@ -84,6 +100,8 @@ cbMarginRatePercent(primeRate) = max(0, primeRate + 1.5)
 CB_MARGIN_COLLATERAL_FRACTION = 0.5       // provisional, src/lib/banking/rules/decide.ts
 maxDebt = 0.5 x propBookMarkValue
 ```
+
+CB margin interest is serviced in the same pass: each turn the bank pays `cbMarginRatePercent(prime)` on its interest-bearing margin debt (margin debt minus any liquidity advance, `interestBearingCbMarginDebt`, `src/lib/banking/rules/facilityInterest.ts`), and the discount window facility is serviced alongside it, from the bank's available cash.
 
 `drawCbMargin`: collateral check is `cbMarginDebt + cbMarginArrears + amount <= maxDebt`, i.e. unpaid interest arrears count against the line's headroom too (the code notes this is deliberate, a bank that cannot service the margin loses headroom rather than silently borrowing its own arrears). On draw, cash is CREATED into `bankCharter.cashReserves` (`+amount`) and `bankCharter.cbMarginDebt` increases by the same amount; the country's `centralBanks.netMoneyCreatedLifetime` increases correspondingly. This mirrors the discount window: originating the loan does not debit any CB pool.
 
@@ -112,9 +130,9 @@ Handles loans a FAILED or REVOKED bank made as a LENDER that were never resolved
 - **Not yet resolved**: payment lands in the dead bank's own `bankCharter.cashReserves`, i.e. the estate. This makes the resolution waterfall (which distributes that cash) bigger if a recovery arrives before it runs.
 - **Resolved**: the dead bank's depositors were already made whole by deposit insurance / the treasury backstop, and the owner already took any residual. A late recovery is treated as subrogation and is paid into the `depositInsuranceFunds` document for that currency (`balance` field), not to the bank or its owner. `ensureFund` is called first to guarantee the currency's insurance fund document exists before crediting it.
 
-### Servicing loop (`processDeadBankLoans`, called from `bankingTurn.ts`)
+### Servicing loop (`processDeadBankLoans`, called from `src/lib/turn/bankingTurn.ts`)
 
-For each dead bank, it queries `bankLoans` for that `bankCorporationId` where `borrowerType` is `character` or `corporation`, `status` in `["current", "arrears"]`, and `lastProcessedTurn !== turn` (idempotency guard). If there are matching loans, it resolves the target (estate or insurer) and then services each loan SERIALLY within that bank (not in parallel), because two loans from the same borrower must see each other's debit exactly as the live per-bank servicing path does. The actual per-loan collection math (interest, arrears, principal) is injected as a `serviceLoan` callback from `bankingTurn.ts` rather than owned by this module, specifically so this file does not depend on the turn file that depends on it.
+For all dead banks it reads `bankLoans` in one query for their `bankCorporationId`s, covering character, corporation and `npcBulk` (household tranche) borrowers, `status` in `["current", "arrears"]`, and `lastProcessedTurn !== turn` (idempotency guard). If there are matching loans, it resolves the target (estate or insurer) and then services each loan SERIALLY within that bank (not in parallel), because two loans from the same borrower must see each other's debit exactly as the live per-bank servicing path does. The actual per-loan collection math (interest, arrears, principal) is injected as a `serviceLoan` callback from `bankingTurn.ts` rather than owned by this module, specifically so this file does not depend on the turn file that depends on it.
 
 Returned summary: `{ loansServiced, recoveredToEstate, recoveredToInsurer }`, all zero if there are no dead banks with loans.
 
@@ -143,7 +161,7 @@ Seeding itself is NOT gated on `privateBankingEnabled` (comment: "gameConfig is 
 
 Turn-phase entry point `processNpcBankPolicyTurn` (registered as phase `npcBankPolicyTurn` in `src/simulation/phases/turnPhaseRegistry.ts`) no-ops with a zero summary (`{ banksChecked: 0, banksUpdated: 0 }`) if `isPrivateBankingEnabled()` is false. It does NOT seed banks; seeding is a separate admin/bootstrap-time operation (`src/lib/admin/seed/seedNpcBanks.ts`, `src/lib/admin/bootstrapGameWorld.ts`).
 
-When enabled, `runNpcBankPolicy` iterates every corp with `ceoType: "npp"`, active `bankCharter`, and charter type `retail` or `universal`. For each, it fetches the country's rate corridors (`getRateCorridors`) and computes the midpoint of the deposit and lending offset ranges. If the bank's current `depositOffset`/`lendingOffset` has drifted from that midpoint by more than `1e-9`, it resets both to the midpoint via `setBankRates`. This is described as keeping NPC banks pinned to the corridor center; it does not set the reserve-holding or loan-book behavior, which the comment says comes from `bankingTurn`'s NPC flows (not covered by this file).
+When enabled, `runNpcBankPolicy` iterates every corp with `ceoType: "npp"`, active `bankCharter`, and charter type `retail` or `universal`. For each, it fetches the country's rate corridors (`getRateCorridors`) and computes the targets: the deposit offset goes to the lower quartile of its range (`min + 0.25 * (max - min)`, so incumbents price deposits lazily and leave room for player banks to win share), the lending offset to the midpoint. If the current `depositOffset`/`lendingOffset` has drifted from either target by more than `1e-9`, both are reset via `setBankRates`. it does not set the reserve-holding or loan-book behavior, which the comment says comes from `bankingTurn`'s NPC flows (not covered by this file).
 
 ## Key Files
 
@@ -151,7 +169,9 @@ When enabled, `runNpcBankPolicy` iterates every corp with `ceoType: "npp"`, acti
 - `src/lib/banking/deadBankLoans.ts`, dead-bank loan discovery and recovery routing
 - `src/lib/banking/npcBanks.ts`, NPC bank seeding and rate-corridor policy
 - `src/lib/banking/featureFlag.ts`, `privateBankingEnabled` / `bankPropTradingEnabled` / `bankContagionEnabled` gates
-- `src/lib/turn/bankingTurn.ts`, turn-phase orchestration: `serviceInterbankAndCbMargin`, `serviceOneInterbankLoan`, `payInterbankInterest`, `processDeadBankLoans` invocation. `ARREARS_DEFAULT_TURNS = 8` is defined in `src/lib/banking/rules/loans.ts`
+- `src/lib/turn/bankingTurn.ts`, turn-phase orchestration and `processDeadBankLoans` invocation
+- `src/lib/turn/bankingInterbankTurn.ts`, `serviceInterbankAndCbMargin`
+- `src/lib/banking/serviceInterbankLoan.ts` and `src/lib/banking/rules/interbankServicing.ts`, per-loan servicing. `ARREARS_DEFAULT_TURNS = 8` is defined in `src/lib/banking/rules/loans.ts`
 - `src/lib/turn/bankSolvencyTurn.ts`, `writeOffLenderSideInterbankOnFailure`, `sumInterbankDefaultsLastTurn`
 - `src/lib/db/types/bank.ts`, `InterbankLoan`, `BankLoan`, `DepositInsuranceFund` type definitions
 - `src/simulation/phases/turnPhaseRegistry.ts`, registers `npcBankPolicyTurn` phase
@@ -159,3 +179,61 @@ When enabled, `runNpcBankPolicy` iterates every corp with `ceoType: "npp"`, acti
 - `src/app/api/corporations/[id]/bank/interbank/loans/route.ts`, POST originate interbank loan
 - `src/app/api/corporations/[id]/bank/interbank/margin/route.ts`, POST draw/repay CB margin
 - `src/lib/banking/__tests__/deadBankLoans.test.ts`, `src/lib/banking/__tests__/npcBanks.test.ts`, reference behavior under test
+
+## Worked example
+
+Interbank. A retail bank has lendable headroom of 1,000,000, so its interbank cap is 500,000. It already has 200,000 out.
+
+- A new 350,000 loan is refused (200,000 + 350,000 = 550,000 is over the cap). 300,000 is allowed.
+- At 8% annual, the 300,000 loan owes `300,000 * 0.08 / 48 = 500` per turn.
+- If the borrower has only 300 cash, it pays 300 and arrears becomes 1. On the eighth consecutive shortfall the loan defaults: 300,000 is written off, no cash moves, and the borrower's `interbankDebt` falls by 300,000.
+
+CB margin. Prime rate 4% gives a margin rate of 5.5%. A prop book marked at 2,000,000 gives a debt ceiling of 1,000,000. With 600,000 drawn and 50,000 of interest arrears, the most the bank can draw is `1,000,000 - 600,000 - 50,000 = 350,000`. Each turn's interest on 600,000 is `600,000 * 0.055 / 48 = 687.50`.
+
+## Timing
+
+Order within a turn (`src/simulation/phases/turnPhaseRegistry.ts`):
+
+1. `npcBankPolicyTurn` runs first, before `bankingTurn`, so corrected NPC rate offsets price this turn's deposits and loans.
+2. `bankingTurn` (`src/lib/turn/bankingTurn.ts`): live-bank loan books, then dead-bank loans (`processDeadBankLoans`), then `serviceInterbankAndCbMargin`.
+3. `recomputeSharePrices`, then `bankSolvencyTurn` (`src/lib/turn/bankSolvencyTurn.ts`): failure detection, contagion and the lender-side interbank write-off, so prop-book marks use fresh prices.
+
+Player actions (originate, repay, draw, repay margin) run immediately on the API call, outside the turn. NPC bank seeding happens only at bootstrap or by admin action.
+
+## Edge cases and limits
+
+- Interbank cap compares the single new loan and the running total against `0.5 x headroom`, with a `1e-9` tolerance. Headroom of zero means no lending.
+- Repayment is capped at the outstanding balance; partial repayments reset `arrearsTurns` to 0.
+- The borrower defaulting never sends cash back. Writing off is bookkeeping only, because chasing a failed counterparty would convert one failure into two.
+- A lender failing defaults all its current loans and leaves the borrower with the cash; claims against a failed bank as borrower go through the deposit-book waterfall instead.
+- CB margin repayment is limited to `min(amount, cbMarginDebt, cashReserves)`; a bank with no cash cannot repay.
+- Margin arrears count against the collateral limit so a bank that cannot service the line cannot borrow more to hide it.
+- Interbank and margin actions are blocked when prop trading is off; existing books are frozen, not unwound. Dead-bank servicing and NPC seeding do not depend on prop trading.
+- A revoked charter is treated as resolved immediately; a failed one only after `depositorsResolvedTurn` is stamped.
+- NPC seeding skips countries with no configured capital HQ state, no currency, or no legal retail charter.
+
+## Connections
+
+**Driven by:**
+
+- Prime rate from the country's central bank, see [money supply and QE](./money-supply-and-quantitative-easing.md) and [monetary system](./monetary-system-as-shipped.md).
+- Prop book marks (share prices from [stock market](./stock-market.md)) set the margin ceiling.
+- Reserve requirement (`getReserveRequirement`, `src/lib/banking/reserves.ts`) sets lendable headroom.
+- Charter and deposit state from the wider private banking system.
+
+**Affects:**
+
+- Money supply: margin draws create reserves and raise `centralBanks.netMoneyCreatedLifetime`; repayments destroy them.
+- Deposit insurance: late dead-bank recoveries refill `depositInsuranceFunds`.
+- Bank failure and contagion: unpaid margin and interbank defaults feed `bankSolvencyTurn` (`sumInterbankDefaultsLastTurn`).
+- Borrowers of a dead bank: loans are still serviced and recovery routed to the estate or insurer.
+- Savers and households: NPC banks set deposit and lending pricing pressure on player banks.
+
+## Order of operations
+
+1. NPC bank rate policy resets offsets.
+2. Banking turn: live loan books, dead-bank loans, interbank interest and CB margin interest.
+3. Share prices recomputed.
+4. Bank solvency: failures, lender-side interbank write-off, resolution waterfall.
+
+Last checked: 2026-10-29, version 1.18.0

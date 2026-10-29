@@ -25,14 +25,14 @@ Standard patterns for API routes in A House Divided.
     }
   }
   ```
-- **Expected errors:** Throw `ApiError` (or its helpers `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, `internalError`) from `@/lib/api/errors` for 4xx/5xx. `handleRouteError` recognizes `ApiError` and returns its `status`/JSON body directly.
-- **Uncaught errors:** Anything that isn't an `ApiError` is tagged, sent to Sentry via `Sentry.captureException` and `alertOps`, logged, and returned as a generic 500 (`internalError().toJson()`).
+- **Expected errors:** Throw `ApiError` (or its helpers `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, `internalError`) from `@/lib/api/errors` for 4xx/5xx. `handleRouteError` recognizes `ApiError` and returns its `status`/JSON body directly. Expected 4xx errors are intentionally not sent to Sentry.
+- **Uncaught errors:** Anything that isn't an `ApiError` is tagged, sent to Sentry via `Sentry.captureException` and `alertOps`, logged, and returned as a generic 500 (`internalError().toJson()`). Pass `{ request, route, extra }` as the optional second argument to tag the Sentry event with the endpoint, method and entity ids.
 
 ## Cron Routes
 
 - **Auth:** Use `requireCron(request)` from `@/lib/api/requireCron`.
 - **Header:** `Authorization: Bearer ${CRON_SECRET}`
-- **Status code:** Return 401 when cron auth fails.
+- **Return value:** `requireCron` returns a boolean, not a response. The route returns 401 itself when it is false. It is false when `CRON_SECRET` is unset or the header does not match.
 
 ## Status Codes
 

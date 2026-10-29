@@ -1,8 +1,34 @@
 # Subsidiary Corporations
 
+A player-owned corporation can control other player-owned corporations as a **holding group**: one corp (the parent) formalizes >50% voting control of another (the subsidiary), gaining management rights over its CEO seat, funding it directly, and setting a dividend floor. The relationship is always **derived**, never stored as a parent pointer, a corp is a subsidiary of whoever currently controls its votes, full stop. This companion doc covers that system; see [corporations.md](./corporations.md) for the base corporation model it extends.
+
+Player guide: [Subsidiary Corporations](https://www.ahousedividedgame.com/wiki/subsidiary-corporations)
+
 Feature flag: `subsidiaryCorporationsEnabled` on the `gameState` singleton (`_id: "current"`), default ON for fresh worlds via `featureFlagDefaults`. Fail-closed on any world that never stamped the flag, `isSubsidiaryCorporationsEnabled()` returns `false` unless the field is explicitly `true`. Every subsidiary API route, and every effect below, is gated behind this flag.
 
-A player-owned corporation can control other player-owned corporations as a **holding group**: one corp (the parent) formalizes >50% voting control of another (the subsidiary), gaining management rights over its CEO seat, funding it directly, and setting a dividend floor. The relationship is always **derived**, never stored as a parent pointer, a corp is a subsidiary of whoever currently controls its votes, full stop. This companion doc covers that system; see [corporations.md](./corporations.md) for the base corporation model it extends.
+## Rules and Constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `SUBSIDIARY_OWNERSHIP_THRESHOLD_PERCENT` | 50 (voting power must exceed this) | `src/lib/corporations/corporateOwnershipConstants.ts` |
+| `SUBSIDIARY_FORMALIZATION_THRESHOLD_PERCENT` | 50 (kept in sync with the above) | `src/lib/corporations/subsidiaries/constants.ts` |
+| `SUBSIDIARY_MIN_AGE_TURNS` | 24 turns between formalize and release | `src/lib/corporations/subsidiaries/constants.ts` |
+| `SUBSIDIARY_CAPITAL_INJECTION_MAX_PCT_OF_PARENT_LIQUID` | 0.25 | `src/lib/corporations/subsidiaries/constants.ts` |
+| `SUBSIDIARY_CAPITAL_INJECTION_COOLDOWN_TURNS` | 24 turns per subsidiary | `src/lib/corporations/subsidiaries/constants.ts` |
+| `SPIN_OFF_COOLDOWN_TURNS` | 168 turns per parent | `src/lib/corporations/subsidiaries/constants.ts` |
+| `SPIN_OFF_BASE_COST_ANCHOR` | 500,000 ₳ | `src/lib/corporations/subsidiaries/constants.ts` |
+| `SPIN_OFF_PER_SECTOR_COST_ANCHOR` | 100,000 ₳ per sector moved | `src/lib/corporations/subsidiaries/constants.ts` |
+| `MAX_DIVIDEND_RATE` | 25 (upper bound of a dividend floor, percent) | `src/lib/constants/corporationsClient.ts` |
+| `GROUP_SYNERGY_CONVERGENCE` | 0.05 of the gap per turn | `src/lib/corporations/groups/synergies.ts` |
+| `GROUP_SYNERGY_MAX_SHARE` | 0.6 of the group leader's strength | `src/lib/corporations/groups/synergies.ts` |
+| `SPINOFF_SYNERGY_MAX_SHARE` | 0.85 | `src/lib/corporations/groups/synergies.ts` |
+| `SPINOFF_BRAND_INHERITANCE_TURNS` | 96 turns after spin-off | `src/lib/corporations/groups/synergies.ts` |
+| `TRANSFER_PRICING_AUDIT_THRESHOLD_ANCHOR` | 5,000,000 ₳ accrued exposure | `src/lib/corporations/groups/transferPricing.ts` |
+| `TRANSFER_PRICING_PENALTY_RATE` | 0.4 | `src/lib/corporations/groups/transferPricing.ts` |
+
+One turn is about one real hour; 48 turns are one game year. So 24 turns is about one real day and 168 turns is about seven real days.
+
+Worked example: parent P owns 62% of voting power in corp S and its CEO formalizes. P has 2,000,000 liquid capital, so one injection is capped at 500,000. After the injection S cannot receive another for 24 turns. P sets a dividend floor of 10%; S's CEO has set 6%, so S pays 10%. If S's CEO had set 15%, S would pay 15%. P later sells down to 48% and on the next corporation turn the formalization marker and floor are cleared.
 
 ## Core Model: Derived Control, Not a Stored Edge
 
@@ -45,11 +71,26 @@ Unsold shares still sitting in the parent's own open sell orders or listings cou
 
 ## Zombie Subsidiary Cleanup (turn processor)
 
-`cleanupZombieSubsidiaries()` runs every turn inside `processCorporationTurn` (gated by the feature flag), after the corp/sector lookups are built:
+`cleanupZombieSubsidiaries()` runs every turn inside `processCorporationTurn` (gated by the feature flag), after financial-distress tracking and after group relief and synergies (see Timing):
 
 - For every corp with `subsidiaryFormalizedAtTurn` set: if nobody controls >50% anymore, the formalization marker and dividend-floor fields are unset, the managed relationship dissolves on its own, no player action needed.
 - For every corp with a stale `parentDividendFloorSetByCorpId` (the setter no longer controls >50%, but the formalization itself is still valid under a _different_ controller): only the floor is cleared, formalization stays.
 - Runs as a bulk write; logs the count and records an audit entry (`corp.subsidiary_cleanup`).
+
+## Timing
+
+All of this runs in the corporation phase of the turn (`processCorporationTurn` in `src/lib/turn/corporation/index.ts`), only when `subsidiaryCorporationsEnabled` is on. Player actions (formalize, release, injection, floor, appoint, spin-off) run immediately when the API is called, outside the turn.
+
+Order inside the corporation phase, earliest first:
+
+1. Per-corp sector processing, including dividends. The parent dividend floor is applied here (`src/lib/turn/corporation/sectorCalculations.ts`).
+2. Supply agreement settlement, then the transfer-pricing audit for cross-border intra-group premiums (`groups/applyTransferPricingAudit.ts`).
+3. Tax is charged and IMF bailout payments remitted.
+4. Phase 3e, group loss relief (`groups/applyGroupRelief.ts`), a rebate after tax.
+5. Phase 3f, group synergies (`groups/applySynergies.ts`).
+6. Later, after financial-distress tracking, zombie subsidiary cleanup (`subsidiaries/turnCleanup.ts`).
+
+Because cleanup runs last, a group edge that lapsed this turn is only cleared at the end of the same phase. Group edges need both control and the formalization marker, so a lapsed parent already stops counting for relief and synergies in the same turn's resolution.
 
 ## Authorization: `canActOnCorporationAsParent`
 
@@ -154,6 +195,35 @@ A **group** is the set of corporations connected by formalized subsidiary edges,
 - Sub-0.01 deltas are skipped entirely (not worth a write, wouldn't show in the UI).
 - Returns only members that actually move; a settled group writes nothing.
 
+## Edge cases and limits
+
+- **Exactly 50% is not control.** The test is strictly greater than 50% of voting power (`src/lib/corporations/corporateOwnership.ts` returns no parent when the top holder is at or below the threshold).
+- **Control lapses.** The marker and floor are cleared at the next corporation turn. Nothing is refunded or reverted; capital already injected stays in the subsidiary.
+- **Different controller.** If a different corporation takes over >50%, formalization stays but the old controller's dividend floor is cleared.
+- **Zero or vacant seats.** A vacant parent CEO cannot formalize, release, inject, set a floor, appoint or spin off.
+- **State and national corps are excluded** as parents and subsidiaries, because their ownership is the treasury, not shareholders.
+- **No chaining.** A formalized subsidiary cannot be a parent, so groups are one level deep.
+- **Dividend floor** can only raise the payout. It is bounded by `MAX_DIVIDEND_RATE` (25) and never lowers a CEO rate that is already higher.
+- **Capital injection cap** uses the parent's liquid capital at the time of the call; a zero-liquid parent cannot inject.
+- **Loss relief** never exceeds tax actually collected, needs at least two members and one profit plus one loss, and is same-country only. Cross-border shifts are policed by the transfer-pricing audit instead.
+- **Synergies** only lift, never lower, and skip deltas under 0.01. Averaging was rejected so a weak subsidiary cannot penalize a strong parent.
+- **Share issuance is blocked** on formalized subsidiaries so dilution cannot drop the parent below control.
+- **Spin-off fee** is paid to the parent's country treasury, not destroyed, and the whole operation rolls back on any failure.
+
+## Connections
+
+**Driven by:**
+
+- [Corporations](./corporations.md): share ownership and voting power (`getControllingCorporateParent()` in `src/lib/corporations/corporateOwnership.ts`) decide who is a parent.
+- [Corporate mergers and acquisitions](./corporate-mergers-and-acquisitions.md): buying a controlling stake creates the control that formalization marks; purchase-time cycle checks run in `subsidiaries/cycleGuard.ts`.
+
+**Affects:**
+
+- [Corporations](./corporations.md): the dividend floor changes payout in `src/lib/turn/corporation/sectorCalculations.ts`, and issuance is blocked via `subsidiaries/issuanceGuard.ts`.
+- [Corporate mergers and acquisitions](./corporate-mergers-and-acquisitions.md): the merger-review divestiture check measures the controlled group (`src/lib/corporations/mergerReview/divestiture.ts`).
+- Tax: group loss relief rebates tax already collected (`groups/applyGroupRelief.ts`), which lowers treasury tax revenue.
+- Marketing and logistics strength: synergies in `groups/applySynergies.ts`.
+
 ## Admin Toggle
 
 `POST /api/admin/corporations/subsidiaries/toggle` flips `gameState.subsidiaryCorporationsEnabled`. UI: `src/components/admin/economy/SubsidiaryCorporationsToggle.tsx`.
@@ -204,3 +274,5 @@ No new collection. All state lives on the existing `corporations` documents:
 - `src/app/api/admin/corporations/subsidiaries/toggle/route.ts`, admin feature-flag toggle
 - `src/components/corporation/SubsidiaryManagementCard.tsx`, `SubsidiariesOverviewCard.tsx`, `FormalizeSubsidiaryModal.tsx`, `SpinOffModal.tsx`, `AppointSubsidiaryCeoModal.tsx`
 - `src/components/admin/economy/SubsidiaryCorporationsToggle.tsx`
+
+Last checked: 2026-10-29, version 1.18.0

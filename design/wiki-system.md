@@ -77,9 +77,7 @@ Pages are organized into categories:
 
 Pages with `featured: true` are highlighted on the wiki home page:
 
-- `getting-started` - Core systems overview
-- `core-systems` - Turn structure, actions
-- `elections` - Election browser
+Featured flags are set per page in the category files under `src/lib/seeds/wiki/pages/`. Current featured pages include `getting-started`, `core-systems`, `strategy-guides`, `first-campaign-walkthrough`, `reference-formulas`, `glossary`, `elections-player-guide`, `election-mechanics` and `campaign-strategy`. Check the seed files for the full current set.
 
 ### Special Routes
 
@@ -156,24 +154,24 @@ The wiki can auto-update on game events:
 
 ### Election Results
 
-When elections resolve, wiki pages can be updated with new results.
+When elections resolve, politician pages gain election-history entries (`updatePoliticianPagesAfterElection` in `src/lib/wiki/updatePoliticianPageOnElection.ts`).
 
 ### Leadership Changes
 
-When party leadership or government leadership changes, relevant pages update.
+Congressional leadership pages (`/wiki/leadership/[role]`) are built live from current office data (`src/lib/wiki/leadershipData.ts`), and `markCongressLeadership.ts` records that a character has held a leadership role.
 
 ## Learning Paths
 
 Wiki pages can be organized into learning paths for new players:
 
-1. **Getting Started Path:**
-   - `getting-started` → `core-systems` → `stats-actions` → `rpg-stats` → `relocation` → `campaign-strategy` → `election-mechanics` → `multi-country-play` (`src/lib/wiki/learningPaths.ts`)
+Paths are defined in `LEARNING_PATHS` (`src/lib/wiki/learningPaths.ts`) and served under `/wiki/paths/*`. Pages tied to a single country are hidden from players who do not have that country enabled. The current paths are:
 
-2. **Elections Path:**
-   - `election-mechanics` → `campaign-strategy` → `demographics-targeting` → `fundraising-ads`
-
-3. **Strategy Path:**
-   - `state-level-power` → `party-building` → `meta-strategy` → `min-maxing`
+1. **New Player Journey** (`new-player`): `getting-started` -> `core-systems` -> `stats-actions` -> `rpg-stats` -> `relocation` -> `campaign-strategy` -> `election-mechanics` -> `multi-country-play`.
+2. **Running for Office** (`running-for-office`): `election-mechanics`, `campaign-strategy`, `demographics-targeting`, `fundraising-ads`, `political-operations`, `primary-general-tactics`, `npp-elections`.
+3. **Advanced Strategy** (`advanced-strategy`): congress and chamber leadership, bills, national budget, offices reference, party organization, formulas reference, power-player guide.
+4. **Economy Operator** (`economy-operator`): plants, commodities, resources, household economy, stock market, sovereign bonds, central banks, interbank lending, pensions, IMF facility, market safeguards, national budget.
+5. **War College** (`war-college`): conflicts, declaring war, units, conscription, generals, doctrine, commands, battles, procurement, occupation, peace, and a full war walkthrough.
+6. **Cold War Operations** (`cold-war-operations`): `bloc-spheres`, `international-organizations`, `trade-system`, `embargo-and-trade-exposure`, `conflicts-overview`, `central-banks`.
 
 ## Integration Points
 
@@ -181,9 +179,7 @@ Wiki pages can be organized into learning paths for new players:
 
 Wiki pages are served via API:
 
-```typescript
-GET / api / wiki / { slug };
-```
+`GET /api/wiki/{slug}` (`src/app/api/wiki/[slug]/route.ts`). Other wiki routes under `src/app/api/wiki/` cover search, tags, templates, live stats, office history, country history, elections and reports.
 
 ### Server Components
 
@@ -195,7 +191,7 @@ const pageData = await getWikiPageData(slug);
 
 ### Admin Panel
 
-Admins can trigger the legacy-slug rename pass (`syncPriorWikiSubmissions`) and manage page publish status from the admin panel.
+Admins can trigger the legacy-slug rename pass (`syncPriorWikiSubmissions`, route `src/app/api/admin/wiki/sync-prior-submissions/route.ts`) and manage page publish status from the admin panel.
 
 ## Content Authoring
 
@@ -231,4 +227,6 @@ Tags enable cross-category discovery:
 
 - **Developer Docs:** this repository's `design/`, `engineering/`, and `api/` Markdown sources
 - **Wiki API:** `src/app/api/wiki/` - Wiki route handlers
-- **Admin Tools:** `src/app/admin/` - Sync triggers
+- **Admin Tools:** `src/app/admin/` and `src/app/api/admin/wiki/` - slug rename and moderation
+
+Last checked: 2026-10-29, version 1.18.0

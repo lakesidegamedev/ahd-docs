@@ -1,5 +1,7 @@
 # Commodity pricing v2 - design note
 
+Historical record: this page describes the commodity pricing redesign as planned before the three-layer model shipped. For current behaviour see [Commodities](./commodities.md).
+
 > **Historical migration plan:** The three-layer model has shipped. Use
 > [Commodities](./commodities.md) and `src/lib/tariffs/tariffEffects.ts` for
 > current behavior. Values below are retained as design history where noted.

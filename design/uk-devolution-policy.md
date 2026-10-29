@@ -1,5 +1,7 @@
 # UK Devolution Policy + Independence/Reunification Desire
 
+Historical record: this page describes the UK devolution policy proposal and its implementation history, as of the devolved executive rollout. For current behaviour see [United Kingdom](./united-kingdom.md) and [UK Elections](./uk-elections.md).
+
 **Status:** Proposal and implementation-history document. Devolved executive
 offices have shipped, but policy details and open phase notes below are not a
 current shipped-behavior specification.

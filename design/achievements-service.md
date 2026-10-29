@@ -1,5 +1,7 @@
 # Achievements Service
 
+Player guide: [Achievements](https://www.ahousedividedgame.com/wiki/achievements). Design: [Achievements](./achievements.md).
+
 ## Overview
 
 The Achievements Service provides a comprehensive system for awarding, revoking, and tracking player achievements. Achievements are **account-bound** (keyed by `userId`) with optional character context for historical tracking.
@@ -292,7 +294,7 @@ The trigger system automatically checks for achievement conditions when game eve
 | `rest`             | `rested`          | 1             |
 | `poll`/`pollLarge` | `pollster`        | 5 total polls |
 
-**Plus two checks that run on every call regardless of `actionType`:**
+**Plus three checks that run on every call regardless of `actionType`:**
 
 | Condition                                          | Achievement    | Threshold                |
 | --------------------------------------------------- | -------------- | ------------------------- |

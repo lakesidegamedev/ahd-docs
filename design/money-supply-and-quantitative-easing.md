@@ -1,5 +1,7 @@
 # Money Supply and Quantitative Easing
 
+Player guide: [Central Banks](https://www.ahousedividedgame.com/wiki/central-banks) (QE, QT and the Money Supply tab are covered there; there is no separate money supply wiki page).
+
 This page covers the money-supply aggregates (M1/M2), open market operations (QE/QT), the NPP autonomous monetary-operations policy, and how all of it feeds back into inflation. It is a companion to [Monetary System (as shipped)](./monetary-system-as-shipped.md), which covers the prime rate, FOMC, forex and lines of credit; those systems are not repeated here except where they interact directly with money supply. The whole feature is gated behind `gameConfig.moneySupplyEnabled` (`isMoneySupplyEnabledFromConfig` in `src/lib/moneySupply/featureFlag.ts`): every entry point below is a no-op when the flag is off.
 
 ## M1 and M2
@@ -138,6 +140,55 @@ The coefficient is era dependent: 0.08 while pegged (`PEGGED_MONEY_GROWTH_COEFF`
 
 Excess M2 growth over real GDP growth contributes up to +2.5pp of inflation; a money supply contracting faster than GDP contributes down to -1.5pp. This term is one addend among unemployment (Phillips curve), the prime-rate gap (`monetary`, a *separate* term from expected-inflation channel, not to be confused with this money-supply term), fiscal deficit, tariffs, wages, commodities, forex, savings flow, housing, and discretionary policy stance, all summed into `rawInflation`, then smoothed with inertia and pulled toward target by mean reversion. Money supply is a real but bounded driver, not the dominant one: its ±pp cap (-1.5 to +2.5) is comparable in size to several of the other cost-push terms, not larger.
 
+## Rules summary
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `MIN_MONEY_GROWTH_BASE_TURNS` | 12 | `src/lib/moneySupply/rules/calculate.ts` |
+| `MONETARY_OPERATION_COOLDOWN_TURNS` | 6 | `src/lib/moneySupply/operations.ts` |
+| `DIRECT_ADVANCE_GDP_CAP` | 0.01 (1% of GDP) | `src/lib/moneySupply/operations.ts` |
+| `LIQUIDITY_INJECTION_GDP_CAP` | 0.03 (3% of GDP) | `src/lib/moneySupply/operations.ts` |
+| QE price support | `min(0.2, ratio * 0.5)`, price clamped to [0.05, 2] | `src/lib/moneySupply/quantitativeEasing.ts` |
+| `PERSONS_PER_HOUSEHOLD` / `HOUSEHOLD_LIQUID_RATIO` / `HOUSEHOLD_SAVINGS_RATIO` | 3.2 / 0.15 / 0.6 | `src/lib/moneySupply/rules/assemble.ts` |
+| Money supply inflation term | clamp -1.5 to +2.5pp; coefficient 0.08 pegged, 0.15 after Bretton Woods exit | `src/lib/budget/inflation.ts`, `src/lib/monetary/brettonWoods.ts` |
+
+Worked QE example: the bank buys 1,000 units of a sovereign bond trading at 0.97. The consideration is `1,000 * BOND_UNIT_FACE_VALUE * 0.97`, booked as new money (`moneySupplyDelta > 0`) on `centralBanks.externalBroadMoney`. If the bond has 10,000 units issued and the bank now holds 1,000, `qeSupportRatio = 0.10` and the support premium is `min(0.2, 0.10 * 0.5) = 5%`. The premium reaches its 20% cap only when the ratio hits 0.40. Why it exists: QE should visibly lift bond prices (lower yields) without letting a bank that owns the whole float set any price it likes.
+
+## Timing
+
+1. `inflationRecalc` (stateEffects phase, `src/lib/turn/inflationRecalc.ts`) reads the latest `moneySupplySnapshots` row with `turn < currentTurn`, so the inflation term uses the previous turn's growth reading.
+2. `centralBankChairTurn`, then `fomcMeetings`, then `nppMonetaryOperations` run later in the same phase (`src/simulation/phases/stateEffectsPhase.ts`). Autonomous banks act here; a manual player operation can happen any time through the API route and snapshots immediately.
+3. `moneySupplySnapshot` is a separate registry phase after `stateEffectsAndNationalAggregation` and `indexFunds` (`src/simulation/phases/turnPhaseRegistry.ts`), writing the turn's aggregates after every value-affecting phase.
+
+So an operation executed on turn T first reaches inflation on turn T+1 or later, through the snapshot growth reading, and only once 12 turns of history exist.
+
+## Edge cases and limits
+
+- Feature off: `moneySupplyEnabled` false makes every entry point a no-op and the API returns 409.
+- Growth is `null`, not 0, when the opening or closing aggregate is 0 or less, or fewer than 12 turns have elapsed. Inflation then falls back to GDP growth, a zero impulse.
+- QE units are limited to the bond's `publicFloat`; QT units to `centralBankHoldings`. An empty float or empty holdings plans zero units. An autonomous bank that wants to tighten with no holdings holds instead of acting.
+- QT is blocked when it would retire more than the bank's remaining `externalBroadMoney`.
+- Treasury advance needs a real slump (inflation at least 3pp under target, GDP growth at or below -3%, treasury at or below -0.5x GDP) for autonomous banks; a chair may request one manually within the 1% GDP cap.
+- Liquidity injection with no chartered private bank in the currency falls back to buffering the bank's own `reserveBalance` with `moneySupplyDelta` 0, which does nothing for M2.
+- Government liquid is one-sided: an indebted treasury contributes 0 to M1, never a negative.
+- Countries with no central bank (command economies outside forex) still get synthetic snapshots keyed by country, so they have money supply rows.
+- Non-admin chairs only: cooldown and GDP caps. Admins bypass both. A bank with `chairControlsLocked` set cannot be operated by its chair.
+
+## Connections
+
+Driven by:
+
+- [Monetary System (as shipped)](./monetary-system-as-shipped.md): chair authority and prime rate decide who may operate and when (`src/app/api/country/[code]/central-bank/monetary-operation/route.ts`).
+- [Sovereign Bonds](./sovereign-bonds.md): QE and QT trade the sovereign bond's `publicFloat` and `centralBankHoldings` (`planOpenMarketOperation`).
+- [National Budget](./national-budget.md): treasury cash feeds government liquid, and treasury advances write `federalBudget.treasuryBalance` through `deriveFiscalState`.
+- Private banking ([Interbank and Bank Resolution](./interbank-and-bank-resolution.md)): bank deposits enter M2 and liquidity injections land in chartered banks (`advanceToPrivateBanks`).
+
+Affects:
+
+- [National Budget](./national-budget.md): the money supply term in `calculateInflationWithBreakdown` (`src/lib/budget/inflation.ts`), and treasury advances change debt and credit rating.
+- Bond prices: the support premium changes `bond.marketPrice`, which moves yields for [Sovereign Bonds](./sovereign-bonds.md) holders.
+- [Monetary System (as shipped)](./monetary-system-as-shipped.md): the savings, LOC and forex chains read the prime rate, inflation and (through the inflation term) this page's output.
+
 ## Key Files
 
 - `src/lib/moneySupply/rules/calculate.ts`, `calculateMoneyAggregates`, `annualizedMoneyGrowthPct`, `MIN_MONEY_GROWTH_BASE_TURNS`
@@ -155,3 +206,5 @@ Excess M2 growth over real GDP growth contributes up to +2.5pp of inflation; a m
 - `src/app/centralbank/[currency]/components/CentralBankMoneySupplyTab.tsx`, UI for manual QE/QT/advance/injection actions
 - `src/lib/turn/inflationRecalc.ts`, reads `annualizedM2GrowthPct` per currency into the inflation calc
 - `src/lib/budget/inflation.ts`, `calculateInflationWithBreakdown`, the `moneySupply` pressure term
+
+Last checked: 2026-10-29, version 1.18.0

@@ -2,6 +2,8 @@
 
 > **Document status, 2026-08-21:** The overview, exchange-rate model, fee routing, and canonical storage rule describe the shipped system. The later schema proposals and migration sequence are retained as implementation history, not as a current rollout checklist. For current fields and execution paths, use `src/lib/db/types/character.ts`, `src/lib/db/types/centralBank.ts`, `src/lib/currency/`, and `src/lib/turn/forexTurn.ts`.
 
+Player guide: [Currency Exchange](https://www.ahousedividedgame.com/wiki/currency-exchange)
+
 A dynamic foreign exchange system where each active country uses its native currency, exchange rates float based on macroeconomic conditions and player trading activity, and players can speculate on currency markets.
 
 ## Overview
@@ -96,7 +98,7 @@ Source: `src/lib/currency/rateCalculation.ts` and `src/lib/constants/currencies.
 
 Positive volume pressure (net buying) lowers the rate, since buying a currency strengthens it.
 
-Volume pressure is calculated using the total internal-unit value of trades. To prevent a single "whale" trade from instantly hitting the cap, each individual trade's contribution to the 24-turn volume is capped at a specific threshold (e.g., 10x the average trade size).
+Volume pressure is calculated from the total internal-unit value of trades in the lookback (`VOLUME_LOOKBACK_TURNS = 24`, `src/lib/constants/currencies.ts`; computed in `src/lib/currency/volumeTracker.ts`). There is no per-trade cap. A single whale is held back by the saturating curve and the breadth factor below instead.
 
 Traded flow (organic) is weighted by `ORGANIC_VOLUME_DIRECTION_WEIGHT = 0.05`. Its pressure saturates smoothly: net traded volume of `ORGANIC_VOLUME_HALF_PRESSURE_ANCHOR` (₳1,000,000,000) produces half of the cap, so everyday conversions barely register. A `breadthFactor` scales it by the number of effective traders behind the flow: one holder alone earns 1/`ORGANIC_FULL_BREADTH_TRADERS` (1/5) of the push, and 5 or more traders earn the full push. Central-bank intervention keeps the original channel, with `VOLUME_PRESSURE_SENSITIVITY = 0.0001` per internal unit and `VOLUME_DIRECTION_WEIGHT = 0.2`, so it still beats organic flow. This dampens speculative swings while still rewarding well-timed, broad volume.
 
@@ -107,6 +109,24 @@ Heavy yen buying pushes the yen rate below fundamentals temporarily (the yen str
 #### 3. Random Noise
 
 Small per-turn jitter (up to ±0.4%, `RATE_NOISE_MAX = 0.004`) prevents perfectly predictable rate movement.
+
+#### 4. Directional Regime Pressure (cycle pressure)
+
+Each currency holds one randomly rolled directional regime for `CYCLE_PRESSURE_TURNS = 12` turns, then rolls again (`rollCyclePressureRegime()` and `CYCLE_PRESSURE_BY_REGIME`, `src/lib/constants/currencies.ts`; applied by `applyCyclePressure()` in `src/lib/currency/rateCalculation.ts`). The five regimes are equally likely:
+
+| Regime | Pressure per turn | Effect on the rate |
+| ------ | ----------------- | ------------------ |
+| moderate_strengthen | +0.0015 | rate x (1 - 0.0015) |
+| slight_strengthen | +0.0007 | rate x (1 - 0.0007) |
+| neutral | 0 | none |
+| slight_weaken | -0.0007 | rate x (1 + 0.0007) |
+| moderate_weaken | -0.0015 | rate x (1 + 0.0015) |
+
+A sustained regime settles only about `pressure / DRIFT_SPEED` off the macro target (roughly 3% for moderate, 1.4% for slight), so strong fundamentals pulling the other way usually win. Pegged currencies and the euro peg skip the regime entirely (pressure 0).
+
+#### Full per-turn pipeline
+
+`computeRateUpdate()` runs these in order: macro target, drift, volume pressure, cycle pressure, noise, then the guardrail clamp. The top three reserve currencies by rank get a noise multiplier of 0.5, 0.75 and 0.875 (`RESERVE_CURRENCY_VOLATILITY_REDUCTIONS = [0.5, 0.25, 0.125]`).
 
 ### Baseline Economic Values (Fixed)
 
@@ -121,7 +141,7 @@ Each country has baseline values representing a "neutral" economic state. These 
 
 Prime rate and inflation baselines come from `MONETARY_BASELINES`; GDP and trade growth baselines come from a separate `ECONOMIC_BASELINES` constant (`src/lib/constants/currencies.ts`). A third module, `monetaryEra.ts`, layers era-specific overrides on top of `MONETARY_BASELINES` for pre-1999 worlds (e.g. JP's 1953-era neutral prime rate is 5.5%, not the modern 1.0%), keyed on the current in-game year so a long-lived world graduates through eras as its clock advances.
 
-Values reflect real-world historical norms. Tunable during playtesting.
+Values reflect real-world historical norms. Tunable during playtesting. The table shows the four original modeled countries; other currencies carry their own baselines in `ECONOMIC_BASELINES` and `monetaryEra.ts`. A currency with no full baseline still gets the absolute inflation penalty (threshold `ABSOLUTE_INFLATION_DEPRECIATION_THRESHOLD = 6.0` percentage points, sensitivity `ABSOLUTE_INFLATION_SENSITIVITY = 0.015` per excess point).
 
 ### CentralBank Schema Fields
 
@@ -161,10 +181,27 @@ Spread fees are split roughly 25/25/50 (`src/lib/currency/spreadFees.ts`):
 - **25% to `forexRevenue`** (`SPREAD_FEE_FOREX_REVENUE_RATIO`), the central bank's intervention reserve.
 - **50% to `spreadFeeReserveBalances.<currency>`** (`SPREAD_FEE_RESERVE_RATIO`), a currency-specific sell-defense pool.
 
-Together, `forexRevenue` and currency-specific spread-fee reserves make up the
+Players also pay a size fee and a market-liquidity scaling on top of the base spread (see Player Trade Fees below). Together, `forexRevenue` and currency-specific spread-fee reserves make up the
 central bank's 75% share (`SPREAD_FEE_CENTRAL_BANK_RATIO`). Flooring is handled
 in `spreadFees.ts`, with the destroyed share absorbing rounding remainder. The
 split applies to all three trading tiers.
+
+### Player Trade Fees (size and liquidity)
+
+The flat tier spreads in the Fee Schedule are the base. A player's own conversions (market maker and limit orders) pay a total of `min(FOREX_MAX_TRADE_FEE, (baseSpread + sizeFee) x liquidity)`, computed by `playerTradeFeeRate()` in `src/lib/currency/tradeFees.ts`. Conversions the game makes for the player (dividends, coupons, auto-convert shortfalls) pay the base spread only.
+
+| Constant | Value | Meaning |
+| -------- | ----- | ------- |
+| `FOREX_SIZE_FEE_MAX` | 0.2 | Extra fee rate a very large trade approaches |
+| `FOREX_SIZE_FEE_HALF_ANCHOR` | 10,000,000,000 | Trader volume (₳, over the lookback) at which the size fee is half its maximum |
+| `FOREX_LIQUIDITY_REFERENCE_VOLUME` | 100,000,000 | Gross ₳ in a currency over the lookback that earns a neutral 1x fee |
+| `FOREX_LIQUIDITY_FEE_MIN` / `FOREX_LIQUIDITY_FEE_MAX` | 0.5 / 1.5 | Fee multiplier in a busy / quiet market |
+| `FOREX_MAX_TRADE_FEE` | 0.3 | Ceiling on the total fee rate |
+| `FOREX_SPREAD_STRENGTH_MIN` / `MAX` / `DEFAULT` | 0.5 / 1.5 / 1.0 | Chair multiplier on the spread when their currency is sold |
+| `FOREX_SPREAD_STRENGTH_COOLDOWN_TURNS` | 48 | Turns between chair spread-strength changes |
+| `SECTOR_FX_SPREAD` | 0.005 | Spread on cross-currency corporate sector flows |
+
+All in `src/lib/constants/currencies.ts`. The size fee is the average of a rising marginal rate `MAX x x / (x + HALF)` over the trader's new slice of volume, so ten trades of ₳1B cost the same as one of ₳10B. The liquidity multiplier is `clamp(sqrt(REFERENCE / recentVolume), 0.5, 1.5)`, taking the quieter of the two currencies.
 
 ### Turn Processing Placement
 
@@ -229,7 +266,7 @@ Foreign-denominated income (JP stock dividends, UK bond coupons, CEO salary from
 
 This preference is stored per holding (per stock position, per bond position) so a player can auto-convert UK bond coupons while accumulating JP dividends in yen. The setting is accessible from the portfolio page next to each holding.
 
-> **Schema note:** Stock holding and bond holding documents need a new `incomeConversionPreference: "foreign" | "home"` field (default `"foreign"`). This must be added to the relevant holding types during implementation.
+> **Not shipped as designed (checked 2026-10-29):** no `incomeConversionPreference` field exists in the code. Live behavior is that foreign dividends are converted automatically to the home currency at the market-maker rate when forex is enabled. This section is retained as the original proposal.
 
 Income routes based on source:
 
@@ -369,7 +406,7 @@ currencyBalances: {
   campaign: number; // home currency only, never holds foreign currency
   personal: Partial<Record<CurrencyCode, number>>; // missing keys = 0 balance
 }
-displayCurrencyPreference: "local" | "home" | "USD"; // default "local"
+displayCurrencyPreference: "local" | "home" | "USD"; // proposal; the shipped type is "local" | "home" | "internal" | CurrencyCode (src/lib/db/types/character.ts)
 autoConvertEnabled: boolean; // default true
 ```
 
@@ -667,3 +704,52 @@ Run in this order against a staging clone first (see `scripts/migrations/README.
 2. `scripts/migrations/bondCurrencyStamp.ts`
 
 (No government-budget migration is shipped, federal and state budgets, snapshots, and enacted laws were already stored in each country's currency pre-v0.2.6; see `docs/design/national-budget.md`.) Each script writes a marker into the `migrationsRun` collection and exits early on re-run. Production rollout is an atomic cutover: pause turns → run both scripts → un-pause → merge the code deploy.
+
+## Worked example
+
+Rate drift. The US baseline prime rate is 3.0%. A chair raises it to 5.0% with everything else at baseline. The macro multiplier is `1 - (5.0 - 3.0) x 0.02 = 0.96`, so the USD target is `1.0 x 0.96 = 0.96`. From a current rate of 1.000 one turn of drift gives `1.000 + (0.96 - 1.000) x 0.05 = 0.998`. After volume pressure of zero, a neutral regime and noise, the rate is about 0.998, a 0.2% strengthening on the first turn, with about 90% of the gap closed after roughly 45 turns.
+
+Volume pressure. Five or more traders net buy a combined ₳1,000,000,000 of yen in the lookback. Organic pressure is `0.05 x 1e9 / (1e9 + 1e9) x 1 = 0.025`, then weighted by `ORGANIC_VOLUME_DIRECTION_WEIGHT = 0.05` to 0.00125, so the yen rate falls 0.125% that turn. A single trader moving the same ₳1B gets a breadth factor of 1/5 and pushes 0.025%.
+
+Fee. A fresh trader converts ₳1,000,000 at the market maker. Size fee is about 0.001%, so the rate is `0.01 + 0.00001 = 1.001%` (₳10,010) when both currencies trade at the reference volume of ₳100,000,000. In a quiet market (₳25,000,000 volume) the multiplier caps at 1.5 and the fee is 1.5015% (₳15,015).
+
+## Timing
+
+Runs inside the state-effects phase of the turn, gated by `GameState.forexEnabled` (`src/simulation/phases/stateEffectsPhase.ts`, `src/lib/turn/forexTurn.ts`). Order:
+
+1. Trade-growth mirror from the federal budget to `centralBanks`.
+2. `recalculateInflationPerTurn()` (`src/lib/turn/inflationRecalc.ts`), so forex sees fresh inflation.
+3. `processForexTurn()`: recompute 24-turn volumes, macro target, drift, volume pressure, 12-turn regime pressure, noise, guardrail clamp, write rates and history, trigger or expire limit orders.
+4. Central-bank chair phases and history snapshots.
+
+Inflation recalculation uses the previous turn's settled exchange rates because it runs before the forex phase. Player trades execute immediately on request and enter the next turn's 24-turn volume.
+
+## Edge cases and limits
+
+- Guardrail: rates are clamped to 0.5x to 1.5x of the base rate (`RATE_FLOOR_MULTIPLIER`, `RATE_CEILING_MULTIPLIER`). At the clamp, trades still execute but the rate cannot move further.
+- The macro multiplier is floored at 0.01 so the target never goes to zero or negative.
+- Combined volume pressure is clamped to the cap times 0.2, so +/-1% of rate per turn at most.
+- Zero net volume gives zero pressure. Non-finite breadth falls back to a factor of 1.
+- Total player fee is capped at 30%, and a very large trade pays up to 20 points of size fee.
+- Campaign funds never take part in forex. Auto-convert draws only from the home currency, never chains through other foreign currencies, and rejects the purchase if home currency is short.
+- Planned (command) economies and any admin hard peg skip drift, volume and regime pressure; the rate holds at its anchor. The Bretton Woods float widens the guardrail band and speeds drift gradually (`src/lib/turn/brettonWoodsTurn.ts`).
+- Euro-union members trade as one euro currency in the volume lookback.
+- Unfilled direct requests expire after `DIRECT_TRADE_EXPIRY_TURNS = 24`.
+- A limit order partly filled keeps `status: "partial"`; spread is charged per tranche.
+
+## Connections
+
+Driven by:
+
+- The central bank prime rate (`CentralBank.primeRate`, set by chair actions) is a direct input to the macro target. See [Monetary system as shipped](./monetary-system-as-shipped.md).
+- [National metrics](./national-metrics.md) and the national budget: inflation, GDP growth and trade growth feed `computeMacroTarget()`.
+- Chair spread strength and intervention reserves (`spreadFeeReserveBalances`, `forexRevenue`), also covered in [Money supply and QE](./money-supply-and-quantitative-easing.md).
+
+Affects:
+
+- [Corporations](./corporations.md): corporate money is stored in the corp's currency, and cross-border sector flows pay `SECTOR_FX_SPREAD`.
+- [Stock market](./stock-market.md): foreign share trades settle in the stock's currency, converting from home currency at the market maker.
+- [Sovereign bonds](./sovereign-bonds.md): coupon and FX depreciation effects on demand.
+- Campaign funds and the wallet: personal balances are multi-currency, campaign funds are home currency only.
+
+Last checked: 2026-10-29, version 1.18.0

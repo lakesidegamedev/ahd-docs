@@ -1,6 +1,6 @@
 # Turn Processing Submodules
 
-> Historical index. For the current registry, ordering, lock recovery, phase counts, and telemetry contract, use [The Turn Processor (as shipped)](../engineering/turn-processor-as-shipped.md).
+Historical record: this page describes the turn processing submodule layout as of the early turn-system refactor. For current behaviour see [The Turn Processor (as shipped)](../engineering/turn-processor-as-shipped.md).
 
 The live turn is driven by `processTurn()` in `src/lib/turnSystem.ts` and entered through authenticated `GET /api/cron/turn`. It runs adapters from `src/simulation/phases/turnPhaseRegistry.ts`; each adapter calls individually named phases through the runtime wrapper in `src/simulation/engine/turnPhaseRuntime.ts`.
 

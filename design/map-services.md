@@ -4,6 +4,8 @@
 
 The Map Services layer provides data for political map visualizations across all countries. Services compute party control, lean metrics, and approval ratings for display on interactive maps.
 
+This is a developer-facing service document. No player wiki page covers it; players see its output as the map overlays.
+
 **Location:** `src/lib/map/`
 
 **Key files:**
@@ -15,6 +17,10 @@ The Map Services layer provides data for political map visualizations across all
 - `leanService.ts` - Political lean (economic/social) by state
 - `partyOrgService.ts` - Party organization strength
 - `approvalService.ts` - Government approval ratings
+- `officeholderService.ts` - Seated officeholders (portraits, chamber breakdowns) for the atlas
+- `rosterService.ts` - Region roster (id, name, seats, grouping, population) derived live from `states`
+- `metricsService.ts` - US state indicators (GDP, per capita and policy scores) for the metrics map
+- `overviewTypes.ts`, `metricTypes.ts` - Response types for the routes below
 
 ## House Service
 
@@ -59,7 +65,7 @@ Party2: N seats
 ...
 ```
 
-**Color Mapping:**
+**Color Mapping** (`DEFAULT_COLORS` and `partyColor` in `src/lib/map/houseService.ts`; the same table is duplicated in `senateService.ts`, `governorService.ts`, `presidentialService.ts` and `partyOrgService.ts`, so a change must be made in all five). A vacant seat uses `VACANT_COLOR` `#334155`.
 
 ```typescript
 DEFAULT_COLORS = {
@@ -99,12 +105,14 @@ interface MapSenateSeat {
 
 **Logic:**
 
-1. Fetch all elected officials with `officeType = "senate"`
+1. Fetch all elected officials with `officeType = "senate"` (also used for JP and BR in the overview route)
 2. Sort by state, then senate class
 3. Assign seat1 (class 1) and seat2 (class 2/3)
 4. Return per-state breakdown
 
-**Note:** UK does not have an elected upper house (Lords are appointed), so this service primarily serves US data.
+A seat row with no seated character returns `null` (rendered in the shared vacant colour `#334155`), not "independent".
+
+**Note:** UK does not have an elected upper house (Lords are appointed), so the UK overview does not call this service.
 
 ## Lean Service
 
@@ -132,16 +140,16 @@ interface MapLeanState {
 **Lean Calculation:**
 
 ```typescript
-// From demographics if available
+// 1. Cached state values win when both are set
+economicLean = state.cachedEconomicLean;
+socialLean = state.cachedSocialLean;
+
+// 2. Otherwise compute from demographics if available
 const c = calculateStateLean(demo, demographicCategories);
 economicLean = c.economicLean;
 socialLean = c.socialLean;
 
-// Fallback to cached state values
-economicLean = state.cachedEconomicLean;
-socialLean = state.cachedSocialLean;
-
-// Fallback to 2020 election data (US only)
+// 3. Otherwise fall back to 2020 election data (US only, else 0)
 const margin = ELECTION_2020_MARGIN[stateId];
 const lean = margin !== undefined ? marginToLean(margin) : 0;
 ```
@@ -173,7 +181,9 @@ From demographics (weighted avg)
 
 **Purpose:** Compute governor party by state.
 
-**Returns:** Similar structure to houseService, showing gubernatorial control.
+**Inputs:** `electedOfficials` with `officeType = "governor"` (country-filtered in memory) and `politicalParties`.
+
+**Returns:** `MapGovernorState` keyed by state: `leadingParty`, `leadColor`, `governorName` (`"Vacant"` when no character is seated) and a one-line `tooltip`.
 
 ## Presidential Service
 
@@ -181,7 +191,9 @@ From demographics (weighted avg)
 
 **Purpose:** Compute presidential election results by state.
 
-**Returns:** Electoral vote allocations and state winners.
+**Inputs:** the most recently updated national election (`elections` with `state = countryId`, status active, upcoming, completed or resolved), its vote tallies, `states`, `politicalParties`, and the live apportionment (`loadApportionment` in `src/lib/elections/apportionment.ts`).
+
+**Returns:** per-state `MapPresidentialState` (`leadingParty`, `leadColor`, `candidateName`, `ev`, `tooltip`), plus optional electoral-vote, candidate name, party and colour maps and `totalElectoralVotes`. With no national election the maps come back empty and the panel assumes 538.
 
 ## Party Org Service
 
@@ -189,7 +201,9 @@ From demographics (weighted avg)
 
 **Purpose:** Compute party organization strength by state.
 
-**Returns:** Party org levels (0-100) for visualization.
+**Inputs:** `statePartyOrg` records for the country and `politicalParties`. Only parties matched by `sequentialId` count; old slug-based party ids are stale data and are ignored.
+
+**Returns:** per region `MapPartyOrgState`: `leadingParty`, `leadingPartyName`, `leadColor`, `organization` and `tooltip`. Regions with no organisation use `VACANT_COLOR` `#334155`.
 
 ## Approval Service
 
@@ -197,7 +211,15 @@ From demographics (weighted avg)
 
 **Purpose:** Compute government approval ratings by state.
 
-**Returns:** Approval percentages for state and national government.
+**Inputs:** merged regional metrics (`findMergedRegionMetricsMany`), `states`, electorate groups, and the era context (`getEraContext`), so the heatmap matches the approval shown on the region page under any era preset. Countries with political approval (`isPoliticalApprovalCountry`) use the hybrid political base from `loadPoliticalApprovalBases`.
+
+**Returns:** per region `MapApprovalState` (`approval`, `color`, `tooltip`). The colour is a linear blend from `#dc2626` at 0 to `#22c55e` at 100 (`approvalToHeatColor` in `src/lib/map/approvalService.ts`); approval is clamped to 0 to 100 for colour only. The formula itself is in [Government Approval](./government-approval.md).
+
+## Officeholder, Roster and Metrics Services
+
+- `computeMapOfficeholders(db, countryId, regionIds)` returns seated senate, house and governor holders per region as `MapOfficeholder` (name, office, party, colour, avatar, seats). Vacant seats are excluded; multi-seat delegations keep their seat count.
+- `buildRegionRoster` (`rosterService.ts`) builds the nation map's region list from the country's live `states`. For the US, `filterPoliticalUsRoster` drops non-political regions (unadmitted territories under early eras, DC) so a 1953 world shows 48 states.
+- `loadMapMetrics(db, politicalIds)` (`metricsService.ts`) returns current US state indicators with their own prefix, suffix and decimals. It is US only.
 
 ## Country Safety
 
@@ -254,6 +276,15 @@ GET /api/map/logistics?countryId=US
 GET /api/map/resources?countryId=US&resource=oil
 ```
 
+| Route | Backed by | Notes |
+| --- | --- | --- |
+| `/api/map/overview` | All services above | Public. Defaults to `US`; unknown country is 400. Each country has its own branch (US adds senate, governor, presidential, officeholders and electoral votes; UK, DE, JP, BR and CN call a subset). |
+| `/api/map/metrics` | `metricsService.ts` | US only (400 otherwise); `Cache-Control: no-store`. |
+| `/api/map/logistics` | `sourcingNetworkLoad` and `CommodityPrice.stateSupply` | Freight capacity vs projected haul TEUs per state. |
+| `/api/map/resources` | `stateResourceCapacity` and active extraction contracts | Needs a valid `resource`; returns capacity and contracted share per state. |
+
+There are no per-chamber routes (`/api/map/house`, `/senate`, `/lean`); chambers are fields of the overview response.
+
 ## Performance Optimizations
 
 ### Parallel Fetching
@@ -277,9 +308,29 @@ const partyColorMap = new Map(
 );
 ```
 
+## Timing
+
+Map services run per request, not in the turn processor. They read whatever the last completed turn wrote (`states`, `statePartyOrg`, regional metrics, `electedOfficials`, `elections`), so a map is at most one turn stale. The overview route runs its services in parallel with `Promise.all`; the individual services do not depend on each other. No result is cached server side, except that `/api/map/metrics` explicitly sets `no-store`.
+
+## Edge cases and limits
+
+- Older `electedOfficials` rows may lack `countryId`; they are treated as US (`(r.countryId ?? "US")`). Services therefore load every row of an office type and filter in memory.
+- Vacant seats render in `#334155`, never as independents.
+- Lean uses cached values first, so a state with cached lean ignores fresh demographics until the cache is refreshed.
+- The 2020 election lean fallback is US only; elsewhere the fallback is 0.
+- Era gates: US Alaska and Hawaii are excluded from the roster and electoral votes until admitted.
+- The metrics map refuses non-US countries.
+
+## Connections
+
+- **Driven by:** elections and seat changes (`electedOfficials`, `elections`), party organisation (`statePartyOrg`), regional metrics and approval ([Government Approval](./government-approval.md), [National Metrics](./national-metrics.md)), demographics ([Demographics](./demographics.md)), and era presets (`getEraContext`).
+- **Affects:** nothing in the simulation. Map services are read-only views; they feed the map components and the region pages.
+
 ## Related Systems
 
 - **Demographics:** `src/lib/utils/demographics.ts` - Lean calculations
 - **Politics Utils:** `src/lib/utils/politics.ts` - Color/label helpers
 - **Countries Config:** `src/lib/constants/countries.ts` - Country definitions
 - **UK Constants:** `src/lib/constants/uk.ts` - UK region definitions
+
+Last checked: 2026-10-29, version 1.18.0

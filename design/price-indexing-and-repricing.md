@@ -2,9 +2,76 @@
 
 **Status:** Partially shipped. The household price index described below now
 exists; full nominal repricing of constants remains a plan.
+Player guide: [Household Demand & Price Level](https://www.ahousedividedgame.com/wiki/household-economy) (the shipped household price index and real-income display). The nominal repricing layer in sections 2 to 9 has no player page because it is not shipped.
+
 **Scope:** Cumulative price-level index per country, global weighted inflation series for the forex page, and a nominal-repricing layer for in-game constants (commodity base prices, action costs, startup capital).
 
 **Reviewed against:** `src/lib/budget/inflation.ts`, `src/lib/turn/inflationRecalc.ts`, `src/lib/turn/interestRateSnapshot.ts`, `src/lib/db/types/marketCapHistory.ts`, `src/lib/constants/exchangeRegistry.ts`, `src/lib/constants/commodities.ts`, `docs/design/currency-exchange.md`.
+
+---
+
+## Shipped rules
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `HOUSEHOLD_PRICE_INFLATION_PASSTHROUGH` | 0.75 | `src/lib/economy/rules/householdPriceIndex.ts` |
+| `HOUSEHOLD_PRICE_INDEX_BASELINE` | 1 | `src/lib/economy/rules/householdPriceIndex.ts` |
+| `MIN_ANNUAL_INFLATION_PERCENT` | -100 | `src/lib/economy/rules/householdPriceIndex.ts` |
+| `TURNS_PER_YEAR` | 48 | `src/lib/constants/turnTime.ts` |
+| `FOREX_AND_MACRO_CHART_HISTORY_TURNS` | 240 (`TURNS_PER_YEAR * 5`) | `src/lib/constants/turnTime.ts` |
+| `INERTIA` (inflation smoothing) | 0.35 | `src/lib/budget/inflation.ts` |
+| `MEAN_REVERSION_COEFF` | 0.08 | `src/lib/budget/inflation.ts` |
+| `MODERN_PRICE_LEVEL` | 1 | `src/lib/campaigns/rules/priceLevel.ts` |
+
+Per-turn household price factor, with `x` the settled annual CPI in percent (clamped to at least -100):
+
+```
+annualFactor = 1 + 0.75 * x / 100
+factor = annualFactor ^ (stepFraction / 48)      (stepFraction = 1 for a full turn, 0.5 for the half tick)
+index_next = max(epsilon, index_prev * factor)
+```
+
+A year held at CPI `x` therefore moves the index by exactly `1 + 0.75 * x / 100`. Worked example: CPI held at 4% for 48 turns gives annualFactor 1.03, so the index ends the year at 1.03 (not 1.04). Median income of 50,000 deflated by an index of 1.03 reads as 48,544 in launch-price terms (`householdPriceAdjustedValue`).
+
+The index is stored on `budget.economicFactors.householdPriceIndex` and read by the real-economy outlook (`src/lib/economy/queries/countryEconomyOutlook.ts`).
+
+### Era campaign price level (shipped, separate from the index)
+
+A second shipped repricing: `ERA_PRICE_LEVEL` in `src/lib/campaigns/rules/priceLevel.ts` scales campaign action fund costs and campaign income by world era so a 1953 world does not charge modern dollar amounts. It is gated by `campaignEraPriceLevelEnabled` (`src/lib/seeds/reference/featureFlagDefaults.ts`, on by default). Values are the US GDP per capita of the era divided by the 2019 value.
+
+| Era | Price level |
+| --- | --- |
+| 1953 | 0.03673 |
+| 1979 | 0.16688 |
+| 1991 | 0.35808 |
+| 1999 | 0.49707 |
+| 2007 | 0.6562 |
+| 2019 | 1 |
+| 2023 | 1.14996 |
+| 2027 | 1.28579 |
+
+## Timing
+
+The household index is advanced inside `inflationRecalc` (`src/lib/turn/inflationRecalc.ts`) immediately after that turn's inflation is settled, so it reads the settled rate. `interestRateSnapshot` runs later and independently. The half tick at :30 advances the index by half a turn and is stamped so a retried tick never applies twice. The era price level is not a turn pass; it is resolved at the shell boundary (action execute route and fund generation) from the world preset.
+
+## Edge cases and limits
+
+- **Missing, non-finite or non-positive previous index** reads as the baseline 1.
+- **Missing or non-finite CPI** counts as 0, so the index holds still.
+- **CPI below -100%** is clamped, which keeps the factor above 0. Deflation moves the index down; there is no upper cap.
+- **One way only.** Nothing in inflation reads the index, so a price level can never feed back into CPI.
+- **Not repriced:** commodity base prices, action costs, startup capital and forex baselines (sections 6c and 6d). Only the real-income display and the era campaign scalar use a price level today.
+- **Unknown preset** resolves the era price level to 1 (modern behaviour).
+
+## Connections
+
+**Driven by**
+- [Economic Systems](./economic-systems.md): the settled annual CPI from `src/lib/budget/inflation.ts` through `inflationRecalc`.
+- [Currency Exchange](./currency-exchange.md): forex baselines stay fixed and are the cost-push reference.
+
+**Affects**
+- Real-income display: `countryEconomyOutlook.ts` deflates median income by the index.
+- Campaign actions and fund generation: the era price level scales costs and income (`src/lib/campaigns/rules/priceLevel.ts`).
 
 ---
 
@@ -14,7 +81,7 @@ The per-turn `budget.economicFactors.inflationRate` is an **annualized inflation
 
 The shipped country household index lives in
 `src/lib/economy/rules/householdPriceIndex.ts`. It starts at 1.0 and advances each
-turn using 75% CPI passthrough divided by `TURNS_PER_YEAR`. The real-economy
+turn by the 48th root of the annual passthrough factor (formula in the next section). The real-economy
 panel uses it to deflate median income. It does not yet reprice commodity bases,
 action costs, startup capital, or the other constants proposed later in this
 document.
@@ -163,3 +230,5 @@ Add a test that simulates a one-shot rate shock and verifies inflation/forex/com
 - **Index base turn when backfilled vs fresh start.** If we backfill from existing `inflationHistory` (which only retains the last 240 turns), the base will be "240 turns ago," not game genesis. Fine for a soft launch but the chart legend should say "since turn N" rather than "since game start."
 - **Currency redenomination is not in scope.** If inflation runs very hot for a very long time, nominal balances will eventually look absurd ("¥500,000 action cost"). Handling that is a future product decision (either redenominate or cap cumulative drift), not something this layer solves.
 - **Admin debug UI** - a single page showing each country's current `level`, weight-basis used, and last N periods of compounding factors would make the feedback-loop check and balance tuning dramatically easier. Not required for v1 but strongly recommended before shipping the repricing layer.
+
+Last checked: 2026-10-29, version 1.18.0

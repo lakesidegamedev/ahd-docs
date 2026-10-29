@@ -1,5 +1,7 @@
 # Archetype Approvals System
 
+Historical record: this page describes work as of the original archetype-approval design, before archetypes were replaced by census buckets. For current behaviour see [Granular Electorate (as shipped)](./granular-electorate-as-shipped.md).
+
 > **DEPRECATED, legacy behavior, not the live model.** The 12-archetype voter system this document was written to design is dead as an independent electorate model. Per project doctrine, archetypes have no plan B, no independent display, and no independent targets. In the shipped code, `archetypeApprovals` and the archetype id itself now function purely as a **bucket-keyed compatibility shim**: `src/lib/demographics/archetypeBucketMap.ts` projects each archetype-keyed value onto 2-3 Layer-1 census buckets (weights summing to 1.0) so legacy-authored effects (character/NPP approvals, legislation `demographicEffects`, Address favorability, GOTV modifiers) still land on the **granular Layer-1 electorate**, which is the actual vote path for every country (see [Granular Electorate (as shipped)](./granular-electorate-as-shipped.md)). There is no independent archetype vote-share logic left anywhere in the engine. The schema-change and gap-analysis content below describes the historical design that shipped the `archetypeApprovals` field; read it as a record of that legacy system, not as current architecture guidance.
 
 ## Overview

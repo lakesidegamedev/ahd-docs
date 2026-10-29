@@ -5,6 +5,8 @@ active even when there are not enough players to fill every office. They can
 hold office, enter elections, vote on legislation, join caucuses, receive party
 pressure, and endorse candidates.
 
+Player guide: [NPPs Overview](https://www.ahousedividedgame.com/wiki/npps-overview)
+
 ## Overview
 
 - **Purpose**: Fill seats, create contested races, and act as strategic targets
@@ -142,15 +144,20 @@ ideology roll. Each vote is the sum of four signed forces:
 
 Verdict rule:
 
-- total `> +15` -> `for`
-- total `< -15` -> `against`
-- otherwise -> `abstain`
+- total `> +5` -> `for`
+- total `< -5` -> `against`
+- otherwise (a total of -5 to +5) -> `abstain`
+
+Each force is clamped to -100..100 before summing. The threshold is
+`VERDICT_THRESHOLD = 5` in `src/lib/turn/npp/crossPressure.ts`.
 
 ### Federal vs Local Weighting
 
 Federal and local bill voting share the same core structure, but local chambers
 weight **home-region pressure more heavily** and **donor pressure more lightly**
-than federal voting.
+than federal voting. Federal voting uses weight 1 on every force. Local voting
+(`LOCAL_BILL_FORCE_WEIGHTS` in `src/lib/turn/npp/stateBillVoting.ts`) uses
+ideology 1, whip 1, district 1.35, donors 0.65.
 
 ### Whips in Auto-Voting
 
@@ -264,6 +271,7 @@ only applies to the player's **currently active campaign** in that election.
 That means the live requirement is:
 
 - `required relationship = 40 + min(10, |econ diff| + |social diff|)`
+  (`getRequestedEndorsementRelationshipRequirement` in `src/lib/nppEndorsements.ts`)
 
 ### Lifecycle
 
@@ -293,6 +301,73 @@ NPPs can also participate in caucus systems:
   decays too far
 - caucus whips and caucus health surfaces treat them as real faction members
 
+## Rules and constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| Cross-pressure verdict threshold | abstain when the sum is within -5..+5 | `src/lib/turn/npp/crossPressure.ts` |
+| Force clamp | -100..100 each | `src/lib/turn/npp/crossPressure.ts` |
+| Local force weights | ideology 1, whip 1, district 1.35, donors 0.65 | `src/lib/turn/npp/stateBillVoting.ts` |
+| Endorsement relationship gate | `40 + min(10, policy distance)` | `src/lib/nppEndorsements.ts` |
+| Influence floor when scoring candidates | 10 | `src/lib/electionEngine/candidateEnrichment.ts` |
+| Request Endorsement | 6 actions, $0 | `src/lib/capital/actions.ts` |
+| Private Meeting | 3 actions, $0, +5 relationship | `src/lib/capital/actions.ts` |
+| Boost / Reduce Favorability | 5 actions, $10,000, +3 / -3 favorability, +2 / -2 relationship | `src/lib/capital/actions.ts` |
+| Boost / Reduce Influence | 6 actions, $20,000, +2 / -2 influence, +2 / -2 relationship | `src/lib/capital/actions.ts` |
+| Filing priority | `RACE_PRIORITY`, 18 race types, table above | `src/lib/turn/rules/nppElectionPriority.ts` |
+| Unknown race type priority | 999 (last) | `src/lib/turn/rules/nppElectionPriority.ts` |
+
+## Timing
+
+NPP work is spread across several named turn phases (registry in
+`src/simulation/phases/turnPhaseRegistry.ts`, order in
+`src/simulation/phases/turnPhaseNames.ts`):
+
+1. `nppRelationshipMaintenance`, then `nppBillSponsorship`
+2. `generateChallengers` (challenger supply)
+3. `nppBehavior` (`processNPPTurn` in `src/lib/turn/nppBehavior.ts`): election
+   entry, then federal and local bill voting
+4. `playerEndorsementPartySweep`, then `billLifecycle` (so NPP votes are in
+   before bills resolve)
+5. `nppActionProcessing` and `primaryResolution` later in the same turn
+6. `electionResolution` closes the races NPPs entered
+
+Player influence actions run at request time, not in the turn. They spend
+actions and funds immediately and write to `capitalActionLogs`.
+
+## Edge cases and limits
+
+- Endorsements are manual-only and election-scoped. They end when the campaign
+  resolves, withdraws, goes inactive or stops being a plausible target, and
+  must be requested again for the next race.
+- Policy distance is clamped to 0..10, so the endorsement gate never exceeds 50.
+- Boost favorability is refused with `target_at_cap` when favorability is
+  already 100, and boost influence likewise at influence 100, so the player is
+  not charged for a no-op (`src/lib/capital/actions.ts`).
+- A tie zone of -5..+5 abstains, except on state-bill veto overrides, where an
+  abstain is converted to `against` (`isOverrideVote` in `stateBillVoting.ts`).
+- US congressional leadership votes (Speaker, House and Senate leadership) are
+  player-only: `processSpeakerVoting()` is a no-op.
+- A defending incumbent can refile even after dropping out of the same primary,
+  because the cooldown only blocks the generic fallback fill.
+- Presidential auto-entry is blocked except in autonomy-active countries with
+  no player-enabled presidency.
+- Multi-seat NPPs count `seatsHeld` votes in one tally.
+
+## Connections
+
+**Driven by:**
+
+- [Party whips](./party-whips.md): whip direction feeds the whip force in `computeCrossPressureForces`.
+- [Party slate](./party-slate.md): accepted Slate NPPs file second in the entry order.
+- [Party influence](./party-influence.md): party actions change loyalty, stubbornness, favorability and influence.
+
+**Affects:**
+
+- [Bills and legislation](./bills-legislation.md): NPP votes decide bills in `billVoting.ts` and `stateBillVoting.ts`.
+- [Campaign manager](./campaign-manager.md): arranged endorsements feed campaign-action generation and candidate enrichment.
+- [Caucuses](./caucuses.md): NPP membership and ejection follow chair relationship.
+
 ## Related Docs
 
 - [bills-legislation.md](./bills-legislation.md)
@@ -302,3 +377,5 @@ NPPs can also participate in caucus systems:
 - [party-influence.md](./party-influence.md)
 - [party-whips.md](./party-whips.md)
 - [party-slate.md](./party-slate.md)
+
+Last checked: 2026-10-29, version 1.18.0

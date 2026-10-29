@@ -21,19 +21,20 @@ Two additional reset modes, `empty` and `2019-no-parties`, provide clean-slate v
 
 The admin reset registry is the authority for selectable presets. Seed helpers must receive the selected preset or read it from `gameState`; silently assuming a contemporary bundle can contaminate a historical world.
 
-## Three simulation tiers
+## Four simulation tiers
 
-Every entity in the world manifest has one of three simulation tiers:
+Every entity in the world manifest has one of four simulation tiers (`WorldSimulationTier` in `src/lib/world/worldEntityManifest.ts`):
 
 | Tier | Meaning |
 | --- | --- |
 | `full-autonomous` | Backed by a deep country or macro-country simulation and able to operate independently |
 | `sphere-macro` | Simulated primarily through sponsor, sphere, trade, and macro relationships |
+| `background-macro` | A sovereign polity simulated only as a light background macro country, taken from the background roster (`src/lib/world/backgroundCountryRoster.ts`) when the alignment catalogue lacks it |
 | `historical-presence` | Present for geography, recognition, history, and transition rules without a full country loop |
 
 Tier is separate from player access. `legacyAccess` distinguishes `player`, `economy-preview`, `hidden`, and `config-fallback` access, while readiness records explain why an entity is or is not autonomous or playable. This prevents a map entity, an economy-preview country, and a player-enabled country from being treated as equivalent.
 
-The current static country registry marks the United States, United Kingdom, Germany, Japan, Ireland, and China as active. Historical presets may register many more entities for economic, one-party, macro, or transition behavior. Country status and preset membership therefore answer different questions.
+The static country configs (`status` in each `src/lib/countries/<id>/institutionsFacts.ts`) mark the United States, United Kingdom, Germany, Japan, Ireland, and China as `active`; other configured countries are `coming-soon`. Historical presets may register many more entities for economic, one-party, macro, or transition behavior. Country status and preset membership therefore answer different questions.
 
 ## The world manifest
 
@@ -52,7 +53,7 @@ The 1953 registry is assembled from regional modules in `src/lib/world/registry/
 
 ## Era progression
 
-The live calendar is derived from game time, not wall-clock time. When `eraSystemEnabled` is true, the era-crossing phase runs in the first week of years divisible by ten. It stamps the new decade and publishes a world-news item once. If the feature is enabled in the middle of a decade, the marker quietly self-heals without replaying old decade announcements.
+The live calendar is derived from game time, not wall-clock time. When `eraSystemEnabled` is true, the era-crossing phase runs in week 1 of years divisible by ten. It stamps the new decade and publishes a world-news item once. If the feature is enabled in the middle of a decade, the marker quietly self-heals without replaying old decade announcements.
 
 Metric activation uses the same conservative pattern. Its first enabled run records the current year without dumping missed historical events into the news feed. Later year crossings publish only newly activated metric-catalog events. Other systems, including military branches, technology lanes, election anchors, and catalog selection, read the live year or preset through their own explicit gates.
 
@@ -101,3 +102,6 @@ This separation is deliberate: the role can participate in the economy without a
 - `src/lib/elections/statehoodAdmission.ts`: statehood probability model
 - `src/lib/turn/statehood.ts`: runtime admission writes
 - `src/lib/db/types/imperialCharacter.ts`: imperial-character domain type
+- `src/lib/world/backgroundCountryRoster.ts`: background-macro roster
+
+Last checked: 2026-10-29, version 1.18.0

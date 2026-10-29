@@ -1,5 +1,7 @@
 # National Budget & Treasury
 
+Player guide: [National Budget](https://www.ahousedividedgame.com/wiki/national-budget)
+
 ## Overview
 
 The federal budget system tracks government revenue, spending, and debt. It integrates with tax policy, regional grants, public enterprises, and sovereign bond issuance.
@@ -222,6 +224,74 @@ Rate changes don't affect inflation immediately, they propagate over 12 turns:
 // Rate from 12+ turns ago (k≥12) gets full weight
 ```
 
+### Rules summary
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| Credit ladder (max debt/GDP, rate, GDP penalty, trust penalty) | AAA 0.6, 2%, 0, 0; AA 0.8, 2.5%, 0, 0; A 1.0, 3.5%, 0.1, 0; BBB 1.2, 5%, 0.2, 0; BB 1.5, 7%, 0.3, 5; B 2.5, 10%, 0.5, 10; CCC above, 14%, 0.7, 15 | `src/lib/budget/debt.ts` |
+| `EXTREME_DISTRESS_DEBT_TO_GDP` | 2.5 | `src/lib/budget/debt.ts` |
+| `BASE_TARGET`, `NAIRU`, `NEUTRAL_RATE` | 2.0, 5.0, 3.0 | `src/lib/budget/inflation.ts` |
+| `MONETARY_COEFF_LOW` / `MONETARY_COEFF_HIGH` | 0.8 / 1.2 | `src/lib/budget/inflation.ts` |
+| `FISCAL_COEFF_DEFICIT` / `FISCAL_COEFF_SURPLUS` | 0.15 / 0.08 | `src/lib/budget/inflation.ts` |
+| `MONETARY_LAG_TURNS` | 12 | `src/lib/budget/inflation.ts` |
+| `INERTIA` | 0.35 | `src/lib/budget/inflation.ts` |
+| `MEAN_REVERSION_COEFF` | 0.08 per turn toward the target | `src/lib/budget/inflation.ts` |
+| `MAX_PER_TURN_DELTA` | 1.5pp per turn (ordinary moves) | `src/lib/budget/inflation.ts` |
+| `MIN_INFLATION` / `MAX_INFLATION` | -2.0 / 100.0 | `src/lib/budget/inflation.ts` |
+| `HOUSING_PRESSURE_COEFF` | 0 (term retired) | `src/lib/budget/inflation.ts` |
+| `PEGGED_MONEY_GROWTH_COEFF` | 0.08 (0.15 after Bretton Woods exit) | `src/lib/budget/inflation.ts`, `src/lib/monetary/brettonWoods.ts` |
+| `DEBT_CEILING_RAISE_TRIGGER` / `DEBT_CEILING_RAISE_HEADROOM` | 0.95 / 1.10 | `src/lib/budget/rules/debtCeilingRaise.ts` |
+| `DD_MIN_BORROWING_LIMIT_TO_GDP` | 0.4 (East Germany floor) | `src/lib/budget/borrowingLimit.ts` |
+| Fiscal year start | turn 40 of 48 (`FISCAL_YEAR_START_TURN_IN_YEAR`) | `src/lib/budget/fiscalYear.ts` |
+
+Worked example: a country with revenue 900, spending 1,000 (of which 60 is debt interest) runs a deficit of 100. If GDP is 2,000 and debt principal was 1,050 (0.525, AAA at 2%), the close brings it to 1,150 (0.575, still AAA). A second such year gives 1,250 (0.625), which is AA at 2.5%. The deficit also feeds inflation: 100 / 2,000 = 5% of GDP, so the fiscal term is `5 * 0.15 = +0.75pp`, before smoothing.
+
+Why the asymmetric coefficients: prices are stickier on the way down, so a deficit pushes inflation up harder (0.15) than a surplus pulls it down (0.08). The same holds for the monetary term, where the high-rate side is stronger (1.2 vs 0.8) so a rate hike can actually cool an overheated economy.
+
+## Timing
+
+Registry phases (`src/simulation/phases/turnPhaseRegistry.ts`) in order:
+
+1. `incomeTaxBases` refreshes income tax shares early in the turn.
+2. `corporationTurn` writes corporate tax bases and taxable sales.
+3. `bondTurn` handles sovereign bond issuance and coupons (quarterly issuance, every 12 turns).
+4. `fiscalYear` runs only when `isFiscalYearEnd`, at turn 40 of each 48-turn year; otherwise it is recorded as skipped. It processes annual debt, grants, and snapshots.
+5. `stateEffectsAndNationalAggregation`: `nationalMetrics`, `fiscalBaseGrowth` (1/48 of the annual rate per turn), `economicModel`, `tradeGrowthMirror`, then `inflationRecalc` (so inflation reads this turn's metrics), then the central bank phases.
+6. `playerIncomeTax` and `moneySupplySnapshot` close the turn.
+
+Inflation computed on turn T reaches the prime-rate decision on the same turn (`centralBankChairTurn`) and the savings and loan accruals on turn T+1.
+
+## Edge cases and limits
+
+- Fiscal term: deficit/GDP is clamped to [-30, 50] percentage points before the coefficient, so a runaway debtor cannot inject unbounded inflation.
+- Inflation floor -2.0: stops a deflation spiral, because deflation also applies a corporate margin penalty. Ceiling 100.
+- Ordinary movement is limited to 1.5pp per turn; recovery from deep deflation (more than 4pp below target, `DEEP_DEFLATION_RECOVERY_GAP`) is allowed a larger upward correction.
+- Surplus pays down principal but never below 0.
+- Debt/GDP above 2.5 degrades to CCC; no live country is near it.
+- Debt ceiling: at fiscal close, if principal is at least 95% of the ceiling the ceiling is raised to 110% of principal. East Germany's effective limit is at least 40% of smoothed GDP.
+- No budget set: revenue falls back to a default GDP of 27 trillion.
+- Currency: every budget field is stored in the country's own currency; cross-country sums go through the anchor.
+
+Who changes the budget: tax rates and spending commitments change only through enacted legislation (see [Bills and Legislation](./bills-legislation.md) and [Policy System](./policy-system.md)); there is no direct budget edit for players, and the live budget panel shows the result. Fixing a deficit means raising rates, repealing a spending law, or letting growth expand the tax base. The consequences of a deficit are debt principal growth, a possible rating drop at the next fiscal close, higher coupon cost, and an inflation push.
+
+## Connections
+
+Driven by:
+
+- [Policy System](./policy-system.md) and [Bills and Legislation](./bills-legislation.md): enacted laws set tax rates and spending (`calculateEnactedLawAnnualCost` in `src/lib/budget/costs.ts`).
+- [Corporations](./corporations.md): corporate output writes tax bases (`corporationTurn`).
+- [Monetary System (as shipped)](./monetary-system-as-shipped.md): the effective prime rate feeds the monetary inflation term.
+- [Money Supply and QE](./money-supply-and-quantitative-easing.md): M2 growth over GDP growth feeds the money supply term; treasury advances change debt.
+- [Ministerial Orders](./ministerial-orders.md): `policyInflationPressure` from orders adds the policy term.
+- [Tariffs](./tariffs.md): the tariff rate enters the cost-push term.
+
+Affects:
+
+- [Sovereign Bonds](./sovereign-bonds.md): deficits set quarterly issuance; the rating sets the rate (`applySovereignDebtAdjustment` in `src/lib/bonds/sovereign.ts`).
+- [National Metrics](./national-metrics.md): inflation and GDP effects are written back into the metric set.
+- Public trust and corporate growth: at fiscal close `applyDebtPenalties` applies the rating's GDP penalty and public trust penalty (BB and worse: trust -5, -10, -15) in `src/lib/budget/fiscalYear.ts`.
+- [Monetary System (as shipped)](./monetary-system-as-shipped.md): inflation sets the savings real rate and the chair's Taylor target.
+
 ## Budget Document Structure
 
 ```typescript
@@ -333,3 +403,5 @@ Every federal- and state-budget money field is stored in the country's currency.
 - [Sovereign Bonds](./sovereign-bonds.md), Bond issuance, trading, maturity settlement
 - [Policy System](./policy-system.md), How enacted laws affect budget categories
 - [National Metrics](./national-metrics.md), GDP, unemployment, inflation aggregation
+
+Last checked: 2026-10-29, version 1.18.0

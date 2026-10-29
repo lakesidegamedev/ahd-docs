@@ -1,12 +1,16 @@
 # Parties
 
+Umbrella technical page for the party system: membership, primaries, funds and taxes, organization, NPP recruitment, leadership, influence, slate, caucuses and coalitions. Each subsystem with its own design doc is linked from Connections.
+
+Player guide: [Political Parties](https://www.ahousedividedgame.com/wiki/political-parties)
+
 ## Party System
 
 ### Current Implementation
 
 - **Multi-Party System**: Democrat, Republican, and custom third parties are supported
 - **Default Status**: Players are **Independent by default**. Independents use the independent-primary route where that race supports it; party members enter their party's primary.
-- **Party Formation**: Players can create custom parties; new parties start with the base organization cap (15) in all states, which grows based on election performance
+- **Party Formation**: Players can create custom parties; a new party starts with no organization units in any region and builds them through the Build Org action (see Party Organization)
 
 ## Party Membership
 
@@ -90,11 +94,11 @@ These are active-election windows. The gap between regular elections is controll
 
 Each turn, characters receive funds from:
 
-- **Base rate**: By state population tier (small <2M: $5k/hr, medium: $10k, large: $20k, mega >20M: $40k)
-- **Donor base bonus**: +$500-$4,000/hr per level (scaled by state tier)
+- **Base rate**: By state population tier (small <2M: $5k/hr, medium 2-8M: $10k, large 8-20M: $20k, mega >20M: $40k)
+- **Donor base bonus**: per donor-base level, +$100 (small), +$200 (medium), +$400 (large), +$800 (mega) per hour, so a level 75 donor base adds $7,500 to $60,000/hr. Optionally multiplied by 1 + state influence/100 (up to 2x)
 - **Office bonus**: House +$5k, State Senate +$3k, Senate +$15k, Governor +$15k, VP +$25k, President +$50k
 
-**Party members** pay taxes (0-33% each):
+**Party members** pay taxes (0-33% each, `MAX_TAX_RATE` in `src/lib/utils/fundGeneration.ts`; rates above 33 pay nothing):
 
 - **State tax** → state party treasury (set by State Chair)
 - **National tax** → national party treasury (set by National Chair)
@@ -123,7 +127,7 @@ When presence is lost:
 
 - `orgBuildingPercent` resets to 0
 - Org building cannot add units
-- Organization decays toward 0
+- Organization units decay once the party goes 96 turns without a successful Build Org (`ORG_DECAY_GRACE_TURNS`), at 1% of units per turn (`ORG_UNIT_DECAY_RATE`), both in `src/lib/constants/partyOrg.ts`
 
 ### UK Commons Support
 
@@ -141,6 +145,9 @@ When a player creates a new custom party, NPPs are automatically spawned across 
 | ------- | --------------- | ---------- | -------------- | ---------- |
 | US      | 4 + home locked | Locked     | 2              | 10         |
 | UK      | 2               | Not locked | 1              | 2          |
+| DE      | 2               | Not locked | 1              | 2          |
+
+Source: `partyCreationNPPs` in `src/lib/constants/countryClientConfig.ts`.
 
 The party creation modal shows alignment indicators for each state (good/neutral/poor fit) based on how the party's positions match the state's political lean.
 
@@ -170,27 +177,30 @@ Available slots = Max slots − Current party NPPs in that state.
 
 ### Recruitment Costs
 
-**Base cost by state NPP count:**
+Recruiting one NPP spends **5 NPP Action Points** (`NPP_RECRUITMENT_AP_COST`) from the recruiting party's pool plus a flat treasury cost by currency (`nppRecruitmentFundCost`): $50,000 for USD, GBP, EUR, NGN and SUR; 200,000 for BRL and CNY; 500,000 for JPY. Source: `src/lib/npp/actionPoints.ts`. State parties spend from the state pool and treasury, the national party from the national pool and treasury.
 
-| Party NPPs in State | Actions | Funds      |
-| ------------------- | ------- | ---------- |
-| 0 (first)           | 5       | $100,000   |
-| 1                   | 8       | $200,000   |
-| 2                   | 12      | $350,000   |
-| 3                   | 18      | $600,000   |
-| 4+                  | 25      | $1,000,000 |
+NPP Action Points are banked per party and refill each turn in `partyActionGeneration`:
 
-**Party-wide modifier (applied to base):**
+| Scope | Tier | Pool cap | Regen per turn |
+| --- | --- | --- | --- |
+| National | Major | 160 | 16 |
+| National | Minor | 80 | 8 |
+| State | Major | 40 | 4 |
+| State | Minor | 20 | 3 |
 
-- **Actions**: +1 per 20 total party NPPs (capped at +5)
-- **Funds**: +10% per 20 total party NPPs (capped at +100%)
+The older scarcity table (5 AP and $100,000 for the first NPP rising to 25 AP and $1,000,000 at four or more, with +1 action and +10% funds per 20 party NPPs, capped at +5 and +100%) still exists as `calculateRecruitmentCost` in `src/lib/npp/recruitment.ts`, but it now only prices relocation requests (25% of that cost, via `calculateRelocationRequestCost`), not recruitment.
+
+### Party-wide NPP capacity and growth frontier
+
+- Each party has a total NPP cap from its active members: 5 slots per member up to 5 members, 4 up to 10, 3 up to 20, 2 beyond, clamped to a country ceiling of `max(25, 6 x regions)` (`src/lib/npp/partyCapacity.ts`). A member counts as active with at least 2 game actions in the last 14 days and no ban.
+- A party may only recruit into its **growth frontier**: regions where it already has a member, elected official or active NPP, plus their direct neighbours (`src/lib/parties/partyFrontier.ts`).
 
 ### Cooldown
 
-- **Duration**: 24 turns (24 hours)
-- **Scope**: Party-wide (shared between state and national leadership)
+- **Duration**: 24 turns (`RECRUITMENT_COOLDOWN_TURNS`, `src/lib/npp/recruitmentCooldown.ts`)
+- **Scope**: the national party and each state party track their own cooldown independently.
 
-After any recruitment, the entire party must wait 24 turns before recruiting again.
+After any recruitment, that party scope must wait 24 turns before recruiting again.
 
 ## Party Leadership
 
@@ -258,14 +268,14 @@ See [NPP System](./npp-system.md) for full documentation.
 
 ### Player Actions
 
-Players can influence individual NPPs through deterministic direct-interaction actions on the NPP's profile page (`/npp/[id]`). Live costs are in `CAPITAL_ACTIONS` (`src/lib/capital/actions.ts`): Request Endorsement 6 AP / $0, Private Meeting 3 AP / $0, Boost/Reduce Favorability 5 AP / $10k, Boost/Reduce Influence 6 AP / $20k. There is no chance roll. Withdrawal, opposition, and leadership-support asks are **party-level** influence actions (3 AP each; see [party-influence.md](./party-influence.md)), not profile actions.
+Players can influence individual NPPs through deterministic direct-interaction actions on the NPP's profile page (`/npp/[id]`). Live costs are in `CAPITAL_ACTIONS` (`src/lib/capital/actions.ts`): Request Endorsement 6 AP / $0, Private Meeting 3 AP / $0, Boost/Reduce Favorability 5 AP / $10k, Boost/Reduce Influence 6 AP / $20k. There is no chance roll. Party-level NPP management (stat boosts, loyalty, cooperation, relocation) is separate and spends the party's NPP Action Points and treasury (1 AP each; see [party-influence.md](./party-influence.md)).
 
 ### Party-Level Influence
 
 - **State / Regional Party** (Chair/Vice Chair only) - local `Recruitment` and
   `Management` surfaces for same-party NPPs in that geography
-- **National Party** (Chair/Vice Chair only) - broader party-management tools,
-  endorsements, withdrawals, and relocation
+- **National Party** (Chair/Vice Chair, confirmed campaigners) - the same four
+  tools plus relocation across states
 
 ### Success Calculation
 
@@ -276,9 +286,10 @@ State / regional management now explicitly uses the local four-action subset:
 - `Strengthen Party Loyalty`
 - `Improve Cooperation`
 
-The loyalty / cooperation asks are hidden-roll style discipline requests rather
-than guaranteed stat nudges, and state / regional leadership gets a small local
-edge on those two asks.
+Management actions always succeed once validated and paid for; the roll-style
+chance is only recorded on the attempt log. Loyalty and cooperation change the
+stat by 1 to 3, favorability and influence follow diminishing curves. Costs and
+formulas are in [party-influence.md](./party-influence.md).
 
 ## Whip System
 
@@ -333,16 +344,21 @@ Every party member has a **Party Influence** score (0-100) that accrues passivel
 
 ### How It Works
 
-1. **Total pool** = `partyInfluencePoolMultiplier` × number of player members (configurable; default 3×)
-2. **Each member's share** = their `partyInfluence` / total party influence (across all members)
-3. **Closeness scalar**: Members whose policy positions (economic, social) are close to the party's official platform extract more value from the same raw influence score - up to a 2× multiplier
-4. **Bonus actions** = share × pool × closeness scalar, capped at `partyInfluenceMaxBonus` per turn (default 6)
+Defaults are `DEFAULT_PARTY_INFLUENCE_POOL_MULTIPLIER = 3` and `DEFAULT_PARTY_INFLUENCE_MAX_BONUS = 6` in `src/lib/turn/partyInfluenceTurn.ts`; the other rates fall back to the values below when GameConfig does not set them.
+
+1. **Per-turn gain** = `baseRate x closeness + leadershipBonus - infamyPenalty`, with `baseRate = 3`.
+2. **Decay then add**: `new = max(0, current x (1 - 0.04) + gain)`. The 4% decay (`partyInfluenceDecayRate`) is a half-life of about 17 turns without gain; the gain is what holds the score up.
+3. **Closeness scalar** (0 to 1) = `max(0, 1 - distance / sqrt(200))`, where distance is the Euclidean distance between the member's and the party's (economic, social) positions on the -5..+5 axes.
+4. **Leadership bonus** (flat, stackable): National Chair +5, Vice Chair +2, Treasurer +2, National Committee +1, State Chair +2, State Vice Chair +1, Caucus Chair +2, Caucus Vice Chair +1.
+5. **Infamy penalty** = `maxPenalty x ln(1 + infamy) / ln(1 + 300)`, capped at `maxPenalty = 4` per turn.
+6. **Bonus actions pool** = `partyInfluencePoolMultiplier x player members`.
+7. **Each member's bonus actions** = `floor(influence / total influence x pool x closeness)`, capped at 6 per turn.
 
 ### What Drives Party Influence
 
-- Passive accrual each turn while actively engaged in party operations
-- Maintained by staying active; neglected members see their influence stagnate relative to active members
-- Leaving a party resets your Party Influence to 0; rejoining starts fresh
+- Passive accrual each turn from closeness and any leadership roles
+- Decays 4% per turn, so neglected or off-platform members drift down
+- Leaving a party resets your Party Influence to 0 (`src/app/api/country/[code]/parties/[id]/leave/route.ts`); rejoining starts fresh
 
 ### Visibility
 
@@ -352,7 +368,7 @@ Every party member has a **Party Influence** score (0-100) that accrues passivel
 
 ### Strategic Implications
 
-- Members ideologically close to the party platform get more out of the same influence score - this rewards picking a party that matches your character's positions
+- Members ideologically close to the party platform both gain influence faster and convert it into more bonus actions - this rewards picking a party that matches your character's positions
 - A single highly active member in a small party can dominate the bonus action allocation; larger parties distribute more evenly
 - Party Influence is a long-term investment: switching parties loses all accumulated standing
 
@@ -486,6 +502,60 @@ transfer controls.
 
 ---
 
+## Rules and constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| Org baseline (Unaffiliated stake) | 100 units | `ORG_BUCKET_BASELINE_UNITS`, `src/lib/constants/partyOrg.ts` |
+| Units per Build Org click | 1 | `ORG_BUILD_UNITS_PER_CLICK`, `src/lib/constants/partyOrg.ts` |
+| Org decay grace / rate | 96 turns / 1% of units per turn | `src/lib/constants/partyOrg.ts` |
+| Recruitment slots | 2 / 3 / 4 / 6 at org 0 / 30 / 40 / 50 | `RECRUITMENT_SLOT_TIERS`, `src/lib/npp/recruitment.ts` |
+| Recruitment cost | 5 NPP AP plus $50,000 (USD) | `src/lib/npp/actionPoints.ts` |
+| NPP AP pool cap / regen | National 160 / 16 (Major), 80 / 8 (Minor); State 40 / 4, 20 / 3 | `src/lib/npp/actionPoints.ts` |
+| Recruitment cooldown | 24 turns | `src/lib/npp/recruitmentCooldown.ts` |
+| Purge enabled | false | `PARTY_PURGE_ENABLED`, `src/lib/constants/partyActions.ts` |
+| Purge cooldown / rejoin cooldown | 48 / 24 turns | `src/lib/constants/partyActions.ts` |
+| Purge infamy | base 25, x1.5 per successive purge, max 100 | `src/lib/constants/partyActions.ts` |
+| Max tax rate | 33% | `src/lib/utils/fundGeneration.ts` |
+| Leadership election length | 72 turns; founding 12; custom 168-420 | `src/lib/nationalPartyElectionConstants.ts` |
+| Primary and general windows | House 48/96h, Senate 240/288h, Governor and State Senate 144/192h | `src/lib/constants/electionDurations.ts` |
+| Party influence pool / max bonus | 3x members / 6 per turn | `src/lib/turn/partyInfluenceTurn.ts` |
+| Coalition creation | 25 actions | `src/app/api/country/[code]/coalitions/route.ts` |
+| Coalition priorities | max 3 active | `src/lib/coalitions/priorities.ts` |
+| Coalition disband vote | 24 hours | `DISBAND_VOTE_DURATION_HOURS`, `src/app/api/country/[code]/coalitions/[id]/disband/start/route.ts` |
+
+Worked example: a party with 4 player members has a pool of 12 bonus actions. A member with 30% of the party's influence and closeness 0.8 gets `floor(0.30 x 12 x 0.8) = 2` bonus actions.
+
+## Timing
+
+Party work runs in these turn phases, in order (`src/simulation/phases/turnPhaseNames.ts`): `partyGOTV`, `partyOrgTurn` (organization decay and build resolution), then `supportDecay` and `supportAccrual`, `partyTierTurn` (Major or Minor tier, after `partyOrgTurn`), `statePartyElections`, `nationalPartyElections`, `nationalCommitteeElections`, `partyActionGeneration`, `expireCharters`, `emptyPartyCleanup`, `coalitionDisbandVotes`. NPP behavior (`nppBehavior`) follows later in the same turn. Party influence accrues in `processPartyInfluenceTurn` after the action refresh. Fund generation and taxes run at the turn's income step. Primaries resolve in `primaryResolution`, before `electionResolution`.
+
+## Edge cases and limits
+
+- Independents pay no taxes and have no party influence.
+- Leaving or switching party sets party influence to 0 and applies favorability and political influence penalties.
+- Org presence is required to build: with no player or elected official in the region, `orgBuildingPercent` resets to 0.
+- Recruitment slots count current party NPPs in the state. A region that falls below a tier keeps its NPPs but cannot recruit until it is under the cap again.
+- Purge is switched off in the live release, so the purge rules above are dormant.
+- A coalition cannot hold the same party twice, and one party can only be in one coalition.
+- Tied leadership elections go to the earliest declaration.
+- Tax rates above 33% pay nothing rather than being clamped.
+
+## Connections
+
+**Driven by:**
+
+- [Elections](./elections.md): primary windows and results change party standing.
+- [NPP system](./npp-system.md): NPP stats feed recruitment, whips and slate.
+- [Party building](./party-building.md): org units determine recruitment slots.
+
+**Affects:**
+
+- [Party influence](./party-influence.md): party actions on NPPs.
+- [Coalitions](./coalitions.md): chair-level alliances.
+- [Caucuses](./caucuses.md): sub-party groups sharing treasury and whip.
+- [Parliamentary government](./parliamentary-government.md): seat counts per party decide who forms a government.
+
 ## Related
 
 - [Coalitions](./coalitions.md) - Full coalition system documentation (formation, priorities,
@@ -493,3 +563,5 @@ transfer controls.
 - [Getting Started](./getting-started.md) - Party membership overview for new players
 - [Elections](./elections.md) - How party affiliation affects primaries and generals
 - [Core Systems](./core-systems.md) - Turn processing, party elections phase
+
+Last checked: 2026-10-29, version 1.18.0

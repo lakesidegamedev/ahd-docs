@@ -6,6 +6,8 @@ lever cabinet-position holders spend ministerial actions on, distinct from tier
 settings and regional targets (also cabinet levers, but persistent rather than
 timed).
 
+Player guide: [Cabinet](https://www.ahousedividedgame.com/wiki/cabinet) (see also [Cabinet Guide](https://www.ahousedividedgame.com/wiki/cabinet-guide) for the orders each post can issue).
+
 **Lifecycle location:** `src/lib/cabinet/ministerialOrderLifecycle.ts`
 **Issuance route:** `POST /api/country/[code]/executive/cabinet/[positionId]/order`
 **Turn application:** `src/lib/turn/ministerialOrderProcessing.ts`
@@ -161,6 +163,67 @@ runs every turn, all countries:
    countries additionally get their national + per-region deltas snapshotted into
    `politicalCabinetContribution` for the political-approval dynamics step.
 
+## Rules
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `DEFAULT_ORDER_DURATION` | 24 turns | `src/lib/constants/cabinetMechanicsTypes.ts` |
+| `MINISTERIAL_ACTION_CAP` | 4 actions banked per position | `src/lib/constants/cabinetMechanicsTypes.ts` |
+| `MINISTERIAL_ACTION_ACCRUAL_TURNS` | +1 action every 6 turns (4 per game day) | `src/lib/constants/cabinetMechanicsTypes.ts` |
+| `CABINET_EFFECT_STRENGTH` | 1.25 multiplier on the merged order effect | `src/lib/turn/ministerialOrderProcessing.ts` |
+| `MAX_PER_METRIC_MODIFIER_PER_TURN` | 0.08 per metric per turn, either sign | `src/lib/turn/ministerialOrderProcessing.ts` |
+| `EFFICACY_PIVOT` / `EFFICACY_SLOPE` | 5.5 / 0.04 | `src/lib/stats/statsConstants.ts` |
+
+Order cost is 1 ministerial action. Statecraft multiplier:
+`statMultiplier(stat) = 1 + (clamp(stat, 1, 10) - 5.5) * 0.04` (`src/lib/stats/statMultiplier.ts`),
+so stat 1 gives 0.82x, stat 5.5 gives 1.0x, stat 10 gives 1.18x.
+
+Per-turn effect on one metric, summed over all active orders in a country:
+
+```
+applied = clamp(sum(modifier * statMultiplier(issuer.statecraft)) * 1.25, -0.08, +0.08)
+          * modifierSpanScale(metric)
+```
+
+`modifierSpanScale` is `max(1, |THRESHOLDS.worst - THRESHOLDS.best| / 100)` for the metric (`src/lib/turn/ministerialOrderProcessing.ts`), so a 0-100 authored modifier registers on a metric with a larger real-unit range.
+
+Worked example: a minister with statecraft 8 (multiplier 1.10) issues an order with a +0.03 modifier on a 0-100 metric. Per turn the effect is 0.03 * 1.10 * 1.25 = 0.04125, under the 0.08 clamp, applied for 24 turns, about +0.99 in total if nothing else stacks on that metric. Three such orders on the same metric sum to 0.12375 before clamping, so the 0.08 ceiling cuts them to 0.08 per turn.
+
+Why 24 turns: one game half-year (48 turns per year), long enough that an order is a real commitment, short enough that a minister must keep spending actions to hold a policy.
+
+## Timing
+
+`processMinisterialOrders` runs inside the `stateEffectsAndNationalAggregation` phase (`src/simulation/phases/stateEffectsPhase.ts`), as the `ministerialOrders` sub-phase. It runs after `crisisTurn`, `intelligenceTurn` and `navairOperations` and before `policyEffects`, `demographicEffects` and `metricDecay`, so the turn's order deltas are in the macro metrics before national aggregation (`nationalMetrics`), `inflationRecalc` and the metric history snapshot. The central bank's `policyInflationPressure` written here is read later in the same turn by the inflation recalculation (see [National Budget](./national-budget.md)).
+
+Within `processMinisterialOrders` the order is: expire, load active orders, scale by statecraft, bucket by channel, route inflation pressure, merge and clamp, bulk `$inc`, then action accrual. Accrual happens only when `currentTurn % 6 == 0` (`isOfficePoolAccrualTurn`, `src/lib/actions/officePoolAccrual.ts`), and each row stamps `lastMinisterialActionAccrualTurn` so a phase re-run is a no-op.
+
+## Edge cases and limits
+
+- Action pool: capped at 4, gain +1 per 6 turns while below the cap. New appointments start full (`initialMinisterialActionFields` in `src/lib/cabinet/ministerialActionPool.ts`).
+- UK player holders who hold two titles draw from one shared per-player pool, not one pool per title (`usesSharedMinisterialPool`, `ensureUkSharedPool`). NPP-held UK rows and all non-UK rows keep a per-row pool.
+- Same order twice: an already-active order with the same `orderId` on that position returns 409. A different order is allowed, so several orders can run at once; the 0.08 clamp is what bounds them.
+- Regional orders without a `targetRegionId` are rejected with 400 before any action is spent. A failed insert refunds the action.
+- Zero actions: the issuance route returns 400. The spend is an atomic `$gte: 1` decrement, so two simultaneous requests cannot spend the same action.
+- Unmigrated ministers (no stat block) and orders with no resolvable issuer (NPP-issued, `characterId` null) use a 1.0x multiplier.
+- Inflation pressure effects (`inflationPressure`, `inflationRate` leaves) go to `centralBanks.policyInflationPressure`, never to `stateMetrics`, whatever scope the order declares. Emergency orders are always stored as regional.
+- Government change: when a transition clears the cabinet (`src/lib/cabinetTransition.ts`), every active order in that country is set inactive. The order lifecycle module has no per-seat hook, so an order issued by a minister who is replaced inside the same government keeps running until it expires; the statecraft multiplier then follows the original issuer's stat.
+- Only the position holder (or an admin) can issue orders for that position. The PM or President cannot spend another post's actions.
+- Legacy rows with a missing or string-typed `expiresTurn` are still expired by the second-pass sweep.
+
+## Connections
+
+Driven by:
+
+- [Cabinet](./cabinet.md): appointments set who holds an action pool and which orders a post offers (`availableOrders` in the country cabinet config).
+- Character stats ([Player Progression](./player-progression.md)): the issuer's statecraft scales every order (`src/lib/stats/statMultiplier.ts`).
+- [Turn Processing](./turn-processing.md): the `ministerialOrders` sub-phase and the accrual cadence.
+
+Affects:
+
+- [National Metrics](./national-metrics.md): order deltas are `$inc`ed onto `macroMetrics` and per-region metrics in the same turn they apply.
+- [National Budget](./national-budget.md): inflation-pressure orders feed `centralBanks.policyInflationPressure`, read by `src/lib/budget/inflation.ts`.
+- [Government Approval](./government-approval.md): political-pipeline countries get the national and regional deltas in `politicalCabinetContribution` for the approval dynamics step (`politicalMetricsDynamics`).
+
 ## Related systems
 
 - `src/lib/constants/cabinetMechanicsTypes.ts`, `MinisterialOrderConfig`,
@@ -169,3 +232,5 @@ runs every turn, all countries:
   the legacy-member backfill used at issuance.
 - `docs/design/cabinet.md`, cabinet position structure, tier settings, regional
   targets (the other two cabinet levers, both persistent rather than order-timed).
+
+Last checked: 2026-10-29, version 1.18.0

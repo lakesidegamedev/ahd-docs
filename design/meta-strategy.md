@@ -6,6 +6,10 @@ Advanced multi-player tactics for experienced players. This guide covers politic
 
 A House Divided is ultimately a multiplayer game. While NPPs fill most offices, player-vs-player competition is where the real strategy lives.
 
+This guide is written around the US offices. Parliamentary countries (UK, DE, JP and others) differ: the executive comes from the legislature, so coalitions and confidence votes matter more than the offices below. See [Coalitions](./coalitions.md), [Parliamentary Government](./parliamentary-government.md) and [UK Cabinet](./uk-cabinet.md).
+
+Player guide: [NPP Opponents](./npp-opponents.md) and [Min-Maxing Guide](./min-maxing.md) cover the single-player side of the same decisions.
+
 ## Alliance Building
 
 ### Within Your Party
@@ -33,7 +37,7 @@ A House Divided is ultimately a multiplayer game. While NPPs fill most offices, 
 
 ### Building a Third Party
 
-- Custom parties build organization from scratch; it is tracked in units against a fixed unaffiliated baseline (`src/lib/constants/partyOrg.ts`)
+- Custom parties build organization from scratch; it is tracked in units against a permanent 100-unit Unaffiliated stake in each region (`src/lib/constants/partyOrg.ts`)
 - Requires dedicated members to build org from scratch
 - Advantage: No internal competition; you shape the party platform
 - Disadvantage: Low org means fewer votes until you build up
@@ -44,7 +48,8 @@ A House Divided is ultimately a multiplayer game. While NPPs fill most offices, 
 
 - Most powerful legislative position
 - Requires majority party membership
-- Plurality election - build a coalition within your party
+- Plurality election: the Speaker election runs for 24 hours and the most votes wins (`src/lib/congress/speaker/actions.ts`); build a coalition within your party
+- A motion to vacate the chair needs an absolute majority of all seats (`src/lib/congress/speaker/resolveVacateMotion.ts`). See [Congress Speaker](./congress-speaker.md)
 - NPPs vote for the candidate closest to their policy positions
 
 ### Senate Leadership
@@ -63,8 +68,8 @@ A House Divided is ultimately a multiplayer game. While NPPs fill most offices, 
 
 ### The Electoral Map
 
-- Focus on swing states: AZ, GA, MI, NH, NV, PA, WI (~81 EVs)
-- Safe states (Left ~222 EVs, Right ~235 EVs) are decided by lean
+- Focus on the close states. Which states are close depends on the era preset and current lean (see the Lean map overlay in [Map Services](./map-services.md)); electoral votes follow the live apportionment, not a fixed table, so check the map rather than a memorised list
+- Safe states are decided by lean
 - Win swing states through superior party org and campaign activity
 
 ### Primary vs General Pivot
@@ -76,17 +81,17 @@ A House Divided is ultimately a multiplayer game. While NPPs fill most offices, 
 ### VP Selection
 
 - Choose a VP who complements your weaknesses
-- Any character except the current President can be VP
-- VP office gives +$25k/hr in fund generation (`src/lib/utils/fundGeneration.ts`)
+- Only countries that define a vice-presidential office elect on a ticket (US, Brazil and Nigeria; `src/lib/elections/runningMateEligibility.ts`)
+- The Vice President office gives +$25,000/hr in fund generation, against $50,000 for the President and $5,000 for a House member (`OFFICE_FUND_BONUS` in `src/lib/utils/fundGeneration.ts`)
 
 ## Cabinet Nominations
 
 As President:
 
 - Nominate allies to cabinet positions
-- Senate must confirm - need majority of voting senators
+- Senate must confirm with a simple majority of votes cast, except the White House Chief of Staff, who needs no vote (see [Cabinet](./cabinet.md))
 - Use nominations as political favors to build support
-- Can fire cabinet members anytime (no Senate vote needed)
+- Can fire cabinet members anytime (no Senate vote needed). A change of government dismisses the whole cabinet
 
 ## Advanced Tactics
 
@@ -124,3 +129,7 @@ Political power in A House Divided compounds:
 - [Party Building](./party-building.md) - Growing party strength
 - [Min-Maxing Guide](./min-maxing.md) - Individual optimization
 - [Cabinet](./cabinet.md) - Presidential nominations
+- [Congress Speaker](./congress-speaker.md) - Speaker election and vacate motion
+- [NPP Opponents](./npp-opponents.md) - How NPPs behave against players
+
+Last checked: 2026-10-29, version 1.18.0
