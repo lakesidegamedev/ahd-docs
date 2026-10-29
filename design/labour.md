@@ -13,7 +13,7 @@ The labour system models per-sector wage decisions as a first-class economic and
 
 ## `labourSystemMode` tiers
 
-One graduated flag on `GameConfig`, each tier a strict superset of the previous. Production seed is `"full"` (`gameConfig.labourSystemMode`). `getLabourSystemMode()` returns `"off"` only when the field is absent or unknown.
+One graduated flag on `GameConfig`, each tier a strict superset of the previous. `getLabourSystemMode()` returns `"off"` only when the field is absent or unknown.
 
 | Tier     | Unlocks                                                                                                                                                                                |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

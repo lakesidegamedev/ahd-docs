@@ -9,7 +9,7 @@ Primaries determine your party's nominee. You compete against members of your ow
 ### How Primaries Work
 
 - **Who votes** - Only members of your party in that state
-- **Scoring** - Based on policy alignment, political influence, party organization, and favorability
+- **Scoring** - Based on policy alignment, favorability, and political influence
 - **Duration** - Set by admin; typically runs for several turns
 
 ### Primary Strategy
@@ -17,12 +17,12 @@ Primaries determine your party's nominee. You compete against members of your ow
 - **Appeal to your base** - Your party's core demographics are your voters
 - **Build influence early** - Political Influence is weighted heavily in primary scoring
 - **Policy positioning** - Stay close to your party's median position; extremists lose primaries unless the party is extreme
-- **NPP competition** - NPPs get a 25% score penalty against players, but they still compete. Enter races early to discourage NPP entries.
+- **NPP competition** - NPPs get a 50% score penalty against players (their score is multiplied by 0.5 when a player is in the party primary), but they still compete. Enter races early to discourage NPP entries.
 
 ### Presidential Primary Differences
 
 - Uses **national** political influence (not state-level)
-- Heavier policy weight: Policy 60 + Party Org 20 + National Influence 15 + Favorability 5
+- Heavier policy weight: Policy Alignment 40 + Party Influence 20 + National Reach 15 + Favorability 25 (`src/lib/primaryScore.ts`)
 - One candidate per party
 
 ## General Elections

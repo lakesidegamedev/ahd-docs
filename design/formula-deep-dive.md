@@ -42,8 +42,8 @@ Not part of the vote-share formula above but stack into it as `stateOrgMult` / `
 
 - `MAX_STATE_ORG_BONUS_PRIMARY = 0.25` (primary path cap; the fraction of it delivered follows an uncapped exponential-approach curve, `1 − (1 − 0.75)^(level / 10)`, not a linear ramp, level 10 buys 75% of the max bonus, level 20 buys 93.8%, approaching but never reaching 100%)
 - `MAX_STATE_ORG_BONUS_GENERAL = 0.15` (general path cap, smaller so it doesn't dominate lean × party position)
-- `HOME_STATE_BONUS_PRIMARY = 0.1` (flat bonus in a candidate's home state during a primary)
-- `HOME_STATE_BONUS_GENERAL` (smaller general-election equivalent)
+- `HOME_STATE_BONUS_PRIMARY = 0.2` (flat bonus in a candidate's home state during a primary)
+- `HOME_STATE_BONUS_GENERAL = 0.05` (smaller general-election equivalent)
 
 ### Minimum Vote Floor
 
@@ -54,12 +54,12 @@ There is no 50%-of-base-vote floor. The actual floors are on the individual fact
 ### Decay
 
 ```
-decay = influence × 0.0075  (0.75% per turn)
+decay = influence × 0.0075  (0.75% per turn, `POLITICAL_INFLUENCE_DECAY_RATE` in `shared/constants/formulas.ts`)
 ```
 
 ### NPP Influence Floor
 
-NPPs cannot decay below 10% Political Influence.
+NPPs cannot decay below 10% Political Influence (`NPP_POLITICAL_INFLUENCE_FLOOR`).
 
 ## Presidential Election Scoring
 
@@ -91,8 +91,10 @@ Each demographic group: -20% to +20% modifier
 ### Decay
 
 ```
-modifier = modifier × 0.98  (2% decay per turn toward 0)
+modifier = modifier × 2^(-1/6)  (6 turn half-life, about 10.9% per turn, campaign rules version 1)
 ```
+
+Legacy elections still use `modifier × 0.98` (2% per turn).
 
 ### Canvassing Effectiveness
 
@@ -139,7 +141,7 @@ income = statePopulationTier × donorLevelMultiplier + officeBonus
 
 ### Action Costs
 
-All standard actions cost 1 action point.
+Action costs vary by action and target. For example, setting a travel or primary campaign state costs 3, 5, 7 or 10 actions depending on the state's electoral votes (`getTravelActionCost` in `src/lib/constants/states.ts`). Advertise, fundraise and influence actions have their own costs.
 
 ### State Adjacency Costs
 

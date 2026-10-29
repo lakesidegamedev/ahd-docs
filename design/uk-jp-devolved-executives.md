@@ -3,7 +3,6 @@
 **Status:** Historical implementation plan; the regional executive offices and
 election wiring described here have shipped. Do not treat unresolved questions
 or phase checklists below as current behavior.
-**Branch:** `rework/political-system-update`
 **Closes:** Gate 0 finding - `getRegionalExecutive()` returns `null` for UK/JP.
 
 ## Motivation
@@ -14,7 +13,7 @@ anything for UK or JP regions because no devolved-executive `OfficeType` exists 
 the schema. US (`governor`) and DE (`ministerPresident`) are wired. This document
 covers the design + implementation plan to close that gap.
 
-## Scope locked with user
+## Scope decisions
 
 | Decision                      | Choice                                                                                          |
 | ----------------------------- | ----------------------------------------------------------------------------------------------- |

@@ -10,7 +10,7 @@ representation is not implemented.
 
 ### Shugiin (House of Representatives)
 
-- **465 seats** across 8 regions
+- **465 seats** across 8 regions in the default setup; the 1953 start has 466 and the 1991 start has 512 (`src/lib/countries/jp/eras/`)
 - **Duration:** 192 hours (144h primary + 48h general)
 - **Term cycle:** 4 game years (192 turns)
 - All seats contested every cycle
@@ -18,7 +18,7 @@ representation is not implemented.
 
 ### Sangiin (House of Councillors)
 
-- **248 seats** across 8 regions, split into 2 staggered classes
+- **248 seats** across 8 regions in the default setup (252 in the 1991 start), split into 2 staggered classes
 - **Duration:** 144 hours (72h primary + 72h general)
 - **Term cycle:** 6 game years (288 turns) per class; half-elections every 3 game years (144 turns)
 - Every region contests **both** classes. Class 1 seats = `ceil(regionSeats / 2)` (**125** total). Class 2 seats = `floor(regionSeats / 2)` (**123** total). Together they sum to 248.

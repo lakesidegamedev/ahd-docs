@@ -207,7 +207,7 @@ Re-enacting the same provision updates the existing subsidy rather than creating
 Subsidy margin modifiers are applied during sector processing:
 
 ```typescript
-// src/lib/turn/corporation/sectorTurn.ts:1014-1022
+// src/lib/turn/corporation/sectorTurn/marginStack.ts
 const subsidyMod = getSubsidyMarginModifier(
   lookups.activeSubsidies,
   corp.headquartersState,
@@ -222,12 +222,17 @@ const totalMarginMod = /* ... */ +subsidyMod;
 const effectiveMargin = Math.min(100, sector.profitMargin + totalMarginMod);
 ```
 
+## Budget Cost
+
+Subsidies are not free to the state. Each active subsidy carries an annualized cost in the owning government's budget (`src/lib/subsidies/subsidyBudgetCosts.ts`). The cost is the margin points delivered (7.5pp as a fraction of revenue) times a deadweight factor, `SUBSIDY_DEADWEIGHT_FACTOR = 1.4`, so `SUBSIDY_COST_MULTIPLIER = 0.075 × 1.4 = 0.105` of annual qualifying revenue. Cost is measured on the same revenue the margin bonus is earned on: realized revenue where plants production applies, not nameplate capacity. Sector revenue is normalized to the anchor currency, summed, and converted to the subsidizing country's currency for the budget.
+
 ## Key Files
 
 | File                                             | Purpose                                      |
 | ------------------------------------------------ | -------------------------------------------- |
 | `src/lib/subsidies/subsidyEffects.ts`            | Subsidy qualification and margin calculation |
-| `src/lib/turn/corporation/sectorTurn.ts`         | Subsidy application during turn processing   |
+| `src/lib/turn/corporation/sectorTurn/marginStack.ts` | Subsidy application during turn processing (margin stack) |
+| `src/lib/subsidies/subsidyBudgetCosts.ts`        | Annualized government budget cost of active subsidies |
 | `src/lib/legislationEffects.ts`                  | Subsidy provision enactment (calls `applySubsidyProvision`/`applyEndSubsidyProvision`) |
 
 ## Related Documentation

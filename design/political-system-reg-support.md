@@ -1,9 +1,10 @@
 # Political System - Registration / Support Model
 
+> **Historical:** this is the Phase 0.5 design record. Numbers in the body are as designed then; where the live value differs, a correction note says so.
+>
 > **Status:** Complete pending user review (Phase 0.5 of the political-system rework, kicked off and closed 2026-05-05)
 > **Owner:** political-system-rework
 > **Sources of truth this doc supersedes:** none yet - this is the first design doc that defines `Reg%`, `Support`, and the per-state pool composition.
-> **Plan:** the design archive
 > **Gate 0 audit findings:** see the `### Gate 0 - Findings (recorded 2026-05-05)` section of the plan.
 
 This document is the single source of truth for the Registration / Support model that powers the political-system rework. Phases 1, 2, 3, 4, 5, 5.5, and 6 link to specific anchors here rather than restating the model.
@@ -46,8 +47,8 @@ This document is the single source of truth for the Registration / Support model
 
 ### Country support
 
-- **In scope at Phase 0.5:** US, UK, JP, DE - the game's currently active country simulations.
-- **Not in scope at Phase 0.5:** Brazil, China, Ireland - these have party seeds (`brParties.ts`, etc.) but are not currently active country simulations per the project README. The Reg/Support model applies to them when they become active; nothing here precludes that.
+- **In scope at Phase 0.5:** US, UK, JP, DE - the active country simulations at that time.
+- **Not in scope at Phase 0.5:** Brazil, China, Ireland - these had party seeds (`brParties.ts`, etc.) but were not yet active country simulations. Ireland and China are active now. The Reg/Support model applies to them when they become active; nothing here precludes that.
 
 ### Authority
 
@@ -974,7 +975,7 @@ The "spec'd" framing is intentional: this design doc commits the contract; verif
 
 ### 8.1 Pacing constants
 
-> **Post-implementation correction (2026-08-11):** the block below is the original Phase 0.5 sketch and is stale on two points. The live `src/lib/turn/partyOrg/pacingConstants.ts` sets `PASSIVE_REG_DRIFT_RATE = 0.06` (bumped from `0.04` on 2026-06-21 after the active Registration Drive action was reverted, so Build Org auto-drift is the only Reg-growth lever). Drift is also **one-directional (up only)** as of 2026-07-28: Reg only rises toward the party's Org level and never drifts down; downward pressure comes solely from `PASSIVE_REG_DECAY_RATE`. This was a fix for the Solid South's seeded 85-90% Democratic registration getting eroded by bidirectional drift over ~800 turns. `REG_LAG_BELOW_ORG_PCT_BY_COUNTRY` (referenced in §8.2 below) was also decoupled to an empty map on 2026-06-18, so Reg now targets Org directly with no per-country lag, though the map is retained as a tunable. `PASSIVE_REG_DECAY_RATE`, `REG_DRIFT_CATCH_ELIGIBILITY_ORG_PCT`, `NON_PARTY_BUCKET_INDEPENDENT_BIAS`, and `STRONGHOLD_FALL_TIME_TURNS_TARGET` below still match the live code.
+> **Post-implementation correction (2026-08-11):** the block below is the original Phase 0.5 sketch and is stale on two points. The live `src/lib/turn/partyOrg/pacingConstants.ts` sets `PASSIVE_REG_DRIFT_RATE = 0.075` (bumped from `0.04` on 2026-06-21 after the active Registration Drive action was reverted, so Build Org auto-drift is the only Reg-growth lever). Drift is also **one-directional (up only)** as of 2026-07-28: Reg only rises toward the party's Org level and never drifts down; downward pressure comes solely from `PASSIVE_REG_DECAY_RATE`. This was a fix for the Solid South's seeded 85-90% Democratic registration getting eroded by bidirectional drift over ~800 turns. `REG_LAG_BELOW_ORG_PCT_BY_COUNTRY` (referenced in §8.2 below) was also decoupled to an empty map on 2026-06-18, so Reg now targets Org directly with no per-country lag, though the map is retained as a tunable. `PASSIVE_REG_DECAY_RATE`, `REG_DRIFT_CATCH_ELIGIBILITY_ORG_PCT`, `NON_PARTY_BUCKET_INDEPENDENT_BIAS`, and `STRONGHOLD_FALL_TIME_TURNS_TARGET` below still match the live code.
 
 ```ts
 // src/lib/turn/partyOrg/pacingConstants.ts (new file, sibling to defenseConstants.ts)
@@ -987,7 +988,7 @@ The "spec'd" framing is intentional: this design doc commits the contract; verif
  * Bounds: percent points per hourly turn.
  * Source: plan-locked assumption from user direction (2026-05-03).
  */
-export const PASSIVE_REG_DRIFT_RATE = 0.04 as const; // superseded: live value is 0.06, one-directional (up only); see correction note above
+export const PASSIVE_REG_DRIFT_RATE = 0.04 as const; // superseded: live value is 0.075, one-directional (up only); see correction note above
 
 /**
  * Passive Reg% decay / erosion per turn. Independent of drift - Reg loses
@@ -1035,7 +1036,7 @@ These constants live in a new file `src/lib/turn/partyOrg/pacingConstants.ts`, s
 
 - **Drift > Decay (10×), historically bidirectional.** The original design had drift move Reg toward each party's lagged Org target (`max(0, Org − REG_LAG_BELOW_ORG_PCT_BY_COUNTRY[country])`), raising Reg when the target was above current Reg and lowering it when below. The 10× ratio meant a party that maintains Org converges its Reg back to the lagged target meaningfully faster than baseline erosion bleeds it.
 - **Reg lags Org by a country-specific gap, no longer applied.** Real-world friction - not every voter the party reaches actually registers with that party. The gap reflected each country's registration culture: US 5pp (strong "Independent" identity, 40%+ of voters self-ID as independent), UK 4pp (less Independent framing), JP 8pp (mushikutei dominance, weak party ID), DE 3pp (Stammwähler tradition, list-based system). The map now ships empty (0pp lag for every country); Reg targets Org exactly. Floor: target = `max(0, Org − lag)` so tiny-Org parties don't target negative Reg.
-- **Both rates are very small per turn.** At the live `0.06% / turn` one-directional drift toward Org, moving Reg by 1 percentage point takes about 17 turns (~17 hours) of pure drift; moving it by 10 points takes about 167 turns (~7 days). Active actions (poach) speed this up; passive movement alone is a slow background pressure.
+- **Both rates are very small per turn.** At the live `0.075% / turn` one-directional drift toward Org, moving Reg by 1 percentage point takes about 13 turns (~13 hours) of pure drift; moving it by 10 points takes about 133 turns (~5.5 days). Active actions (poach) speed this up; passive movement alone is a slow background pressure.
 - **Decay routing through 10% Org eligibility** prevents tiny-presence parties from absorbing every other party's losses (which would create snowballing). It also routes naturally toward non-party buckets when no party has structural footprint. The Independent / Unregistered split is country-specific (`NON_PARTY_BUCKET_INDEPENDENT_BIAS_BY_COUNTRY`): US 70/30, UK 50/50, JP 60/40, DE 30/70 - matching each country's non-party identity culture.
 
 ### 8.3 Politics turn-order contract

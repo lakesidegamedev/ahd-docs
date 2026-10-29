@@ -39,7 +39,7 @@ Key values:
 
 ## Influence plays: the rudder
 
-`src/lib/alignment/influence.ts`. A play is a paid push through an organization channel. One play buys at most `PLAY_MAX_POINTS = 10` share points. Price is keyed to the target's own economy: `POINT_COST_GDP_SHARE = 0.01`, so 1% of the target's annual GDP buys one point, linearly. Because a nation moves at most 5 points a turn, spending past roughly 5% of the target's GDP in one turn is visibly wasted.
+`src/lib/alignment/influence.ts`. A play is a paid push through an organization channel. One play buys at most `PLAY_MAX_POINTS = 10` share points. Price is keyed to the target's own economy: `POINT_COST_GDP_SHARE = 0.001`, so 0.1% of the target's annual GDP buys one point, linearly. Because a nation moves at most 5 points a turn, spending past roughly 0.5% of the target's GDP in one turn is visibly wasted.
 
 Channel weight scales every play. In the Cold War era, NATO carries weight 1 toward `WEST` and the Warsaw Pact weight 1 toward `EAST`, both with `alignmentAccession: true`. The Commonwealth deliberately carries no channel: stacking it behind NATO gave the West a permanent 1.75 to 1 advantage the Warsaw Pact could not answer.
 
@@ -90,7 +90,7 @@ Budget. `src/lib/military/appropriation.ts` accrues the annual defence line even
 
 Procurement. `src/lib/military/procurement.ts` prices archetypes off GDP with `ARCHETYPE_COST_GDP_DIVISOR = 387_000` and half indexation (`MILITARY_PRICE_INDEXATION = 0.5`). Upgrades cost a share of unit price by tier: `{ 1: 0.25, 2: 0.35, 3: 0.5 }`.
 
-Arsenal and materiel. `src/lib/military/arsenal.ts` runs equipment as lots: `LOT_COST_UNITS = 387` cost units per lot (the archetype divisor over 1,000), materiel is `MATERIEL_SHARE_OF_UNIT_COST = 0.35` of a unit's price, and equipment grades run to `EQUIPMENT_TRACK_MAX = 3`. Lots produced by a plant come from its strategy and revenue (`lotsFromSector`), and the share diverted from the civilian economy is tracked per sector (`militaryDivertedShare`).
+Arsenal and materiel. `src/lib/military/arsenal.ts` runs equipment as lots: `LOT_COST_UNITS = 387` cost units per lot (the archetype divisor over 1,000), materiel is `MATERIEL_SHARE_OF_UNIT_COST = 0.2` of a unit's price, and equipment grades run to `EQUIPMENT_TRACK_MAX = 3`. Lots produced by a plant come from its strategy and revenue (`lotsFromSector`), and the share diverted from the civilian economy is tracked per sector (`militaryDivertedShare`).
 
 Manpower and conscription. `src/lib/military/manpower.ts` gives five stances, each scaling the pool and gating whether green conscripts may be drawn at all:
 
@@ -102,7 +102,7 @@ Manpower and conscription. `src/lib/military/manpower.ts` gives five stances, ea
 
 Defaults are US selective, UK national, RU universal, DD universal; every other country falls back to limited. For the four playable nations the stance is driven by a defence secondary law (for example `us.sec.reserveForces`), whose five levels are the ladder. Pools start at `MANPOWER_START_FRACTION = 0.25` of the ceiling derived from population.
 
-Readiness. `src/lib/military/readinessDrift.ts` drifts each unit toward the baseline for its posture in steps of `READINESS_DRIFT_STEP = 4`. Unpaid upkeep bites here: the arrears ratio pulls the baseline down at `ARREARS_READINESS_WEIGHT = 0.35`, so a country that cannot fund its force finds it degrading rather than vanishing.
+Readiness. `src/lib/military/readinessDrift.ts` drifts each unit toward the baseline for its posture in steps of `READINESS_DRIFT_STEP = 8`. Unpaid upkeep bites here: the arrears ratio pulls the baseline down at `ARREARS_READINESS_WEIGHT = 0.35`, so a country that cannot fund its force finds it degrading rather than vanishing.
 
 Geography. `src/lib/military/regions.ts` holds the strategic region table commands are assigned over, grouped by theater, and `regionThreat.ts` computes a threat level per region from live conflicts. A conflict derives its `region` from its host country, so declaring a war puts the pin on the map with no extra input.
 
@@ -138,7 +138,7 @@ A `BattleDeclarationDoc` is a committed offensive by one nation against a specif
 
 Verdicts (`src/lib/military/battle.ts`): margin above 45 is a Decisive Victory, above 15 a Victory, any other win Pyrrhic, a loss within -30 a Costly Defeat, worse a Rout.
 
-Territory (`src/lib/military/occupation.ts` with `OCCUPATION` in `config.ts`). `control` is side B's share of the host country's territory, 0 to 100. A war starts at the host's own pole when the host is a belligerent, and at 50 when it is not. A decisive win at `decisiveMargin: 45` takes `maxShift: 5` points of the track; narrower wins scale down; a loser who withdrew in order yields `retreatYield: 0.7`; an advance halves (`deepPushMult: 0.5`) once the winner holds `deepPushDepth: 0.75` of the ground and is outrunning logistics. Supply is derived from displacement rather than accumulated, so a front that swings back also recovers: `compressionPenalty: 40` at full compression, `overextensionPenalty: 15` at full overextension, never below `minSupply: 10`, with `supplyNeutral: 60` the neutral point. Reaching a pole ends the war.
+Territory (`src/lib/military/occupation.ts` with `OCCUPATION` in `config.ts`). `control` is side B's share of the host country's territory, 0 to 100. A war starts at the host's own pole when the host is a belligerent, and at 50 when it is not. A decisive win at `decisiveMargin: 45` takes `maxShift: 5` points of the track; narrower wins scale down; a loser who withdrew in order yields `retreatYield: 0.7`; advances no longer halve at depth (the old `deepPushMult` drag was removed, and the supply penalties below slow a deep push instead; `deepPushDepth: 0.75` now only marks when a war reads as winding down). Early advances are ramped: a front moves at `mobilizationFloor: 0.4` of a normal advance on the opening turn and reaches full pace at `mobilizationTurns: 50`, so a coalition that needs time to mobilise is not shut out of a war already decided. Supply is derived from displacement rather than accumulated, so a front that swings back also recovers: `compressionPenalty: 40` at full compression, `overextensionPenalty: 15` at full overextension, never below `minSupply: 10`, with `supplyNeutral: 60` the neutral point. Reaching a pole ends the war.
 
 ## Ending a war
 

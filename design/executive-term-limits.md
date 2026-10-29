@@ -2,7 +2,7 @@
 
 ## Overview
 
-Per-country configurable term limits on a single executive office (President, Uachtarán, etc.). Source: `src/lib/elections/executiveTermLimits.ts`, config in `COUNTRY_CONFIGS.<id>.executiveTermLimit` (`src/lib/constants/countries.ts`).
+Per-country configurable term limits on a single executive office (President, Uachtarán, etc.). Source: `src/lib/elections/executiveTermLimits.ts`, config in `COUNTRY_CONFIGS.<id>.executiveTermLimit`, typed in `src/lib/constants/countries.ts` with each country's value in `src/lib/countries/<id>/institutionsFacts.ts`.
 
 ## Configuration
 

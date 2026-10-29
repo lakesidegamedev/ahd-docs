@@ -107,7 +107,7 @@ This check lives in each mod API route, not in the auth guard (the guard checks 
 
 ### Tabs
 
-Only one tab for now: **Players**. Adding more tabs later means adding entries to the mod tab config and ensuring API routes accept moderator auth.
+Five tabs: **Priority**, **Players**, **Transactions**, **Content** and **Site** (`src/components/moderator/tabs/ModeratorTabsConfig.tsx`). Adding more tabs means adding entries to the mod tab config and ensuring API routes accept moderator auth.
 
 ### Players Subtabs
 
@@ -144,6 +144,17 @@ Most admin player components can be reused directly. Where behavior differs (del
 | `/api/moderator/patreon/update`     | POST   | Update Patreon tier                  | Yes          |
 | `/api/moderator/activity-log`       | GET    | View activity log                    | No           |
 | `/api/moderator/suspicious`         | GET    | View suspicious activity             | No           |
+| `/api/moderator/audit-log` | GET | List the mod action audit log | No |
+| `/api/moderator/financial-logs` | GET | Paginated financial transaction log | No |
+| `/api/moderator/financial-logs/alerts` | GET | Suspect alert summary by entity | No |
+| `/api/moderator/financial-logs/[id]/review` | POST | Mark a financial log reviewed | Yes |
+| `/api/moderator/mod-view` | POST | Audit unlocking a restricted page view | Yes |
+| `/api/moderator/news/[id]` | DELETE | Delete a player news post | Yes |
+| `/api/moderator/player-ads` | GET | List banner ads for review | No |
+| `/api/moderator/player-ads/[id]` | PATCH/DELETE | Update or remove a banner ad | Yes |
+| `/api/moderator/supporter-requests` | GET | List supporter requests | No |
+| `/api/moderator/supporter-requests/[id]/approve` | POST | Approve a supporter request | Yes |
+| `/api/moderator/supporter-requests/[id]/reject` | POST | Reject a supporter request | Yes |
 
 Every mutating mod route follows this pattern:
 

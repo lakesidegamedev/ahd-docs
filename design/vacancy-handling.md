@@ -2,7 +2,7 @@
 
 ## Overview
 
-When elected officials resign, die, or are removed from office, their seats may be filled temporarily (Senate only) or remain vacant until the next regular election cycle.
+When elected officials resign, die, or are removed from office, their seats may be filled temporarily by appointment (Senate only), filled by a by-election (Governor, UK Commons), or remain vacant until the next regular election cycle (other offices).
 
 ## Vacancy Types by Office
 
@@ -10,9 +10,9 @@ When elected officials resign, die, or are removed from office, their seats may 
 | ------------------- | ----------------------------- | ------------------------------------------------------ |
 | **US Senate**       | Governor appoints replacement | Until next regular Class election                      |
 | **US House**        | Seat remains vacant           | Until next regular House election (2 years max)        |
-| **US Governor**     | Seat remains vacant           | Until next regular Governor election (4 years max)     |
+| **US Governor**     | Special election (`special_governor`) | Filing window then general election (see below)  |
 | **US State Senate** | Seat remains vacant           | Until next regular State Senate election (4 years max) |
-| **UK MP (Commons)** | Seat remains vacant           | Until next regular Commons election                    |
+| **UK MP (Commons)** | By-election for the vacated seat | Contested on a scaled-down regional electorate       |
 
 ## Senate Vacancies (US Only)
 
@@ -104,25 +104,18 @@ When a House member resigns or is removed:
 
 ## Governor Vacancies
 
-When a Governor resigns or is removed:
+When a Governor resigns, retires, dies or is removed mid-term, the seat is filled by an off-calendar special election of type `special_governor` (`src/lib/turn/byElections.ts`). This applies to the countries listed in `BY_ELECTION_COUNTRIES`: the US and Russia.
 
-- Seat remains **vacant**
+- Filing/primary window of 24 turns (`SPECIAL_GOVERNOR_FILING_TURNS`), then a general election of 24 turns (`SPECIAL_GOVERNOR_GENERAL_TURNS`)
+- The winner is seated as a plain governor, and the next regular Governor election spawns on its normal calendar
+- If nobody contests the by-election, another is not spawned for the same seat until `BY_ELECTION_RETRY_COOLDOWN_TURNS = 48` turns have passed
 - No Lt. Governor succession (Lt. Governor is not implemented in the game)
 - No appointment mechanism
-- No special election
-- Seat is filled only when the next regular Governor election completes (every 4 years)
 
 **Impact:**
 
-- State has no governor
-- Executive powers unavailable (cannot appoint senators, cannot sign/veto bills if state-level legislation implemented)
-
-**Example:**
-
-- **Nov 2020:** Gavin Newsom (D) elected Governor of California
-- **Term end:** Nov 2024
-- **Aug 2022:** Newsom resigns
-- **Vacancy:** California has no governor for 27 months until Nov 2024 election
+- State has no governor until the special election resolves
+- Executive powers unavailable in the meantime (cannot appoint senators, cannot sign/veto bills if state-level legislation implemented)
 
 ## State Senate Vacancies
 
@@ -141,19 +134,16 @@ When a State Senator resigns or is removed:
 
 ## UK MP (Commons) Vacancies
 
-When an MP resigns or is removed:
+When an MP resigns or is removed, the seat is recorded as a durable vacancy (`src/lib/countries/uk/elections/commonsVacancyShell.ts`) and a by-election is held for it:
 
-- Seat remains **vacant**
-- No by-election (special election)
-- Seat is filled only when the next regular Commons election completes
+- The by-election contests only the vacated seat(s). AHD models regions with a seat count rather than individual constituencies, so it runs over the regional electorate scaled down to the vacated seats' share of the region, `carveFraction = vacatedSeats / totalRegionSeats` (`byElectionCarve.ts`). The regional mix of groups and leans is preserved.
+- The reduced electorate runs through the normal vote engine.
 
 **Impact:**
 
-- Commons total seat count may drop below 650
-- Party seat counts decrease
+- Commons total seat count can drop below 650 while a seat awaits its by-election
+- Party seat counts decrease until it resolves
 - May affect confidence votes (fewer MPs voting)
-
-**Note:** Real-world UK holds by-elections for vacant seats. This is **not implemented** to avoid mid-cycle election complexity.
 
 ## Resignation Mechanics
 
@@ -174,7 +164,7 @@ Any player holding elected office can resign at any time (except during active e
 
 1. `ElectedOfficial` document deleted
 2. If Senate: Governor notification sent (appoint replacement)
-3. If House/Governor/State Senate/MP: No action (seat vacant)
+3. If House/State Senate: No action (seat vacant); Governor and UK MP seats go to a by-election
 4. Character's `currentOffice` field cleared
 5. Notification sent to character: "You have resigned from [office]"
 
@@ -394,12 +384,11 @@ This action cannot be undone. Your seat will become vacant immediately.
 
 1. **Special elections** - Allow states to opt-in to special elections for House/State Senate
 2. **Lt. Governor succession** - Implement Lt. Governor office; auto-succession on Governor vacancy
-3. **UK by-elections** - Implement by-elections for UK MP vacancies (mirrors real-world practice)
 4. **Death/mortality** - Characters die of natural causes or events; triggers vacancies
 5. **Expulsion** - Congress can expel members via 2/3 vote; triggers vacancy
 
 ## Related pages
 
 - [Election Mechanics](./elections.md) - Election cycles and perpetual races
-- [United Kingdom](./united-kingdom.md) - Commons vacancies until the next regional cycle
+- [United Kingdom](./united-kingdom.md) - Commons vacancies and by-elections
 - [State-Level Power](./state-level-power.md) - Governors and appointments

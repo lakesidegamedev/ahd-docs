@@ -3,7 +3,6 @@
 **Status:** Proposal and implementation-history document. Devolved executive
 offices have shipped, but policy details and open phase notes below are not a
 current shipped-behavior specification.
-**Branch:** `rework/political-system-update`
 **Depends on:** UK FM/Mayor wiring (Phases 1-4 of `uk-jp-devolved-executives.md`)
 
 ## Motivation
@@ -22,11 +21,11 @@ This adds:
 - A soft electoral hook nudging vote share toward pro-independence parties
   when desire is high
 
-## Scope locked with user
+## Scope decisions
 
 | Decision           | Choice                                                                                                                                  |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Mechanic depth     | **Soft electoral hook** - metric drives vote-share nudge for pro-independence parties when high; full referendum trigger is future work |
+| Mechanic depth     | **Soft electoral hook** - metric drives vote-share nudge for pro-independence parties when high; a referendum trigger was deferred at the time (it has since shipped, see below) |
 | Policy change cost | **2 Office AP + 72-turn cooldown**                                                                                                      |
 | Tab scope          | SCO, WAL, NIR only (LON excluded - Mayor of London has no devolution axis)                                                              |
 
@@ -84,15 +83,17 @@ for SCO/WAL/NIR. Drivers (additive):
 | Driver                                                                                                | Range per turn   |
 | ----------------------------------------------------------------------------------------------------- | ---------------- |
 | **FM Devolution Policy**: anti = -0.04, pro = 0, independence = +0.05                                 | -0.04 to +0.05   |
-| **Regional approval** (governor approval of that state): linear, 0.001/turn per full pp away from 50% | -0.050 to +0.050 |
-| &nbsp;&nbsp;&nbsp; e.g. 49% → +0.001, 30% → +0.020, 0% → +0.050; 70% → -0.020, 100% → -0.050          |                  |
+| **Regional approval** (governor approval of that state): linear, 0.002/turn per full pp away from 50%, capped at 0.05 | -0.050 to +0.050 |
+| &nbsp;&nbsp;&nbsp; e.g. 49% → +0.002, 30% → +0.040, 20% or lower → +0.050 (cap); 70% → -0.040, 80% or higher → -0.050          |                  |
 | **National PM approval** (UK PM): same linear formula as regional approval                            | -0.050 to +0.050 |
 | **National inflation**: >5% → +0.02; 2-5% → 0; <2% → -0.01                                            | -0.01 to +0.02   |
 | **Mean-reversion toward 25**: 0.003/turn toward 25 (status-quo baseline)                              | -0.003 to +0.003 |
 
-The approval drivers are **linear** and **unbounded**: contribution is
-`sign(50 − approval) × floor(|50 − approval|) × 0.001` per turn, with
-fractional points truncated toward zero (so 48.1 acts as 49).
+The approval drivers are **linear** and **capped**: contribution is
+`sign(50 − approval) × floor(|50 − approval|) × 0.002` per turn, clamped to
+±0.05 (`APPROVAL_DRIFT_PER_POINT` and `APPROVAL_DRIFT_CAP` in
+`src/lib/governorOffice/devolution/rules.ts`), with fractional points
+truncated toward zero (so 48.1 acts as 49).
 
 Total range: roughly **-0.15 to +0.17/turn** at extremes.
 
@@ -101,7 +102,7 @@ Total range: roughly **-0.15 to +0.17/turn** at extremes.
 **Pace calibration** (illustrative - actual paths depend on starting value):
 
 - **Max-positive run** (Pro-Indy FM, both approvals at 0%, inflation above 5%): **+0.17/turn** → ~70 turns per 12 points of climb. Climbing from the 25 baseline to ~95 takes ~8.5 game-years (~2.1 FM terms), reachable only in deep-crisis conditions.
-- **Plausible-positive run** (Pro-Indy FM, both approvals around 30%, high inflation): ~+0.11/turn → climbing 25 → 70 takes ~9 game-years (~2.3 FM terms) to cross the "possibility" threshold.
+- **Plausible-positive run** (Pro-Indy FM, both approvals around 30%, high inflation): ~+0.15/turn → climbing 25 → 70 takes ~6.5 game-years (~1.7 FM terms) to cross the "possibility" threshold.
 - **Mid-band run** (Pro-Indy FM, neutral approvals, moderate inflation): **~+0.05/turn**, but mean reversion (-0.003) means net ~+0.047/turn above 25. From the 25 baseline → 70 takes ~20 game-years - independence stays a marginal force without a crisis.
 - **Max-suppression run** (Anti-Devolution FM, both approvals at 100%, inflation below 2%): **-0.15/turn** → drags down quickly until mean reversion flips positive below 25 and creates a soft floor.
 
@@ -165,7 +166,7 @@ Layout:
 
 ## Phases
 
-### Phase 1 - Data model + types (this PR)
+### Phase 1 - Data model + types 
 
 - `StateMetrics`: add `independenceDesire?: number` field
 - `governorOfficeState`: add `devolutionPolicy?: "anti" | "pro" | "independence"`,
@@ -202,9 +203,7 @@ Layout:
 
 ## Open questions (deferred)
 
-- **Referendum trigger** - when desire is sustained at 60%+ for N turns,
-  should a referendum election spawn? (Out of scope for v1 per the
-  "soft electoral hook" decision.)
+- **Referendum trigger** - resolved after this proposal: referendum code now exists and uses `independenceDesire` (`src/lib/referendum/`).
 - **Per-policy LARP blurbs** - final copy will live in the
   `DevolutionTab.tsx` component; placeholders for now.
 - **UI label override for NIR** - `getDevolutionLabel(stateId, policy)`

@@ -6,7 +6,7 @@ This page describes the current runtime model. For individual subsystems, see [B
 
 ## Presets are world starting conditions
 
-`RESET_PRESETS` currently exposes five dated starts:
+`RESET_PRESETS` currently exposes six dated starts:
 
 | Preset | Starting frame | Important distinction |
 | --- | --- | --- |
@@ -15,6 +15,7 @@ This page describes the current runtime model. For individual subsystems, see [B
 | `1991-default` | Post-Cold-War transition | Historical legislature and demographic anchors for supported countries |
 | `2019-default` | Contemporary baseline | The default fallback when a world carries no explicit preset |
 | `2023-default` | Recent US baseline | US 118th Congress data, with non-US systems falling back to their 2019 bundles where stated by the preset |
+| `2027-default` | Five-country modern world | January 2027 projection with playable US, UK, Japan, Germany and China, using projected US congressional control and the latest completed national elections elsewhere |
 
 Two additional reset modes, `empty` and `2019-no-parties`, provide clean-slate variants. A preset is not merely a displayed year. It selects seat maps, election anchors, demographics, budgets, policy catalogs, currencies, and feature gates throughout bootstrap and turn processing.
 

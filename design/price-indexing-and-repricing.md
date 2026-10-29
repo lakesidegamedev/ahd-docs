@@ -13,7 +13,7 @@ exists; full nominal repricing of constants remains a plan.
 The per-turn `budget.economicFactors.inflationRate` is an **annualized inflation estimate for this turn's conditions**. It is not a measured trailing 48-turn rate. Inflation uses `INERTIA = 0.35` plus mean reversion in `src/lib/budget/inflation.ts`.
 
 The shipped country household index lives in
-`src/lib/economy/householdPriceIndex.ts`. It starts at 1.0 and advances each
+`src/lib/economy/rules/householdPriceIndex.ts`. It starts at 1.0 and advances each
 turn using 75% CPI passthrough divided by `TURNS_PER_YEAR`. The real-economy
 panel uses it to deflate median income. It does not yet reprice commodity bases,
 action costs, startup capital, or the other constants proposed later in this

@@ -12,9 +12,12 @@ The API Middleware Layer provides infrastructure for building safe, consistent, 
 - `requireAdmin.ts` - Admin authorization
 - `requireCron.ts` - Cron job verification
 - `rateLimit.ts` - In-memory rate limiting
+- `rateLimit.mongo.ts` - Mongo-backed durable limiter (`durableRateLimit`) for high-value buckets
 - `validate.ts` - Zod schema validation
 - `errors.ts` - Structured error handling
 - `schemas/` - Shared Zod schemas
+
+The directory also holds many more role and request gates (for example `requireAdminOrApiKey.ts`, `requireBotToken.ts`, `requireModerator.ts`, `rejectDuringTurn.ts`, `assertSameOrigin.ts`); list `src/lib/api/` for the full set.
 
 ## Authentication Helpers
 
@@ -199,8 +202,8 @@ BOT_READ_LIMITS = { maxRequests: 60, windowMs: 60_000 };
 // Discord bot financial endpoints
 BOT_FINANCIAL_LIMITS = { maxRequests: 30, windowMs: 60_000 };
 
-// Discord bot blackjack endpoints
-BOT_BLACKJACK_LIMITS = { maxRequests: 20, windowMs: 60_000 };
+// Discord bot casino endpoints (per user, plus a global cap)
+BOT_CASINO_LIMITS = { maxRequests: 30, globalMaxRequests: 600, windowMs: 60_000 };
 ```
 
 ### `rateLimitResponse()`
@@ -322,7 +325,7 @@ notFound(message?: string): ApiError
 
 internalError(message?: string, cause?: unknown): ApiError
 // Status: 500, Code: INTERNAL_ERROR
-// Logs to Sentry and Axiom
+// Logs to Sentry
 ```
 
 ### `handleRouteError()`
@@ -344,7 +347,7 @@ export async function POST(request: Request) {
 **Behavior:**
 
 - If `ApiError`: returns JSON response with error details
-- If other error: logs to Sentry and Axiom, returns generic 500
+- If other error: logs to Sentry, returns generic 500
 
 **Implementation:**
 
@@ -355,7 +358,6 @@ export function handleRouteError(error: unknown): NextResponse {
   }
   console.error("[API] Unhandled error:", error);
   Sentry.captureException(error);
-  axiomLog.error("Unhandled API error", { ... });
   const apiErr = internalError(
     process.env.NODE_ENV === "development" && error instanceof Error
       ? error.message
@@ -446,4 +448,3 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 - **Auth:** `src/lib/auth.ts` - Core auth with JWT via `jose`
 - **MongoDB:** `src/lib/mongodb.ts` - `getDb()` connection
 - **Sentry:** Error tracking integration
-- **Axiom:** Logging integration

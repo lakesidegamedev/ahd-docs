@@ -62,7 +62,7 @@ const couponRate = primeRate + termPremium + credibilitySpread;
 | Field           | Value                                                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `issuerType`    | `"sovereign"`                                                                                                            |
-| `countryId`     | `"US"` or `"UK"`                                                                                                         |
+| `countryId`     | Any configured country code (for example `"US"`, `"UK"`)                                                                                  |
 | `faceValue`     | $1,000 per unit (`BOND_UNIT_FACE_VALUE`)                                                                                 |
 | `maturityTurns` | 48 turns (1yr) for scheduled quarterly issuance; admin/reconcile issuance can also use 96 turns (2yr) or 240 turns (5yr) |
 | `marketPrice`   | Starts at 1.0 (par)                                                                                                      |

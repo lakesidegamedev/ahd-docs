@@ -8,7 +8,7 @@ A player-owned corporation can control other player-owned corporations as a **ho
 
 There is no `parentCorporationId` field anywhere. Two facts combine to define "is this corp a managed subsidiary right now, and if so, of whom":
 
-1. **Voting control**, some corporation currently controls **>50%** of the target's voting power (`SUBSIDIARY_OWNERSHIP_THRESHOLD_PERCENT = 50` in `corporateOwnership.ts`, kept in sync with `SUBSIDIARY_FORMALIZATION_THRESHOLD_PERCENT = 50` in the subsidiaries module). Voting power, not raw share count, super-share multipliers are respected via `acquirerOwnershipPercent()` / `getControllingCorporateParent()`.
+1. **Voting control**, some corporation currently controls **>50%** of the target's voting power (`SUBSIDIARY_OWNERSHIP_THRESHOLD_PERCENT = 50` in `corporateOwnershipConstants.ts`, re-exported from `corporateOwnership.ts`, kept in sync with `SUBSIDIARY_FORMALIZATION_THRESHOLD_PERCENT = 50` in the subsidiaries module). Voting power, not raw share count, super-share multipliers are respected via `acquirerOwnershipPercent()` / `getControllingCorporateParent()`.
 2. **Formalization**, `Corporation.subsidiaryFormalizedAtTurn` is set. This is an **opt-in marker**, not a parent pointer; it just records "yes, someone formalized this."
 
 `isFormalizedSubsidiary()` requires both: a controlling parent AND the marker. If voting control lapses (parent sells down, dilution, etc.) the marker becomes stale and is cleared automatically by the turn processor's zombie cleanup (see below), there is no manual "unformalize because the numbers moved" step for players.
@@ -195,7 +195,8 @@ No new collection. All state lives on the existing `corporations` documents:
 - `src/lib/corporations/groups/lossRelief.ts`, `computeGroupRelief()`, `poolByGroupAndCountry()`
 - `src/lib/corporations/groups/groupBalanceSheet.ts`, `loadGroupBalanceSheet()`
 - `src/lib/corporations/groups/synergies.ts`, `computeGroupSynergies()`, `memberShareCap()`
-- `src/lib/corporations/corporateOwnership.ts`, `SUBSIDIARY_OWNERSHIP_THRESHOLD_PERCENT`, `getControllingCorporateParent`, `acquirerOwnershipPercent`
+- `src/lib/corporations/corporateOwnershipConstants.ts`, `SUBSIDIARY_OWNERSHIP_THRESHOLD_PERCENT`
+- `src/lib/corporations/corporateOwnership.ts`, `getControllingCorporateParent`, `acquirerOwnershipPercent`
 - `src/lib/corporations/mergerReview/divestiture.ts`, `controlledGroupIds()`, divestiture satisfaction check against the controlled group
 - `src/lib/corporations/queries/corporationDetail.ts`, subsidiaries payload, viewer permission flags (`canManageAsParent`, `canFormalizeAsSubsidiary`, `canSpinOff`)
 - `src/lib/db/types/corporation.ts`, subsidiary-related fields on `Corporation`

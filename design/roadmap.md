@@ -23,7 +23,7 @@ Status of features across the game. Working = shipped. Partial = core done, gaps
 | **Legislation**         | v3 overhaul: LARP titles, 11-bracket tax scale, absolute cost model, immigration category, natural metric decay toward baseline                                                                       |
 | **Cabinet**             | Nominate, Senate vote, confirm/reject, fire, two-phase proposed→active pattern, whippable nominations                                                                                                 |
 | **Legislation effects** | Signed bills → stateMetrics → government approval → election vote accumulation, natural metric decay (0.25%/turn toward baseline)                                                                     |
-| **Demographics**        | 12 voter groups per state, appeal scoring, polls (quick + full), admin-editable                                                                                                                       |
+| **Demographics**        | granular census-backed electorate per state, appeal scoring, polls (quick + full), admin-editable                                                                                                                       |
 | **Government approval** | State + national, feeds elections                                                                                                                                                                     |
 | **Achievements**        | Chunky labeled tile grid on profiles, category-organized, rarity percentages, settings highlights                                                                                                     |
 | **Wiki**                | Design docs, election history, seats, parties, leadership, politician profiles, search                                                                                                                |
@@ -31,7 +31,7 @@ Status of features across the game. Working = shipped. Partial = core done, gaps
 | **News**                | Composer, feed, leaderboard, wire ticker, post ticker, modal compose, automated election/legislation news                                                                                             |
 | **Auth**                | Login, register, JWT, character creation                                                                                                                                                              |
 | **Player Mail**         | Inbox, sent box, dual-sided soft-delete, mark-as-read, rate limiting, abuse reports, admin review queue, markdown-lite formatting                                                                     |
-| **Corporations**        | Founding, sectors, shares, dividends, bonds, CEO elections, commodity market (11 types), config-driven exchanges (NYSE/FTSE/DAX/Nikkei), 3-mode sector production, HQ relocation, shareholder address |
+| **Corporations**        | Founding, sectors, shares, dividends, bonds, CEO elections, commodity market (27 types), config-driven exchanges (NYSE/FTSE/DAX/Nikkei), 3-mode sector production, HQ relocation, shareholder address |
 | **National budgets**    | Active-country treasury panels, spending categories, fiscal costs, public enterprise revenue, sovereign bonds, heal tools                                                                             |
 | **Campaigns**           | Fundraising-level income model (L0 $20k → L10 $5M/turn), party org scalar (1.0-1.6×), season multiplier (2× final 4 turns), presidential endorsements, donation tracking                              |
 | **Travel**              | Presidential candidate travel to states (3, 5, 7, or 10 actions by electoral-vote tier), +1% favorability/turn passive bonus, travel state badges on electoral map                                     |
@@ -76,7 +76,7 @@ Status of features across the game. Working = shipped. Partial = core done, gaps
 | **E**     | Elections testing (primaries, NPP, balance)                       |
 | **F**     | Demographics: balance testing on the v2 lean/turnout channel       |
 | **G**     | Durable live updates (Redis pub/sub or equivalent, replacing the in-process SSE emitter, plus a wired-up client consumer) |
-| **Later** | Unions, lobbying; expanded international                          |
+| **Later** | Lobbying; expanded international                                  |
 
 ---
 
@@ -128,7 +128,7 @@ The `coming-soon` roster covers most of the eastern-bloc and western-European te
 
 ## Later
 
-**Unions, lobbying.** Labor unions, corporate lobbying, labor vs. business factions. Builds on the existing corporation and party systems.
+**Lobbying.** Corporate lobbying and labor vs. business factions. Unions, collective bargaining and pensions have shipped; lobbying builds on the existing corporation, union and party systems.
 
 **Expanded international.** Trade, sanctions, and crises between active countries affecting domestic metrics. Real trade flows and diplomacy events.
 

@@ -12,7 +12,7 @@ This `ahd-docs` repository is a separate developer-facing documentation site. It
 
 - `getWikiPageData.ts` - Fetch wiki page metadata for display
 - `loadContent.ts` - Load markdown content and transform wikilinks
-- `searchIndex.ts` - Build unified search index (pages, politicians, seats, parties, leadership)
+- `wikiSearch.ts` and `wikiSearchSources.ts` - Build the unified search index (pages, politicians, seats, parties, leadership)
 - `syncPriorSubmissions.ts` - Renames legacy ObjectId-embedded slugs (`player-{hex}`, `corp-{hex}`, `party-profile-{hex}`) to sequentialId-based slugs; see [Slug Migration](#slug-migration) below
 - `seatData.ts` - Derive seat slugs and titles from states collection
 - `partyData.ts` - Fetch party data for wiki pages
@@ -167,7 +167,7 @@ When party leadership or government leadership changes, relevant pages update.
 Wiki pages can be organized into learning paths for new players:
 
 1. **Getting Started Path:**
-   - `getting-started` → `core-systems` → `player-progression` → `stats-actions`
+   - `getting-started` → `core-systems` → `stats-actions` → `rpg-stats` → `relocation` → `campaign-strategy` → `election-mechanics` → `multi-country-play` (`src/lib/wiki/learningPaths.ts`)
 
 2. **Elections Path:**
    - `election-mechanics` → `campaign-strategy` → `demographics-targeting` → `fundraising-ads`

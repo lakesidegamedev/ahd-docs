@@ -222,7 +222,7 @@ export async function getAccountAchievements(
 
 **Returns:** `Map<string, number>` (percentage per achievement)
 
-**Caching:** Caches rarity map; invalidated on award/revoke.
+**Caching:** Caches rarity map for 2 minutes; invalidated on grant/revoke.
 
 ```typescript
 export async function getAchievementRarityMap(): Promise<Map<string, number>> {
@@ -435,41 +435,48 @@ The trigger system automatically checks for achievement conditions when game eve
 
 ### Definition Cache
 
+Both caches are in-memory and expire on a timer (`src/lib/achievements/cache.ts`).
+
 ```typescript
-let cachedDefinitions: Achievement[] | null = null;
+const DEFS_TTL_MS = 5 * 60 * 1000;
+const RARITY_TTL_MS = 2 * 60 * 1000;
+
+let definitionsCache: { data: Achievement[]; expiresAt: number } | null = null;
 
 export function getCachedDefinitions(): Achievement[] | null {
-  return cachedDefinitions;
+  if (!definitionsCache || Date.now() > definitionsCache.expiresAt) return null;
+  return definitionsCache.data;
 }
 
-export function setCachedDefinitions(definitions: Achievement[]): void {
-  cachedDefinitions = definitions;
+export function setCachedDefinitions(data: Achievement[]): void {
+  definitionsCache = { data, expiresAt: Date.now() + DEFS_TTL_MS };
 }
 
-export function invalidateRarityCache(): void {
-  cachedRarity = null; // Also invalidates rarity on definition changes
+export function invalidateDefinitionsCache(): void {
+  definitionsCache = null;
 }
 ```
 
 ### Rarity Cache
 
 ```typescript
-let cachedRarity: Map<string, number> | null = null;
+let rarityCache: { data: Map<string, number>; expiresAt: number } | null = null;
 
 export function getCachedRarity(): Map<string, number> | null {
-  return cachedRarity;
+  if (!rarityCache || Date.now() > rarityCache.expiresAt) return null;
+  return rarityCache.data;
 }
 
-export function setCachedRarity(rarity: Map<string, number>): void {
-  cachedRarity = rarity;
+export function setCachedRarity(data: Map<string, number>): void {
+  rarityCache = { data, expiresAt: Date.now() + RARITY_TTL_MS };
 }
 
 export function invalidateRarityCache(): void {
-  cachedRarity = null;
+  rarityCache = null;
 }
 ```
 
-**Invalidation:** Rarity cache is invalidated on every award/revoke to ensure accurate percentages.
+**Invalidation:** Definitions expire after 5 minutes and rarity after 2 minutes. The definitions cache is also cleared on create and update, and the rarity cache on every grant, revoke and bulk grant. `invalidateAllAchievementCaches()` clears both.
 
 ## Data Model
 

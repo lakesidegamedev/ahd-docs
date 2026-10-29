@@ -124,7 +124,7 @@ Names, descriptions, and hidden status below come from `src/lib/seeds/achievemen
 
 `awardAchievement`/`awardAchievements` also runs `maybeAwardCompletionist` after every award, which grants `completionist` once an account holds every other achievement.
 
-Not every achievement goes through `src/lib/achievements/triggers.ts`. Several call `awardAchievement` directly at the point of the game event instead of through a shared trigger function: `lawmaker` (`src/lib/turn/billLifecycle/lifecycleHelpers.ts`, `src/lib/presidentialBillAction.ts`), `cosponsor` (`src/lib/legislature/commands/nationalBillActions.ts`), `donor`/`big_spender` (`src/app/api/v1/transfer/route.ts`, `src/app/api/characters/[id]/transfer/route.ts`), `speaker_candidate` (`src/lib/congress/speaker/actions.ts`), `party_leader` (`src/lib/nationalPartyElections.ts`, `src/lib/statePartyElections.ts`, `src/lib/parties/applyCharacterPartyJoin.ts`, the party leadership appointment route), `policy_shift` (`src/app/api/settings/policy/route.ts`), `first_subscriber` (`src/app/api/characters/[id]/subscribe/route.ts`), and `presidential_nominee` (`src/lib/turn/primaryResolution.ts`). Only `patreon_supporter_plus`, `wiki_contributor`, `party_founder`, and `dealmaker` are seeded `manual_only` with no automatic award path (admin/moderator grant only, via `src/app/api/admin/achievements/grant/route.ts` or `src/app/api/moderator/achievements/grant/route.ts`).
+Not every achievement goes through `src/lib/achievements/triggers.ts`. Several call `awardAchievement` directly at the point of the game event instead of through a shared trigger function: `lawmaker` (`src/lib/turn/billLifecycle/lifecycleHelpers.ts`, `src/lib/presidentialBillAction.ts`), `cosponsor` (`src/lib/legislature/commands/nationalBillActions.ts`), `donor`/`big_spender` (`src/app/api/v1/transfer/route.ts`, `src/app/api/characters/[id]/transfer/route.ts`), `speaker_candidate` (`src/lib/congress/speaker/actions.ts`), `party_leader` (`src/lib/nationalPartyElections.ts`, `src/lib/statePartyElections.ts`, `src/lib/parties/applyCharacterPartyJoin.ts`, the party leadership appointment route), `policy_shift` (`src/app/api/settings/policy/route.ts`), `first_subscriber` (`src/app/api/characters/[id]/subscribe/route.ts`), and `presidential_nominee` (`src/lib/turn/primaryResolution.ts`). Only `patreon_supporter_plus`, `beta2_veteran`, `wiki_contributor`, `party_founder`, and `dealmaker` are seeded `manual_only` with no automatic award path (admin/moderator grant only, via `src/app/api/admin/achievements/grant/route.ts` or `src/app/api/moderator/achievements/grant/route.ts`).
 
 ### Award Logic
 
@@ -141,7 +141,7 @@ await awardAchievements(userId, [slug1, slug2, ...], characterId);
 ### Action Count Thresholds
 
 ```typescript
-// src/lib/achievements/triggers.ts:32-49
+// src/lib/achievements/triggers.ts (checkActionAchievements)
 
 if (actionType === "fundraise") {
   if (count >= 1) award("first_fundraise");

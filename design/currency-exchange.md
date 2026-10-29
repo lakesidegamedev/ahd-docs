@@ -22,7 +22,7 @@ The abstract internal unit solves this, each currency floats independently. US i
 
 ### Country Scope
 
-`CurrencyCode` (`src/lib/constants/currencies.ts`) defines 25 currency codes total, one per country ever playable. Of these, `FOREX_ACTIVE_CURRENCIES` lists 18 as active in the forex system: USD, GBP, JPY, EUR, IEP, CNY, BRL, NGN, SUR, DDM, FRF, ITL, ESP, SEK, TRL, GRD, ATS, FIM. The remaining codes (e.g. `CAD`, `HUF`, `PLZ`, `ROL`, `YUD`, `BGL`, `CSK`) are reserved for countries not yet active in forex.
+`CurrencyCode` (`src/lib/constants/currencyCodes.ts`) defines 29 currency codes, one per country ever playable. Of these, `FOREX_ACTIVE_CURRENCIES` lists 28 as active in the forex system: USD, GBP, JPY, EUR, IEP, CNY, BRL, NGN, SUR, RUB, DDM, FRF, ITL, ESP, SEK, TRL, GRD, ATS, FIM, PLZ, HUF, ROL, BGL, CSK, YUD, PLN, RON, BGN. The only code not active in forex is `CAD`, reserved for a country not yet playable.
 
 ### Absolute Inflation Penalty
 
@@ -83,20 +83,24 @@ At drift speed 0.05, a rate shock takes roughly one full game year (~48 turns) t
 Net buy/sell volume from the past 24 turns creates a short-term offset:
 
 ```
-netVolume = buyVolume24 - sellVolume24   // Sum of internal-unit values of all trades, past 24 turns
-rawPressure = netVolume × VOLUME_PRESSURE_SENSITIVITY
-volumePressure = clamp(rawPressure, -VOLUME_PRESSURE_CAP, +VOLUME_PRESSURE_CAP)
+netVolume = buyVolume24 - sellVolume24   // Sum of internal-unit values of trades, past 24 turns
+organic = VOLUME_PRESSURE_CAP × netVolume / (|netVolume| + ORGANIC_VOLUME_HALF_PRESSURE_ANCHOR) × breadthFactor
+intervention = clamp(syntheticNet × VOLUME_PRESSURE_SENSITIVITY, ±VOLUME_PRESSURE_CAP)   // central-bank intervention
+volumePressure = clamp(organic × ORGANIC_VOLUME_DIRECTION_WEIGHT + intervention × VOLUME_DIRECTION_WEIGHT,
+                       ±VOLUME_PRESSURE_CAP × VOLUME_DIRECTION_WEIGHT)
 
-finalRate = newRate × (1 - volumePressure × VOLUME_DIRECTION_WEIGHT)
+finalRate = newRate × (1 - volumePressure)
 ```
+
+Source: `src/lib/currency/rateCalculation.ts` and `src/lib/constants/currencies.ts`.
 
 Positive volume pressure (net buying) lowers the rate, since buying a currency strengthens it.
 
 Volume pressure is calculated using the total internal-unit value of trades. To prevent a single "whale" trade from instantly hitting the cap, each individual trade's contribution to the 24-turn volume is capped at a specific threshold (e.g., 10x the average trade size).
 
-Volume pressure is weighted by `VOLUME_DIRECTION_WEIGHT = 0.2`, meaning trade volume accounts for 20% of the rate direction while macro fundamentals drive the remaining 80%. This dampens speculative swings while still rewarding well-timed volume.
+Traded flow (organic) is weighted by `ORGANIC_VOLUME_DIRECTION_WEIGHT = 0.05`. Its pressure saturates smoothly: net traded volume of `ORGANIC_VOLUME_HALF_PRESSURE_ANCHOR` (₳1,000,000,000) produces half of the cap, so everyday conversions barely register. A `breadthFactor` scales it by the number of effective traders behind the flow: one holder alone earns 1/`ORGANIC_FULL_BREADTH_TRADERS` (1/5) of the push, and 5 or more traders earn the full push. Central-bank intervention keeps the original channel, with `VOLUME_PRESSURE_SENSITIVITY = 0.0001` per internal unit and `VOLUME_DIRECTION_WEIGHT = 0.2`, so it still beats organic flow. This dampens speculative swings while still rewarding well-timed, broad volume.
 
-Volume pressure is capped at ±5% (`VOLUME_PRESSURE_CAP = 0.05`) to prevent extreme rate swings from outsized trades. The cap is a tunable constant, can be loosened as the player base and trade volume grow. The sensitivity constant may also need tuning based on observed trade volumes at launch.
+The per-component pressure is capped at ±5% (`VOLUME_PRESSURE_CAP = 0.05`), and the combined pressure is clamped to the cap times `VOLUME_DIRECTION_WEIGHT` (±1%), so intervention alone sets the ceiling. The constants are tunable and can be loosened as the player base and trade volume grow.
 
 Heavy yen buying pushes the yen rate below fundamentals temporarily (the yen strengthens more than the macro picture alone would justify). As volume normalizes, macro drift pulls it back, classic overshoot/correction cycle that rewards well-timed speculation.
 
@@ -178,9 +182,9 @@ The forex phase runs after per-turn inflation recalculation and before central-b
 **New `currencyBalances`, the player-facing wallet:**
 
 ```typescript
-// CurrencyCode is defined in src/lib/constants/currencies.ts.
-// 18 active runtime currencies (FOREX_ACTIVE_CURRENCIES): "USD" | "GBP" | "JPY" | "EUR" | "IEP" | "CNY" | "BRL" | "NGN" | "SUR" | "DDM" | "FRF" | "ITL" | "ESP" | "SEK" | "TRL" | "GRD" | "ATS" | "FIM".
-// Remaining CurrencyCode values (e.g. "CAD", "HUF", "PLZ") are reserved for countries not yet active in forex.
+// CurrencyCode is defined in src/lib/constants/currencyCodes.ts.
+// 28 active runtime currencies (FOREX_ACTIVE_CURRENCIES): every CurrencyCode except "CAD".
+// "CAD" is reserved for a country not yet playable.
 type CurrencyCode = "USD" | "GBP" | "JPY" | "EUR" | "IEP" | "CNY" | "BRL" | "NGN" | "SUR" | "DDM" | "FRF" | "ITL" | "ESP" | "SEK" | "TRL" | "GRD" | "ATS" | "FIM" | "CAD" | ...;
 
 currencyBalances: {
@@ -576,6 +580,10 @@ const INITIAL_RATES: Partial<Record<CountryId, number>> = {
 // Player volume pressure
 const VOLUME_PRESSURE_SENSITIVITY = 0.0001; // per internal-unit of net volume
 const VOLUME_PRESSURE_CAP = 0.05; // ±5% max rate impact from volume, tunable
+const VOLUME_DIRECTION_WEIGHT = 0.2; // central-bank intervention channel
+const ORGANIC_VOLUME_DIRECTION_WEIGHT = 0.05; // traded flow channel
+const ORGANIC_VOLUME_HALF_PRESSURE_ANCHOR = 1_000_000_000; // net ₳ for half the cap
+const ORGANIC_FULL_BREADTH_TRADERS = 5; // traders for full organic push
 const VOLUME_LOOKBACK_TURNS = 24; // ~6 game months of trade history
 
 // Order expiry defaults

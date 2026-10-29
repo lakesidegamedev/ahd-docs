@@ -191,14 +191,14 @@ Inflation is **dynamic** (not static), calculated from economic conditions:
 
 ### Phillips Curve Model
 
-Inflation = Target + Demand-Pull + Monetary + Fiscal + Cost-Push
+Inflation = Target + Demand-Pull + Monetary + Fiscal + Cost-Push + Commodity + Forex + Savings + Housing + Policy + Money supply
 
-All four components are two-sided with asymmetric coefficients: pressure above baseline (inflationary) uses a stronger coefficient than pressure below baseline (deflationary), because prices are stickier on the way down.
+The table below covers the four core components; the commodity, forex, savings, policy and money-supply terms add further pressure (the housing term is retired, coefficient 0), and where a country has a measured output gap the GDP half of demand-pull uses it instead of growth versus trend (`src/lib/budget/inflation.ts`). The core components are two-sided with asymmetric coefficients: pressure above baseline (inflationary) uses a stronger coefficient than pressure below baseline (deflationary), because prices are stickier on the way down.
 
 | Component       | Formula (above baseline / below baseline)                                                                               | Description                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | **Demand-pull** | `(NAIRU - unemployment) × 0.3` (tight) or `× 0.2` (slack), plus `(GDP growth - 2%) × 0.2` (hot) or `× 0.15` (recession) | Tight labor/hot GDP → inflation                             |
-| **Monetary**    | `(3.0% - effectivePrimeRate) × 0.4` (below neutral) or `× 1.2` (above neutral)                                          | Low rates → inflation; high rates → deflation (3× stronger) |
+| **Monetary**    | `(3.0% - effectivePrimeRate) × 0.8` (below neutral) or `× 1.2` (above neutral)                                          | Low rates → inflation; high rates → deflation (1.5× stronger) |
 | **Fiscal**      | `deficitToGdp × 0.15` (deficit) or `× 0.08` (surplus), deficit/GDP clamped to [-30, 50] before the coefficient          | Deficits → inflation; surpluses → deflation                 |
 | **Cost-push**   | `(tariffs - 3%) × 0.05` (above) or `× 0.025` (below), plus `(wages - 2.5%) × 0.15` (above) or `× 0.08` (below)          | Input costs → inflation                                     |
 

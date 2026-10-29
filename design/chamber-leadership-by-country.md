@@ -26,7 +26,7 @@ Role → policy assignment (`POLICY_BY_ROLE`):
 | Role                        | Policy               |
 | ---------------------------- | --------------------- |
 | `speaker_of_the_house`        | `any-seated`           |
-| `president_pro_tempore`       | `any-seated`           |
+| `president_pro_tempore`       | `largest-single-party` |
 | `speaker_of_the_bundestag`     | `any-seated`           |
 | `chair_npcsc`                 | `any-seated`           |
 | `chair_cppcc`                 | `largest-single-party` |

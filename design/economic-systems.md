@@ -28,6 +28,11 @@ The result replaces the static `inflationRate` on `EconomicGrowthFactors` each t
 
 ```typescript
 inflation = BASE_TARGET + demandPull + monetary + fiscal + costPush
+          + commodity + forex + savings + housing + policy + moneySupply
+
+// Housing is retired (coefficient 0). Where a country has a measured output gap,
+// the GDP half of demandPull uses the output gap (OUTPUT_GAP_COEFF_UP 0.25,
+// OUTPUT_GAP_COEFF_DOWN 0.2) instead of growth versus trend.
 
 // Smoothed with inertia
 smoothed = INERTIA × previousInflation + (1 - INERTIA) × inflation
@@ -88,8 +93,8 @@ propagation[i] = min(1, turnsAgo[i] / MONETARY_LAG_TURNS)
 ```typescript
 rateGap = NEUTRAL_RATE - effectiveRate
 monetary = rateGap >= 0
-  ? rateGap × MONETARY_COEFF_LOW   // 0.4, below neutral → stimulative
-  : rateGap × MONETARY_COEFF_HIGH  // 1.2, above neutral → deflationary (3x low rate)
+  ? rateGap × MONETARY_COEFF_LOW   // 0.8, below neutral → stimulative
+  : rateGap × MONETARY_COEFF_HIGH  // 1.2, above neutral → deflationary (1.5x low rate)
 ```
 
 **Interpretation:**
@@ -268,7 +273,7 @@ the fiscal-year boundary must not apply a second annual growth jump.
 | -------------------------------- | -------------------------------- | ----------------------------------------- |
 | Inflation too volatile           | Low inertia, high coefficients   | Increase `INERTIA`, reduce coefficients   |
 | Inflation unresponsive to policy | High inertia, low coefficients   | Decrease `INERTIA`, increase coefficients |
-| Rate changes feel meaningless    | Low `MONETARY_COEFF_LOW`         | Increase to 0.5-0.6                       |
+| Rate changes feel meaningless    | Low `MONETARY_COEFF_LOW`         | Raise it (now 0.8, was 0.4)               |
 | Deflation too common             | Asymmetric coefficients too weak | Increase `_DOWN` coefficients             |
 
 ### Recommended Ranges
@@ -276,7 +281,7 @@ the fiscal-year boundary must not apply a second annual growth jump.
 | Coefficient             | Current | Safe Range |
 | ----------------------- | ------- | ---------- |
 | `INERTIA`               | 0.35    | 0.2-0.5    |
-| `MONETARY_COEFF_LOW`    | 0.4     | 0.3-0.6    |
+| `MONETARY_COEFF_LOW`    | 0.8     | raised from 0.4 (`src/lib/budget/inflation.ts`) |
 | `MONETARY_COEFF_HIGH`   | 1.2     | 0.9-1.5    |
 | `UNEMPLOYMENT_COEFF_UP` | 0.3     | 0.2-0.5    |
 | `FISCAL_COEFF_DEFICIT`  | 0.15    | 0.1-0.25   |

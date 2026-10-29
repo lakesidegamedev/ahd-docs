@@ -91,7 +91,7 @@ Code: `src/lib/corporations/mergerReview/{constants,gate,authority,concentration
 Gating is on **ownership and marketization**, never a country allow-list (explicit design note in `constants.ts`, referencing spec `ahd-b4-scrutiny-rework-spec`):
 - Both acquirer and target must be privately owned, if either side is state-owned, the deal is an act of the state, not a reviewable transaction.
 - The target's country must not be a command economy (`loadCommandEconomyBlockedCountries`), in a command economy the state already owns the firms, so review is deliberately inert, not a gap.
-- The target's country must have an antitrust law mapped in `ANTITRUST_LAW_BY_COUNTRY` (currently `US`, `UK`, `RU`, `DD`, see mapping below), with an enacted level whose threshold is not `null` (level 0 = "No Antitrust Enforcement" = off).
+- The target's country must have an antitrust law mapped in `ANTITRUST_LAW_BY_COUNTRY` (explicit entries for `US`, `UK`, `RU`, `DD`; other countries review under their Competition Act from `mechanicalLaws`, or a carried law, and have a reviewing seat in `MERGER_AUTHORITY_SEAT_BY_COUNTRY`, see mapping below), with an enacted level whose threshold is not `null` (level 0 = "No Antitrust Enforcement" = off).
 - The reviewing country must currently have a live officeholder seat for that law (`resolveMergerAuthority` returns non-null; a seat that doesn't exist yet in the current era means no review).
 
 Two call sites trigger the gate, both at the instant two corporations would actually become one: `executeAgreedAcquisition` (trigger `"agreedAcquisition"`) and the hostile-takeover squeeze-out route (trigger `"hostileTakeover"`, not documented here). Reviewing at share-purchase time would be too early, per the code's own reasoning, until absorption the two firms are still measured separately.
@@ -106,6 +106,7 @@ Each country's antitrust *level* (0-4, from its existing competition-primary leg
 | UK | `uk.economy.competition.primary` (Restrictive Practices and Competition Act) | Business Secretary (`business_secretary`, era-renamed Board of Trade → Trade and Industry → Business) |
 | RU | `ru.economy.competition.primary` | Minister of Internal Trade (`minister_of_internal_trade`) |
 | DD | `dd.economy.competition.primary` | Minister of Internal Trade (`minister_of_internal_trade`) |
+| Every other legislature | its Competition Act (`mechanicalLaws`); DE also carries the GDR competition primary | DE and JP: economy minister (`economy_minister`); IE: `minister_for_enterprise`; CN: `minister_of_commerce`; NG, FR, IT, ES, SE, TR, GR, AT, FI, BR: `minister_of_trade_industry`; PL, HU, RO, BG, CS, YU, UKR, BLR, BAL: `minister_of_internal_trade` |
 
 `MERGER_REVIEW_THRESHOLD_PERCENT` by enacted level:
 

@@ -35,30 +35,31 @@ Private banking has its own distress-lending mechanism, interbank loans and dead
 ### 1. IMF institution corporation
 
 - One **canonical IMF corporation** per live game (or per deployment), created via **seed script** or one-time admin setup, documented in `scripts/` README.
-- Recommended fields (exact names TBD in types PR):
-  - `hiddenFromExchange: true` (already exists) so it does not pollute retail listings.
-  - Optional: `imfInstitution: true` (new boolean) to gate UX and validate bailout targets.
+- Fields (`src/lib/db/types/corporation.ts`):
+  - `hiddenFromExchange: true` so it does not pollute retail listings.
+  - `imfInstitution: true` marks the global IMF institution, gating UX and validating bailout targets.
 - **Sherrod Brown** character must exist and be assigned **CEO** of this corp (`ceoId`, `ceoVacant: false`).
 - **US headquarters** and **USD** `liquidCurrencyCode` so incoming remittances match product (“IMF in USD”).
 
 ### 2. Bailout state on the rescued corporation
 
-Add to `Corporation` (names illustrative):
+Fields on `Corporation` (`src/lib/db/types/corporation.ts`):
 
 | Field                              | Type           | Meaning                                                           |
 | ---------------------------------- | -------------- | ----------------------------------------------------------------- |
 | `imfBailoutActive`                 | `boolean`      | Bailout / restructuring in effect.                                |
 | `imfBailoutImfCorporationId`       | `ObjectId`     | Which IMF corp holds (or will hold) the stake.                    |
 | `imfBailoutTargetOwnershipPercent` | `number`       | Target fully diluted ownership **of the IMF** (0-100), e.g. `40`. |
-| `imfBailoutStartedAt`              | `Date` or turn | Audit / display.                                                  |
+| `imfBailoutStartedAt`              | `Date`         | Audit / display.                                                  |
 
-**IMF facility (amortization)**, illustrative fields on the rescued corp:
+**IMF facility (amortization)**, fields on the rescued corp:
 
 | Field                             | Type          | Meaning                                                         |
 | --------------------------------- | ------------- | --------------------------------------------------------------- |
 | `imfFacilityPrincipalOutstanding` | `number` (₳)  | Remaining principal owed to IMF after haircut / consolidation.  |
-| `imfFacilityAnnualRate`           | `number`      | Annual interest rate on outstanding principal (design-tunable). |
-| `imfFacility…`                    | turns / dates | Term or maturity, enough to compute scheduled P+I each turn.   |
+| `imfFacilityAnnualRate`           | `number`      | Annual interest rate on outstanding principal (%).              |
+| `imfFacilityAmortizationTurnsRemaining` | `number` | Turns left on the amortization schedule.                        |
+| `imfFacilityIncomeCaptureFraction` | `number`     | Share of per-turn operating income captured for the payment.   |
 
 **Invariant:** When `imfBailoutActive` is true, `imfBailoutImfCorporationId` must reference the seeded IMF corp (validate on write).
 
@@ -172,30 +173,6 @@ Add to `Corporation` (names illustrative):
 
 ---
 
-## Seeds / ops checklist
-
-1. Create **IMF** `Corporation` + assign **Sherrod Brown** as CEO.
-2. Store IMF `_id` in config / `GameState` as required by code.
-3. Document how to fix a broken assignment (admin CEO route already exists: `src/app/api/admin/corporations/[id]/ceo/route.ts`).
-
----
-
-## Testing
-
-| Area                | Tests                                                           |
-| ------------------- | --------------------------------------------------------------- |
-| Issuance math       | Unit: `x = p*O/(1-p)`, edge cases `p=0`, `p→1`.                 |
-| Haircut             | Bond units scale; mail sent (mock `playerMail`).                |
-| Amortization        | Cap 45% income; principal decreases; IMF USD credit.            |
-| Refinance blocked   | Integration or route test: bailout on → POST refinance 400.     |
-| GET bond-default    | `canRefinance` false when bailout active.                       |
-| Share price         | Corp turn: bailout on → price = `0.85 ×` baseline.              |
-| Dividends / CEO pay | Routes 400 when bailout active; turn snapshot shows $0 payout.  |
-| Admin valuation     | Unit: facility principal, IMF %, equity vs net-of-debt display. |
-| Force liquidate     | Admin-only; CEO path unchanged.                                 |
-
----
-
 ## Risks / follow-ups
 
 - **Forex / non-USD HQ:** QA bailout remittances with **JPY** and **GBP** rescued corporations (active forex); use **EUR** only if Germany is in scope for that test matrix, not as the default second non-USD beside JPY.
@@ -203,21 +180,6 @@ Add to `Corporation` (names illustrative):
 - **Double dilution:** Guard admin “apply issuance” against repeated clicks (transaction or idempotency key).
 - **Nationalized corps:** Likely **exclude** or explicit error if `countryOwnerId` set (same as other bond-default restrictions).
 - **Design doc / PUBLIC_CHANGELOG** when shipping: follow `ahd-release` skill.
-
----
-
-## File map (expected touch list)
-
-| Area                    | Files (representative)                                                                                |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| Types                   | `src/lib/db/types/corporation.ts`                                                                     |
-| Turn / price / facility | `sectorCalculations.ts`, new amortization helper or phase in `src/lib/turn/` (order per core-systems) |
-| Mail                    | `src/lib/mail/systemMail.ts`                                                                          |
-| Bond default API        | `bond-default/route.ts`, `refinance/route.ts`, extract dissolve to shared lib + `force-liquidate`     |
-| Admin API               | `admin/corporations/route.ts`, `imf-bailout`, `force-liquidate`                                       |
-| Admin UI                | `src/components/admin/economy/CorporationsAdminPanel.tsx`                                             |
-| Seeds                   | `scripts/` (new or existing seed)                                                                     |
-| Tests                   | Co-located `*.test.ts` / integration tests                                                            |
 
 ---
 

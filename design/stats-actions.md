@@ -74,8 +74,8 @@
 - **Office Bonus**: House +1, State Senate +1, Senate +2, Governor +2, Vice President +2, President +4
 - **Starting Bonus**: 25 one-time grant on character creation
 - **Regeneration**: Actions accumulate each turn (base + office bonus added to pool)
-- **Cap**: 200 actions max
-- **Hoarding Penalty**: -4/turn when holding > 100 actions (applied before refresh)
+- **Cap**: 200 actions at Energy 1, rising to 250 at Energy 10 (`src/lib/stats/statsConstants.ts`)
+- **Hoarding Penalty**: -4/turn when holding more than the hoard threshold, 100 at Energy 1 rising to 125 at Energy 10 (applied before refresh)
 
 ### Party Influence
 
@@ -124,7 +124,7 @@
 - Neighboring state: **1.25×**
 - Non-neighboring state: **1.5×**
 
-Applies to interpersonal actions such as Support and Attack. Campaign and Advertise use GDP-based fund scaling instead.
+Applies to the action cost of Support and Attack. Campaign and Advertise use GDP-based fund scaling instead.
 
 ---
 
@@ -134,20 +134,22 @@ These actions target another player character or NPP. They are taken from the ta
 
 | Action        | Actions | Funds     | Effect on Target                                             | Effect on You       |
 | ------------- | ------- | --------- | ------------------------------------------------------------ | ------------------- |
-| **Support**   | 6       | -         | +1% Favorability, subject to the per-target swing cap        | -                   |
-| **Attack**    | 6       | -         | −1% Favorability (fails if roll < Infamy × 10)               | +2% Infamy (always) |
-| **Barnstorm** | 5       | −$100,000 | +1% Political Influence (+2% if target's home state matches) | -                   |
+| **Support**   | Quote   | Quote     | +1% Favorability, subject to the per-target swing cap        | -                   |
+| **Attack**    | Quote   | Quote     | −1% Favorability (fails if roll < Infamy × 10)               | +2% Infamy (always) |
+| **Barnstorm** | Quote   | Quote     | +1% Political Influence (+2% if target's home state matches) | -                   |
+
+Costs are not flat. Each is priced from the equivalent self-action quote (`src/lib/influence/rules.ts`): Support from an Advertise quote with a 1.25x premium, Attack with a 1.5x premium, and Barnstorm from a Campaign quote with a 1.25x premium. Action points round down and funds round to the nearest unit.
 
 **Support/Attack notes:**
 
-- The action cost scales with state proximity (see Out-of-State Multipliers above)
+- The action cost also scales with state proximity (see Out-of-State Multipliers above)
 - Even a failed attack costs you 2 Infamy
 - Attacking high-Infamy players is safer (their attack-failure chance is the one that matters, not yours - but your Infamy affects _your_ attacks)
 - You cannot Support or Attack yourself
 
 **Barnstorm notes:**
 
-- Ignores out-of-state multipliers; flat 5-action cost regardless of target's location
+- Ignores out-of-state multipliers; the price does not depend on the target's location
 - The +2% bonus applies when your home state matches the **target's** home state
 - Useful for helping allies build influence before an election
 
@@ -198,8 +200,8 @@ See [Political Parties](./parties.md) and [Party Building](./party-building.md) 
 ## Action Economy
 
 - **Base per Turn**: 4 actions
-- **Accumulation**: Unused actions carry over; cap 200
-- **Hoarding Penalty**: −4/turn when over 100 (encourages active play)
+- **Accumulation**: Unused actions carry over; cap 200 (250 at max Energy)
+- **Hoarding Penalty**: −4/turn when over the hoard threshold, 100 (125 at max Energy) (encourages active play)
 - **Initial Bonus**: 25 actions on character creation
 - **Party Bonus**: Distributed each turn from the party influence pool - variable per member, up to a per-turn cap
 

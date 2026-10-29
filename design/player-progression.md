@@ -129,14 +129,16 @@ During a presidential **general election**, active candidates can **Travel** to 
 
 ### Action Bonus (per turn)
 
-| Office         | Bonus | Total (Base 3) |
+| Office         | Bonus | Total (Base 4) |
 | -------------- | ----- | -------------- |
-| House          | +1    | 4              |
-| State Senate   | +1    | 4              |
-| Senate         | +2    | 5              |
-| Vice President | +2    | 5              |
-| Governor       | +3    | 6              |
-| President      | +4    | 7              |
+| House          | +1    | 5              |
+| State Senate   | +1    | 5              |
+| Senate         | +2    | 6              |
+| Vice President | +2    | 6              |
+| Governor       | +2    | 6              |
+| President      | +4    | 8              |
+
+The base is at least 4 per turn (`MIN_BASE_ACTIONS_PER_TURN` in `src/lib/turn/actionRefresh.ts`); office bonuses come from `src/lib/countries/us/institutionsFacts.ts`.
 
 ### Fund Generation Bonus (per turn)
 
@@ -146,7 +148,7 @@ During a presidential **general election**, active candidates can **Travel** to 
 | State Senate   | +$3,000  |
 | Senate         | +$15,000 |
 | Vice President | +$25,000 |
-| Governor       | +$20,000 |
+| Governor       | +$15,000 |
 | President      | +$50,000 |
 
 Base rate + donor bonus also apply. See `src/lib/utils/fundGeneration.ts`.

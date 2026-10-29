@@ -37,7 +37,7 @@
 
 - Players can influence NPPs to **endorse candidates** via the NPP Influence system (see [NPP System](./npp-system.md))
 - **Effect**: NPP publicly endorses a candidate in an election; boosts that candidate's appeal
-- **Cost**: 5 actions, success chance based on relationship, stubbornness, etc.
+- **Cost**: 6 actions on the NPP profile (Request Endorsement, `src/lib/capital/actions.ts`); the party-level endorse action costs 3 (see [party-influence.md](./party-influence.md))
 
 ### Player-to-Player Endorsements
 
@@ -104,25 +104,13 @@ Each turn, characters receive funds from:
 
 ## Party Organization
 
-### Organization Cap System
+### Organization Shares
 
-Each state party has an organization level (0-100) that affects electoral performance. The organization cap limits how high organization can grow.
+Each state or region party has an organization percentage (0-100) that affects electoral performance. It is derived from contribution units, not a cap (`src/lib/parties/rules/organizationBucket.ts`, `src/lib/constants/partyOrg.ts`):
 
-**Cap Calculation**: The cap is the sum of contributions from each election type plus a base:
-
-- **Base**: 15 (always present)
-- **Governor**: Up to 25 (based on seat share)
-- **Senate**: Up to 25 (based on seat share)
-- **House**: Up to 17.5 (based on seat share)
-- **State Senate**: Up to 17.5 (based on seats held)
-
-Total potential cap: 100 (15 + 25 + 25 + 17.5 + 17.5)
-
-**Dynamic Updates**: Cap contributions adjust over time:
-
-- **Target**: Set when an election resolves, based on the party's seat share in that race
-- **Rate**: How quickly the current contribution moves toward the target (faster for shorter election cycles)
-- **Next Election Turn**: When the next election of this type will resolve
+- Every region starts with a permanent 100-unit Unaffiliated stake (`ORG_BUCKET_BASELINE_UNITS`) that never decays and is always counted in the denominator.
+- A successful Build Org action deposits one unit (`ORG_BUILD_UNITS_PER_CLICK`) for the acting party.
+- A party's organization is its units divided by the Unaffiliated stake plus all parties' units, as a percentage.
 
 ### Presence Requirement
 
@@ -134,31 +122,12 @@ Organization building requires **party presence** in the state:
 When presence is lost:
 
 - `orgBuildingPercent` resets to 0
-- Momentum cannot accumulate
+- Org building cannot add units
 - Organization decays toward 0
-
-### Momentum System
-
-Organization grows through **momentum**, accumulated by spending party treasury on org building:
-
-- **Cost**: $100,000 per momentum point
-- **Growth**: 0.25 organization per momentum per turn
-- **Drift**: -0.125 momentum per turn when no budget is allocated (only applies when not actively building)
-- **NPP Factor**: NPP-driven momentum is half as effective as player-driven
-
-Note: Momentum decay was removed to make treasury investment more effective. Drift only applies when no org building budget is set.
 
 ### UK Commons Support
 
-The party organization system extends to UK House of Commons constituencies. UK parties have state party org records for each UK region (England, Scotland, Wales, Northern Ireland, London). The same cap, momentum, and election integration mechanics apply. Stale party ID healing automatically fixes org records that reference outdated party identifiers after the sequential ID migration.
-
-### Election Integration
-
-When elections resolve:
-
-- **Wins**: Increase momentum (+3.0 for Governor, +2.5 for Senate, +2.0 for House/State Senate)
-- **Losses**: Smaller momentum penalty (half of win values)
-- **Cap Targets**: Updated based on new seat share
+The party organization system extends to UK House of Commons constituencies. UK parties have state party org records for each UK region (England, Scotland, Wales, Northern Ireland, London). The same organization mechanics apply. Stale party ID healing automatically fixes org records that reference outdated party identifiers after the sequential ID migration.
 
 ## NPP Recruitment
 
@@ -190,10 +159,12 @@ Per-state maximum slots based on state party organization:
 
 | State Org | Max Slots |
 | --------- | --------- |
-| 0-24%     | 2         |
-| 25-49%    | 3         |
-| 50-74%    | 4         |
-| 75-100%   | 5         |
+| 0-29%     | 2         |
+| 30-39%    | 3         |
+| 40-49%    | 4         |
+| 50%+      | 6         |
+
+Tiers are `RECRUITMENT_SLOT_TIERS` in `src/lib/npp/recruitment.ts`.
 
 Available slots = Max slots − Current party NPPs in that state.
 
@@ -239,23 +210,18 @@ Each state party (and national party) has three elected leadership positions:
 - Ties are broken by earliest declaration time
 - New elections are created automatically when a term expires
 
-### Admin Controls
-
-- Admins can **directly appoint** or vacate any leadership position from the state party page (bypasses election)
-- The admin Elections tab offers **Batch-Create** (spawn missing elections) and **Process Now** (force-resolve) controls
-- All admin appointments are written to the admin action log
-
 ### Chair Office - Purge Member
 
 The national party Chair can expel a regular member from their party via the **Chair Office** tab.
 
 **Rules:**
 
+- The mechanic is currently switched off (`PARTY_PURGE_ENABLED = false` in `src/lib/constants/partyActions.ts`): chairs cannot expel members and the Chair Office hides the controls.
 - Only the national Chair can initiate a purge.
 - Leadership roles (Vice Chair, Treasurer) cannot be purged - only regular members.
-- **Cost to chair:** +25 infamy, minus `floor(target.partyInfluence / 2)` from the chair's own party influence (floored at 0).
+- **Cost to chair:** base +25 infamy, escalating ×1.5 per successive purge up to 100, minus `floor(target.partyInfluence / 2)` from the chair's own party influence (floored at 0).
 - **Effect on target:** `party → "independent"`, `partyInfluence → 0`; existing candidacies and state party positions cleaned up via `withdrawFromMismatchedPrimaries` + `cleanupPartyPositionsOnSwitch`; any `electedOfficials` records for the target are updated to `party: "independent"`; target receives a `party_kicked` notification.
-- **Cooldown:** 6 turns per party, tracked via `PoliticalParty.lastPurgeAtTurn`. Constant: `PURGE_COOLDOWN_TURNS` in `src/lib/constants/partyActions.ts`.
+- **Cooldown:** 48 turns per party, tracked via `PoliticalParty.lastPurgeAtTurn`. Constant: `PURGE_COOLDOWN_TURNS` in `src/lib/constants/partyActions.ts`. A purged member must also wait 24 turns (`PURGE_REJOIN_COOLDOWN_TURNS`) before rejoining the party that purged them.
 
 **API:** `POST /api/country/[code]/parties/[id]/purge` - auth: `requireAuthWithCharacter` (chair only); body `{ characterId: string }` (MongoDB ObjectId hex).
 
@@ -517,12 +483,6 @@ transfer controls.
 - preset postures
 - state-funding visibility
 - override history for party leadership
-
-### Party Platform
-
-- Official party policy positions recorded as a platform document
-- May affect voter perception and member voting expectations
-- **Status**: Planned
 
 ---
 

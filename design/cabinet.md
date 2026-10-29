@@ -4,7 +4,7 @@ The President nominates principal officers to cabinet positions. The Senate conf
 
 ## Cabinet Positions
 
-15 principal officers, defined in `src/lib/constants/cabinet.ts` (`CABINET_POSITIONS`), ordered to match the presidential line of succession after the Vice President. Each position also carries a `yearEnabled` (some, like Homeland Security, don't exist in earlier eras) and an `id` used across nominations, members, and the UI.
+17 positions, defined in `src/lib/countries/us/cabinet/positions.ts` (`CABINET_POSITIONS`, re-exported from `src/lib/constants/cabinet.ts`), ordered to match the presidential line of succession after the Vice President, followed by the two seats outside the cabinet departments (orders 16 and 17). Each position also carries a `yearEnabled` (some, like Homeland Security, don't exist in earlier eras) and an `id` used across nominations, members, and the UI.
 
 | Order | Position                                       | ID                          | Year Enabled |
 | ----- | ----------------------------------------------- | --------------------------- | ------------ |
@@ -23,14 +23,18 @@ The President nominates principal officers to cabinet positions. The Senate conf
 | 13    | Secretary of Education                          | `secretary_of_education`    | 9999         |
 | 14    | Secretary of Veterans Affairs                   | `secretary_of_veterans`     | 1989         |
 | 15    | Secretary of Homeland Security                  | `secretary_of_homeland`     | 2002         |
+| 16    | Director of Central Intelligence                | `director_of_intelligence`  | 1946         |
+| 17    | White House Chief of Staff                      | `chief_of_staff`            | 1946         |
 
 The Secretary of Health and Human Services position is named Secretary of Health, Education, and Welfare until `secretary_of_education` is enabled via `renameOnDepartmentSplit` (`namesByYear` in the same file tracks this). Education uses `yearEnabled: 9999` and is carved out of HEW only when the Department of Education Act passes (legislation-gated, not calendar 1980).
+
+The White House Chief of Staff is appointed by the President alone with no Senate vote (`appointedWithoutConfirmation`) and is not in the line of succession. The nominee is seated at the next turn.
 
 There is no EPA Administrator, OMB Director, UN Ambassador, or USTR position in the cabinet; those are not implemented.
 
 ## UK Cabinet Positions
 
-18 seats, defined in `UK_CABINET_POSITIONS` (`src/lib/constants/ukCabinet.ts`), in file order. `agriculture_secretary` and `environment_secretary` share order 12; agriculture retires in 2001 and hands off to environment via `succeededBy` since their eras never overlap.
+20 seats, defined in `UK_CABINET_POSITIONS` (`src/lib/countries/uk/cabinet/positions.ts`), in file order. `agriculture_secretary` and `environment_secretary` share order 12; agriculture retires in 2001 and hands off to environment via `succeededBy` since their eras never overlap.
 
 | Order | Position (base name)                                              | ID                          |
 | ----- | ------------------------------------------------------------------- | ---------------------------- |
@@ -52,8 +56,10 @@ There is no EPA Administrator, OMB Director, UN Ambassador, or USTR position in 
 | 14    | Secretary of State for Northern Ireland                              | `northern_ireland`          |
 | 15    | Secretary of State for Scotland                                      | `scotland`                  |
 | 16    | Secretary of State for Wales                                         | `wales`                     |
+| 17    | Chief of the Secret Intelligence Service                             | `director_of_intelligence`  |
+| 18    | Parliamentary Secretary to the Treasury (Chief Whip)                 | `chief_whip`                |
 
-**Key UK difference:** The Prime Minister appoints cabinet ministers directly, there is no parliamentary confirmation vote. Once the PM names a minister, they are immediately a confirmed cabinet member. This contrasts with the US system where every nomination requires a Senate majority vote before the member is seated.
+**Key UK difference:** The Prime Minister appoints cabinet ministers directly, there is no parliamentary confirmation vote. Once the PM names a minister, they are immediately a confirmed cabinet member. This contrasts with the US system where every nomination except the Chief of Staff requires a Senate majority vote before the member is seated.
 
 ## Lifecycle
 
@@ -145,7 +151,7 @@ The function accepts a `CountryId` and resolves the correct set of position IDs 
 - **Hero header**, Cabinet image with stats strip: Positions filled (X / Y) and Pending Votes count
 - **"Vote in Senate" banner**, Shown when active nominations exist; links to Congress Senate tab
 - **Vote section**, When the current player is a Senator and nominations are pending, inline vote UI appears (For / Against / Abstain buttons with current tallies)
-- **Positions grid**, All 15 positions displayed as cards:
+- **Positions grid**, All 17 positions displayed as cards:
   - Filled positions show member name, party, and "Fire" button (President only)
   - Vacancies show "Nominate" button (President only)
   - Active nominations show vote status

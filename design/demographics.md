@@ -106,12 +106,12 @@ The turnout system allows strategic manipulation of voter participation through 
 
 **Modifiers**: Each demographic has a modifier from **-20% to +20%** (additive to baseline turnout).
 
-**Decay**: All modifiers decay **2% per turn** toward 0%, requiring sustained investment to maintain boosts.
+**Decay**: Campaign modifiers decay toward 0 with a half-life of 6 turns (about 11% per turn, `TURNOUT_HALF_LIFE` in `src/lib/campaignTargeting/rules.ts`), requiring sustained investment to maintain boosts. The legacy modifier set still decays 2% per turn.
 
-**Diminishing Returns**: Larger existing modifiers receive smaller boosts:
+**Diminishing Returns**: Larger existing modifiers receive smaller boosts in the direction they already point:
 
-- Formula: `adjustedBoost = rawBoost × (1 - |currentModifier| / 20)`
-- Example: At +10% modifier, a 1% boost becomes 0.5% effective boost
+- Formula: `adjustedBoost = rawBoost × (1 - max(0, sign(boost) × currentModifier) / 20)`
+- Example: At +10% modifier, a 1% boost becomes 0.5% effective boost. A positive boost on a negative modifier is not reduced.
 
 ### Party GOTV (Passive)
 
@@ -130,20 +130,19 @@ Campaign action to boost a specific demographic in the candidate's home state:
 
 **Cost**: 100 funds, 1 action point
 
-**Effectiveness Formula**:
+**Effectiveness Formula** (`src/lib/campaignTargeting/rules.ts`):
 
 ```
-baseBoost = 0.05%
-distance = |charEcon - demoEcon| + |charSocial - demoSocial|
-alignmentMultiplier = max(0.1, 1.0 - distance × 0.15)
-seasonMultiplier = isActiveCampaignSeason ? 2.0 : 1.0
-finalBoost = baseBoost × alignmentMultiplier × seasonMultiplier
+CANVASS_BASE_BOOST = 2
+distance² = ((charEcon - demoEcon)² + (charSocial - demoSocial)²) / 2
+campaignFit = 0.2 + 0.8 × exp(-distance² / 18)
+finalBoost = CANVASS_BASE_BOOST × campaignFit² × (isActiveCampaignSeason ? 2 : 1)
 ```
 
-**Alignment Scaling**:
+**Fit Scaling**:
 
-- Perfect alignment (distance 0): 1.0x multiplier
-- Poor alignment (distance 10): 0.1x multiplier (minimum)
+- Perfect alignment (distance 0): fit 1.0, full boost of 2 points
+- Poor alignment: fit falls toward the 0.2 floor, so the boost bottoms out at 0.04 of base
 
 **Campaign Season**: Active campaign season = 4 turns before election. During this period, canvassing is **2x more effective**.
 
@@ -203,7 +202,7 @@ State-specific turnout modifiers are applied to election calculations via `deriv
 
 Demographic turnout processing occurs in **sequential order** during turn processing:
 
-1. **Decay**: Apply 2% decay to all existing modifiers
+1. **Decay**: Apply half-life decay to all existing campaign modifiers
 2. **Party GOTV**: Process all active party budgets, apply alignment-based boosts
 3. **Player Canvassing**: Process queued canvassing actions (currently immediate, but designed for queue integration)
 
@@ -234,7 +233,7 @@ Demographic turnout processing occurs in **sequential order** during turn proces
 **Core Logic**:
 
 - `src/lib/turn/demographicTurnoutTurn.ts`, Turn processing (decay, GOTV, canvassing)
-- `src/lib/utils/turnoutDecay.ts`, 2% decay formula with threshold rounding
+- `src/lib/utils/turnoutDecay.ts`, Legacy 2% decay formula with threshold rounding
 - `src/lib/utils/demographicAlignment.ts`, Party GOTV alignment filtering
 - `src/lib/utils/diminishingReturns.ts`, Diminishing returns calculation
 

@@ -56,13 +56,13 @@ This contrasts with the old delta model. Re-seeding policies resets to the basel
 
 All metrics now decay naturally toward their baseline value at **0.25% per turn** when no active policy is pushing them. This prevents metrics from permanently deviating from realistic ranges after extreme legislation passes and then expires or is repealed. At 0.25%/turn, a fully-deviated metric takes approximately 20 game years (~960 turns) to return to baseline with no opposing policy active.
 
-Implemented in `src/lib/demographicEffects.ts`.
+Implemented in `src/lib/turn/metricDecay.ts` (`DECAY_RATE`).
 
 ### Federal Effect Division
 
 Federal bills apply their metric effects to every US state. Each state receives **1/50th** of the full effect per turn (previously was 1/3). This prevents a single federal bill from dominating state-level metrics and ensures the sum of per-state effects roughly equals the intended national total across 50 states.
 
-Configured via `FEDERAL_MULTIPLIER` in `src/lib/demographicEffects.ts`.
+Configured via `FEDERAL_MULTIPLIER` in `shared/constants/formulas.ts`, with per-country overrides there (UK 1/12, JP 1/8, DE 1/16) chosen by `getFederalMultiplier`.
 
 ### US Legislation Type Changes (v3 overhaul)
 
@@ -86,11 +86,10 @@ grant to regions. The seated Chancellor of the Exchequer can allocate that pool
 through the cabinet allocation route; `src/lib/turn/regionalBudget.ts` applies
 the configured percentages, defaulting to an equal split.
 
-**UK-specific metrics:** 14 metrics unique to the UK (e.g., `nhsWaitingTime`, `childPoverty`, `housingAffordability`, `devolutionSatisfaction`, `bbcTrust`). 4 US-only metrics excluded from UK (`uninsuredRate`, `affordabilityIndex`, `highSchoolGradRate`, `collegeEnrollment`). National effect division uses `UK_FEDERAL_MULTIPLIER = 1/12` (12 regions vs US 50 states).
+**UK-specific metrics:** 14 metrics unique to the UK (e.g., `nhsWaitingTime`, `childPoverty`, `housingAffordability`, `devolutionSatisfaction`, `bbcTrust`). 4 US-only metrics excluded from UK (`uninsuredRate`, `affordabilityIndex`, `highSchoolGradRate`, `collegeEnrollment`). National effect division uses `UK_FEDERAL_MULTIPLIER = 1/12` in `shared/constants/formulas.ts` (12 regions vs US 50 states).
 
 **Regional Budget Constraint:** UK regions operate under a balanced-budget requirement. Revenue = Council Tax + Business Rates + Westminster grant. If enacted spending exceeds budget for more than 1 turn, forced austerity downgrades the most expensive programme one option level per turn until balanced. Property and commercial value bases drift dynamically based on investment levels (25%-300% of baseline guardrails).
 
-Full spec: the design archive
 
 ## Bill Lifecycle
 
@@ -205,26 +204,20 @@ The turn processor runs `processBillLifecycle()` every turn; all status transiti
 - Bills with multiple provisions apply each provision’s effect in sequence.
 - Legislation types are seeded via `scripts/seeds/legislationTypes.ts` (`npm run seed:legislation`). Base policy (national and state) is seeded via `scripts/seeds/basePolicies.ts` and `scripts/seed/seed-policies.ts` (`npm run seed:policies` or `npm run seed:policies:reset`).
 
-### Archetype Approval Impacts
+### Voter Approval Impacts
 
-When a bill is **enacted** (signed into law or veto overridden), legislators who voted FOR the bill receive archetype approval changes based on the policy shift:
+When a bill is **enacted** (signed into law or veto overridden), legislators who voted FOR the bill receive approval changes among voter groups based on the policy shift. The groups are the Layer-1 census buckets the vote engine counts (for example `education:no_college`), not the older voter archetypes:
 
 | Component                | Description                                                                                                                                                                                          |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Policy domains**       | 13 domains: education, healthcare, environment, immigration, criminal_justice, defense, economic, welfare, infrastructure, governance, foreign_policy, tax, mediaInformation                         |
-| **Archetype affinities** | Each archetype has a per-domain affinity (±50). Positive = likes rightward shifts, negative = likes leftward. E.g., evangelicals +35 on education (love school choice), public_sector -40 (hate it). |
-| **Shift calculation**    | `shift = newPolicyIndex - oldPolicyIndex`. Moving 2 steps right = +2, 1 step left = -1.                                                                                                              |
-| **Impact formula**       | `impact = shift × affinity × 0.15`, clamped to ±10 per bill. A 2-step rightward education shift gives evangelicals +10 approval.                                                                     |
+| **Policy domains**       | 15 domains: education, healthcare, environment, immigration, criminal_justice, defense, economic, welfare, infrastructure, governance, foreign_policy, tax, mediaInformation, technology, agriculture |
+| **Bucket affinities**    | Each census bucket has a per-domain affinity, set per country. Positive = likes rightward shifts, negative = likes leftward.                                                                         |
+| **Shift calculation**    | `shift` is the change in the option's combined economic plus social position score (falls back to the option index when scores are missing). Rightward is positive.                                                                                                            |
+| **Impact formula**       | `impact = shift × affinity × 0.15 × position multiplier`, rounded and clamped to ±10 per bill. The multiplier runs 0.5 to 1.5 and is higher when the new position is more extreme.                                                                     |
 | **Who gets impacts**     | All legislators who voted FOR the bill (both chambers for federal bills).                                                                                                                            |
 | **When applied**         | Only at enactment (`onBillEnacted` in `src/lib/billEnactment.ts`), not during chamber voting.                                                                                                        |
 
-**Example**: Federal Education Funding moves from index 1 (left) to index 4 (center-right), a +3 shift.
-
-- Evangelicals (affinity +35): `3 × 35 × 0.15 = 15.75` → clamped to +10
-- Public sector (affinity -40): `3 × -40 × 0.15 = -18` → clamped to -10
-- Libertarians (affinity +30): `3 × 30 × 0.15 = 13.5` → clamped to +10
-
-Implementation: `DOMAIN_AFFINITIES` and `calculateShiftImpacts()` in `src/lib/archetypeAffinities.ts`.
+Implementation: `calculateShiftImpacts()` in `src/lib/archetypeAffinities.ts`, with the affinity tables in `src/lib/bucketAffinities.ts`.
 
 ### Data and APIs
 

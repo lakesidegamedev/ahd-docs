@@ -4,9 +4,8 @@ Each country has a **stock exchange** hub listing corporations, bonds, commoditi
 
 ## Routes
 
-- **Global**, `/stockmarket/global`, all listed corporations worldwide (exchange filter).
-- **Country exchange hubs**, `/country/[code]/stockmarket` for each configured exchange country.
-- **Legacy country URLs**, `/stockmarket/[country]` redirects to `/country/[code]/stockmarket`; `/stockmarket/global` remains the global view.
+- **Market hub**, `/market`, all listed corporations worldwide, with an optional exchange filter (`/market?exchange=<code>`) and tab (`/market?tab=...`).
+- **Legacy URLs**, `/stockmarket/[country]` and `/country/[code]/stockmarket` redirect to the market hub with the matching exchange filter (`src/lib/market/legacyStockMarketRedirect.ts`); there is no longer a separate `/stockmarket/global` page.
 
 Active exchanges are config-driven from `COUNTRY_CONFIGS.exchangeName` (`src/lib/constants/countries.ts`, exposed via `src/lib/constants/exchangeRegistry.ts`): every country with an `exchangeName` set gets a registered venue automatically, no per-exchange wiring needed. 21 exchanges are configured as of this writing, including NYSE (US), FTSE (UK), DAX (DE), and Nikkei (JP).
 

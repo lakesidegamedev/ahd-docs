@@ -11,7 +11,7 @@ The live turn is driven by `processTurn()` in `src/lib/turnSystem.ts` and entere
 - Fiscal-year processing uses each country's configured boundary, which is turn 40 for the current country configs.
 - A phase failure is isolated and recorded. An error outside a phase can abort the turn.
 - The processing lock, heartbeat, timeout, crash recovery, and final `turnLog` are part of the correctness contract.
-- The cron route is `GET`, protected by `Authorization: Bearer <CRON_SECRET>`.
+- The cron route is `GET`, protected by a bearer-token secret.
 
 ## Where code lives
 

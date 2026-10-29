@@ -6,7 +6,7 @@ The corporation system lets players found and manage businesses that operate acr
 
 - **Cost and starter plant:** In plants worlds, founding charges an era-scaled entry fee plus a discounted starter build. The build is queued at zero capital stock and comes online after its shortened greenfield construction time.
 - **CEO shares:** Founder equity is created by the founding flow; IPO structure and dual-class selection can change voting control.
-- **Requirement:** One active CEO seat per character. Founding starts a 168-turn per-user cooldown before that user can re-found after leaving.
+- **Requirement:** One active CEO seat per character. Founding starts a 96-turn per-user cooldown before that user can re-found after leaving.
 - **Starting marketing strength:** 10 (`marketingStrength`, used for market capture; grows further from marketing spend each turn)
 
 Players choose from 17 sector types:
@@ -303,7 +303,7 @@ A single source of truth function `computeAllMarginModifiers()` in `src/lib/cons
 | Modifier          | Max Effect        | Sectors Affected                                                                             | Threshold/Pivot                         |
 | ----------------- | ----------------- | -------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Sector Type Match | +5% / -15%        | All                                                                                          | Match vs mismatch                       |
-| Home Location     | +10% / +5%        | All                                                                                          | HQ state = +10%, same country = +5%     |
+| Home Location     | +5% / +2.5%      | All                                                                                          | HQ state = +5%, same country = +2.5%    |
 | Unemployment      | ±5%               | All                                                                                          | Pivot at 3%                             |
 | Power Grid        | -4%               | All                                                                                          | Gate 95%, floor 85%                     |
 | Corruption        | -3%               | All                                                                                          | Linear to index 100                     |
@@ -322,10 +322,10 @@ A single source of truth function `computeAllMarginModifiers()` in `src/lib/cons
 
 ### Home Location Bonus (implemented)
 
-Sectors in the corporation's HQ state receive a **+10% margin bonus**. Sectors in the same country as the HQ (but a different state) receive a **+5% bonus**. Sectors in a foreign country receive no home location bonus. Stacks additively with all other modifiers.
+Sectors in the corporation's HQ state receive a **+5% margin bonus**. Sectors in the same country as the HQ (but a different state) receive a **+2.5% bonus**. Sectors in a foreign country receive no home location bonus. Stacks additively with all other modifiers.
 
-- **HQ state:** `HOME_STATE_MARGIN_BONUS = 10`
-- **Same country:** `HOME_NATION_MARGIN_BONUS = 5`
+- **HQ state:** `HOME_STATE_MARGIN_BONUS = 5`
+- **Same country:** `HOME_NATION_MARGIN_BONUS = 2.5`
 
 Function: `getHomeLocationMarginBonus()` in `src/lib/constants/corporations.ts`
 

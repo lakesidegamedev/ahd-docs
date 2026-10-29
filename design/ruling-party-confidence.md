@@ -112,7 +112,12 @@ for every one-party country:
 - `installNewLeader(db, countryId, leaderId, officeType, partyId, turn)`  - 
   fresh confidence of 75. Called when a new PM is seated.
 - `renewLeaderMandate(db, countryId, leaderId, ...)` - +5 bump (capped
-  at 95). Called when the seated leader is confirmed for another term.
+  at 95), or the country's `renewalBumpOverride` when the constitutional
+  reform action has set one. Called when the seated leader is confirmed for
+  another term.
+- Reunification: when the leader's state absorbs another, the carried head of
+  government takes `REUNIFICATION_BUMP` = +10 (`src/lib/settlement/actuate.ts`,
+  constant in `src/lib/onePartyState/rulingPartyConfidence.ts`).
 - `adjustLeaderConfidence(db, countryId, leaderId, delta, reason, turn)`  - 
   arbitrary delta with history entry. Used by the turn driver and any
   future ad-hoc consumers.
