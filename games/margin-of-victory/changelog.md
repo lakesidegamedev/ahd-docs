@@ -8,5 +8,7 @@ It lists what was added, changed and fixed, grouped by month, with upcoming chan
 
 ## Recent changes
 
-- **October 2026.** Release pricing: US 2024, US 2020 and the daily challenge stay free, every other country is a bundle, and the Complete Collection unlocks everything. Supporter+ and Supporter++ members get the Complete Collection. Purchases follow your Lakeside account across devices.
+- **October 2026.** Release pricing: US 2024, US 2020 and the daily challenge stay free, every other country is a bundle ($0.99 each), and the Complete Collection ($3.99) unlocks everything. Supporter+ and Supporter++ members get the Complete Collection. Purchases follow your Lakeside account across devices.
 - **September 2026.** The game became Margin of Victory, with a new product page. Plan bonuses reward ordering your week. Native iPhone and Android apps, built on the same campaign engine, are in development. Campaigns survive a refresh in every country.
+
+Last checked: 2026-10-29, version October 2026 release
