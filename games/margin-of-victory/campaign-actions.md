@@ -33,6 +33,12 @@ An action that cannot be afforded or has no effect does not use a slot. The exce
 
 You pick the spend with a slider from $1M to $30M, a state, and a mode:
 
+![Line chart of effective ad reach against spend from $0M to $30M for media markets 0.75, 1 and 1.6, each rising steeply and flattening toward a ceiling of 6.](images/campaign-actions-ad-reach.svg)
+
+![Line chart showing the share of a fresh push's effect falling in a straight line from 100% to 0% as the shift already achieved in a bloc rises from 0 to the 0.7 ceiling.](images/campaign-actions-saturation.svg)
+
+*The same curve limits every persuasion action, not only ads.*
+
 - **Positive** raises your appeal with the blocs in the state, most with blocs whose issues match your positions.
 - **Contrast** attacks the opponent. It moves blocs 60% as far as a positive buy, lowers turnout energy in the state, and dents your own media narrative.
 - **Issue** does not move votes directly. It raises how much voters nationally care about the issue you choose, up to +0.12 per buy.
@@ -55,6 +61,10 @@ You choose a state, and the haul scales with its electoral votes. The base is $8
 
 Each field office costs $1.5M and one staff capacity, and adds 0.2 ground game in that state (maximum 1.0, so five offices). Ground game never decays. Staff capacity starts at 6 and does not refill, so you can build six offices in a whole campaign.
 
+![Bar chart of the GOTV margin shift per action at full ground game for each of the eight blocs, highest for young voters and lowest for seniors.](images/campaign-actions-gotv-by-bloc.svg)
+
+![Line chart of the GOTV margin shift for an average bloc rising in a straight line as field offices go from 1 to 5.](images/campaign-actions-gotv-by-offices.svg)
+
 Get out the vote (GOTV) costs $1M and shifts blocs toward you in proportion to your ground game there, most for blocs that usually stay home. Without ground game it fails and the $1M is gone. Repeating it in one state fades, because each push is reduced by how far you have already moved those blocs.
 
 ### Opposition research
@@ -71,6 +81,8 @@ An issue pivot is free in cash. You set a new position on an issue from -1 (left
 
 A setup action on an earlier day makes a later payoff action stronger. Both actions must have an explicit day, the setup must come on a strictly earlier day, and it must have actually done something.
 
+![Diagram of the four plan bonuses: Rally before Ads, Field offices before GOTV, Policy prep before Issue pivot or issue ad, and Opposition research before Contrast ads, each with its multiplier. The setup must come on an earlier day in the same state.](images/campaign-actions-plan-bonuses.svg)
+
 | Setup (earlier day) | Payoff (later day) | Bonus |
 | --- | --- | --- |
 | Rally | Ads in the same state | +20% |
@@ -83,6 +95,10 @@ Bonuses multiply if more than one applies. The opponent's AI plans do not use da
 ## What you can do
 
 Use the action panel on the planning screen. Pick an action type, then a state (and spend, mode or issue where needed), then press the plus button on the day you want it. Remove it from the day strip before you end the week.
+
+![The week plan panel in the 2024 campaign: Advertising selected with Pennsylvania as target and a $10.0M spend, a Rally queued on day 1 and ads on day 2, with the Own the news cycle plan bonus lit up.](images/campaign-actions-planning-panel.png)
+
+*The week plan panel with a rally on day 1 and ads on day 2, which earns the Own the news cycle bonus.*
 
 - **Spend in the right place.** Ads in a battleground with a 1.0 market give far more reach per dollar than the same ad in a 1.6 market that is already safe. States that lean hard resist persuasion, so you cannot flip California or New York with ad dumps.
 - **Mix, do not stack.** Three small ad buys in different states beat one huge buy. Repeated pushes in the same state fade, because every action is scaled down as you approach a ceiling on how far a campaign can move any one bloc.
@@ -113,6 +129,8 @@ The Californian fundraiser, with Biden's fundraising skill of 78, earns about $1
 ## Connections
 
 **Driven by:**
+
+![Diagram with The campaign week and Voter blocs feeding Campaign actions, which in turn change cash and slots, staff capacity, bloc lean, enthusiasm, momentum and debates.](images/campaign-actions-connections.svg)
 
 - [The campaign week](the-campaign-week.md): sets your action slots, the 3 per day cap, the order actions resolve in and the weekly decay of momentum and prep.
 - [Voter blocs](voter-blocs.md): each bloc's issues and lean decide how much an ad or rally moves it.

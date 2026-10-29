@@ -14,6 +14,8 @@ Each bloc starts with a lean toward one side. The game calibrates every state so
 
 Lean is the bloc's national two-party Democratic share in the 2020 baseline.
 
+![Grouped bar chart of each of the eight blocs' share of the national electorate and base turnout, sorted by share from working-class white voters down to young voters.](images/voter-blocs-share-and-turnout.svg)
+
 | Bloc | Share of voters | Base turnout | Lean (Democratic share) | Cares most about |
 | --- | --- | --- | --- | --- |
 | Working-class white voters | 30% | 0.62 | Republican (36%) | Economy, trade, immigration, law and order |
@@ -59,11 +61,15 @@ Young voters gain about 39% more than seniors from the same push. That is before
 - **Use issue pivots to win a bloc.** Moving your position toward a bloc's ideal on an issue it cares about raises your appeal there, and costs you with groups that preferred your old position.
 - **Watch the big blocs.** Working-class white voters are 30% of the electorate nationally and take the largest share of any state-wide ad, so a small move in them is worth more than a large move in a 5% bloc.
 
+![The state detail panel for Pennsylvania in the 2020 campaign, listing each bloc with its modeled votes, turnout, and Biden and Trump split.](images/voter-blocs-state-detail.png)
+
 Common questions: *Which bloc decides the state?* The one with the most votes (size times turnout) that is still close to 50-50. A huge bloc at 90% or 10% is decided already; a mid-sized bloc near the middle is where the margin is made. *Why did my rally barely move anyone?* A rally is small per bloc (about 0.05) and strong leans resist, so it works through momentum and enthusiasm more than direct persuasion.
 
 ## Connections
 
 **Driven by:**
+
+![Diagram of issues, candidate positions and campaign actions feeding bloc lean and enthusiasm, which together with bloc size times turnout set the state margin.](images/voter-blocs-connections.svg)
 
 - [Campaign actions](campaign-actions.md): ads, rallies, get-out-the-vote, oppo research and pivots all shift bloc leans and enthusiasm.
 - [The campaign week](the-campaign-week.md): every weekly resolution relaxes bloc enthusiasm 40% back toward normal.

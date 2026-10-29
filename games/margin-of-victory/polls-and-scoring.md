@@ -10,6 +10,8 @@ Every state is built from voter blocs (see [Voter blocs](voter-blocs.md)). Each 
 
 The polls you see are not the true count. For each state the game shows five pollsters, each with its own sample size and a small built-in lean (house effect). A reported number is the true two-party share, plus the pollster's house effect, plus random sampling noise. The noise is redrawn every week, so a state's poll line can wobble even when nothing changed. Polls are a guide, not a measurement.
 
+![Chart of where a reported poll lands when the true share is 50 percent: a wide curve for a single poll and a narrow curve for the five poll average, with the 0.85 point error band shaded.](images/polls-and-scoring-poll-error.svg)
+
 | Pollster | Sample | House effect (toward Democrats) |
 | --- | --- | --- |
 | Quinnipiac | 1,100 | +0.5 points |
@@ -33,6 +35,8 @@ Turnout is not a separate roll. Each bloc's votes in a state are its size times 
 ### Your score
 
 Your score runs from 0 to 1000 and is from your side's point of view, so a loss scores low. It adds three things and then applies a difficulty multiplier:
+
+![Line chart of score against electoral votes won from 200 to 400 for Easy, Normal and Hard at a 4.5 point popular vote lead, flattening at 337 electoral votes.](images/polls-and-scoring-score-curve.svg)
 
 `score = (500 + electoral margin points + popular vote points) x difficulty multiplier`
 
@@ -58,6 +62,10 @@ The same win scores far higher on Hard, which is why harder settings rank above 
 - **Read the results screen.** It explains why you won or lost before it lists the states, and shows your score. From there you can share the result or move on to the next election.
 - **Push the popular vote on Hard.** Each point of popular vote margin adds 10 points before the multiplier, so winning big matters even when the electoral vote is safe.
 
+![The Campaign Trends screen showing the national polling average, the electoral vote projection and national momentum by week.](images/polls-and-scoring-trends.png)
+
+![The results screen showing the electoral vote bar, the campaign score out of 1000 and the Why you lost explanation with decisive contests.](images/polls-and-scoring-results.png)
+
 Common questions:
 
 - *Why did I lose a state I led in polls?* Noise, house effects and the last week's events. The polls are a blurred view and the final count is exact.
@@ -67,6 +75,8 @@ Common questions:
 ## Connections
 
 **Driven by:**
+
+![Diagram of the pipeline from actions and events to bloc lean and enthusiasm, to state share, to electoral votes with the tossup band, to score.](images/polls-and-scoring-pipeline.svg)
 
 - [Voter blocs](voter-blocs.md): each bloc's size, base lean and turnout weight are the raw material of every state result.
 - [Campaign actions](campaign-actions.md): ads, rallies, get-out-the-vote, oppo and pivots shift bloc leans and enthusiasm.
