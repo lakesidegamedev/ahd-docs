@@ -71,7 +71,7 @@ Banks that run a committee do so by design only for the US: `FOMC_COMMITTEE_COUN
 | `FOMC_VOTE_WINDOW_TURNS` | 24, the hard turn deadline |
 | `FOMC_VACANCY_REMINDER_INTERVAL_TURNS` | 48 |
 
-`src/lib/centralBank/seedFomcBoard.ts` populates a US bank without a board: one technocrat NPP per seat (role `fomcMember`), seat 0 the chair mirrored onto the bank's legacy single chair fields. Alignments alternate hawk, dove, hawk, dove across seats, and term expiries are staggered (seat i of 7 expires `(i + 1) / 7` of a term after the start turn) so roughly one seat opens per window. A sitting player chair keeps seat 0. A government controlled bank gets no committee: the MPC was created by the independence grant, so a pre-1997 Bank of England has no board until legislation seeds one. Vacated seats are not restaffed by the engine; they stay vacant until a President nominates and the Senate confirms.
+`src/lib/centralBank/seedFomcBoard.ts` populates a US bank without a board: one technocrat NPP per seat (role `fomcMember`), seat 0 the chair mirrored onto the bank's legacy single chair fields. Alignments alternate hawk, dove, hawk, dove across seats, and term expiries are staggered (seat i of 7 expires `(i + 1) / 7` of a term after the start turn) so roughly one seat opens per window. A sitting player chair keeps seat 0. A government-controlled bank gets no committee, and legislation seeds one only for the US: `seedFomcBoards` skips every bank outside `FOMC_COMMITTEE_COUNTRY_IDS` before it checks government control, so an independent Bank of England keeps a single governor. Its callers are world bootstrap (`seedForex` at turn 0) and an independence grant (`applyCentralBankIndependenceProvision` in `src/lib/billEnactment.ts`); nothing else seeds a board. Vacated seats are not restaffed by the engine. A governor seat stays vacant until a President nominates and the Senate confirms; a vacant chair seat can also be filled by the chair draw (see Chair selection).
 
 The voting logic in `src/lib/centralBank/fomc.ts` is pure and deterministic. Each seat forms a view by running the same Taylor rule the autonomous chair uses (`computeNppChairRateTarget` and `computeNppChairRateStep` in `src/lib/nppAutonomy/nppChairAutoRate.ts`), tilted by its alignment. A step smaller than `FOMC_MOVE_THRESHOLD = 0.125` points reads as a hold. The chair proposes a motion; when the chair cannot change the rate (per-term cap, cooldown, command economy) the motion can only be a hold.
 
@@ -87,11 +87,35 @@ Alignment is temperament, not ideology. `CHAIR_ALIGNMENT_POLICY` in `src/lib/cen
 | `hikeStepMult` | 1.25 | 0.75 |
 | `cutStepMult` | 0.75 | 1.25 |
 
-When no alignment is stored, `deriveChairAlignment` reads the technocrat's personality: stubbornness at or above ambition leans hawk, otherwise dove. `oppositeAlignment` flips the temperament when a seat's term expires and it is replaced.
+When no alignment is stored, `deriveChairAlignment` reads the technocrat's personality: stubbornness at or above ambition leans hawk, otherwise dove. Expired board seats are vacated, not replaced (`expireSeats` in `src/lib/monetaryGovernance/rules/machine.ts`). `oppositeAlignment` is used only when a caretaker chair is appointed on a bank without a board (`src/lib/nppAutonomy/appointNppChair.ts`), flipping the outgoing chair's temperament.
 
 ### Nominations
 
-`FomcNomination` (`src/lib/db/types/centralBank.ts`, lifecycle in `src/lib/fomcNominationLifecycle.ts`, collection `fomcNominations`) is a President's nomination of a named nominee to a specific `seatId`, confirmed by the Senate through the same lifecycle as cabinet nominations. It carries `makeChair`, the `occupantType` (a live player seat or an autonomous NPP seat) and the hawk or dove `alignment` the President assigns. On confirmation the nominee is installed into that seat on `fomcBoard`; on rejection the seat is untouched. The older executive path (`CentralBankNomination` plus `ChairSelectionPending`) still exists for chair picks that need the nominee's acceptance, and tracks which nominees declined this cycle so re-selection skips them.
+`FomcNomination` (`src/lib/db/types/centralBank.ts`, lifecycle in `src/lib/fomcNominationLifecycle.ts`, collection `fomcNominations`) is a President's nomination of a named nominee to a specific `seatId`, confirmed by the Senate through the same lifecycle as cabinet nominations. It carries `makeChair`, the `occupantType` (a live player seat or an autonomous NPP seat) and the hawk or dove `alignment` the President assigns. A nomination may target any existing seat, vacant or occupied, with one active nomination per seat (`src/app/api/country/[code]/fomc/nominate/route.ts`). The caller must be head of government of a member country. A player nominee who sits in the cabinet is refused for every US seat (`requiresCabinetIndependence` in `src/lib/cabinet/rules/officeCompatibility.ts`), and the lifecycle refuses to install one who joined the cabinet in the meantime. NPP senators vote along party lines; at the 24-turn deadline the tally is recomputed and decides. On confirmation the nominee is installed into that seat on `fomcBoard`, replacing any occupant, with a fresh 192-turn term; `makeChair` moves the chair flag and updates the chair mirror fields. On rejection the seat is untouched.
+
+The executive draw (`CentralBankNomination` plus `ChairSelectionPending`, below) is the main chair path for every bank, and the second route to the Fed chair seat whenever it falls vacant: a vacated chair seat sets `vacancyAwaitingAutomaticSelection` unless a pick is already pending (`mirrorChair` in `machine.ts`), which opens the draw.
+
+### Chair selection
+
+All in `src/lib/turn/centralBankChairSelection.ts` unless noted.
+
+**Which bank.** A country's chair bank is `sharedBankId ?? countryId` (`src/lib/centralBank/helpers.ts`). DE uses the ECB; Scotland and Wales use the Bank of England. A bank without an intorg scopes its members to its own country, so Scotland, Wales and the UK each nominate into the shared Bank of England pool from their own country only. Ruble-zone banks are national (BLR runs its own Gosbank). Only registered countries run selection, and each bank is processed once per turn.
+
+**Nomination** (`POST /api/country/[code]/central-bank/nominate`; the intorg route forwards to it). The caller must hold the first `isExecutive` office of a member country (the head of government: president, prime minister, chancellor, taoiseach, premier). Cost 1 action point, spent idempotently with the write. At most 3 nominations per bank. The window (`isNominationWindowOpen`) is open when chair and term are both null, when the bank is NPP-chaired with no player chair, or within the last `NOMINATION_WINDOW_TURNS = 48` turns of the term. A nominee must be a player character in a member country, not a cabinet member (`getIncompatibleOfficeHolders(db, "bank", ...)`, the dual-appointment rule), not the head of government, and not already nominated.
+
+**Lobbying** (`POST /api/country/[code]/central-bank/lobby`). Any character in a member country may lobby for an existing nominee, minimum 1, paid from liquid cash in the bank country's currency (auto-converted under forex) and refunded if the bank write fails.
+
+**The draw.** `processCentralBankChairSelection` runs each turn after the executive-removal sweep. A bank with no pending pick draws when its term has expired (`currentTurn >= chairTermExpiresAtTurn`), when `vacancyAwaitingAutomaticSelection` is true (set by resignation, dismissal, an admin action, or an FOMC chair seat going vacant), or on bootstrap (chair null, term null, not NPP mode); otherwise it skips. `selectChairCandidate` skips this cycle's exclusions, cabinet members, NPPs and every executive in the member countries (heads of government, deputies and ceremonial heads of state). The pick is weighted random with weight `1 + lobbyingTotal / LOBBY_SCALE_FACTOR` (`LOBBY_SCALE_FACTOR = 500,000`), seeded `cbchair:<turn>`, redraws seeded `cbchair-redraw:<country>:<turn>`.
+
+**Acceptance.** A pick becomes `chairSelectionPending`; the seat's person fields are cleared and the nominee is notified. The nominee has `CHAIR_ACCEPTANCE_WINDOW_TURNS = 24` turns. Acceptance refuses a nominee now in executive office or the cabinet. On accept the term runs `CHAIR_TERM_TURNS = 192` from that turn, `chairMode` becomes `character`, the player takes the chair seat if the bank has a board, and nominations and lobbying are cleared. A decline, or a pick older than 24 turns, runs `reselectAfterRefusal`: the refused nominee joins this cycle's exclusion list (stored on the pending object, cleared when a chair is seated) and a new draw runs, else the seat is vacant.
+
+**No candidates.** The US seat is left vacant, never a technocrat. Elsewhere, with NPP autonomy at any level other than `off`, `appointNppChair` seats a caretaker technocrat, in player countries too; otherwise the seat is vacant. The caretaker adopts the board chair if a board exists, else reuses or spawns a `centralBankChair` technocrat with the opposite alignment to the previous chair and a 192-turn term. A caretaker serves its full term: nominations are open during it, but no draw runs until the term expires (`centralBankChairSelection.test.ts`, "does not redraw every turn while an NPP caretaker is mid-term and nominations exist").
+
+**Leaving.** The executive-removal sweep (`src/lib/turn/centralBankChairExecutiveRemoval.ts`) vacates a seated player chair who now holds national executive office and empties their FOMC chair seat, and clears a pending nominee who took executive office; NPP-chaired banks are skipped. Dismissal (`dismiss-chair`, head of government of a member country, player chairs only) sets scrutiny to `min(100, current + 18)` and flags the vacancy. Resignation (chair only, also triggered by relocation) empties the FOMC chair seat and flags the vacancy, with no scrutiny change of its own.
+
+**Scrutiny across a handover.** `CHAIR_CHANGE_SCRUTINY_RETAINED = 0.75` (`src/lib/centralBank/credibility.ts`) is applied as `$mul` on `chairInfamy` in `persistVacancy`, in `persistPendingProposal` (every proposed pick, redraws included) and at acceptance. A normal handover therefore keeps `0.75 * 0.75 = 56.25%`, and each decline or lapse multiplies again. See Known issues.
+
+**Government control and command economies.** Selection checks neither: a government-controlled bank or a Gosbank still gets a chair the same way, but the governance machine keeps rate-setting with the government, or blocks it in a command economy. A euro member's own independence law is a no-op for rate-setting.
 
 ### The rate corridor readout
 
@@ -203,7 +227,7 @@ M1, M2, growth annualization and open market operations are on [Money Supply and
 
 | Collection | Fields read or written | Shown to players |
 | --- | --- | --- |
-| `centralBanks` | `primeRate`, `rateHistory` (max 96), `interestRateHistory`, `lastRateChangeTurn`, `rateChangesThisTerm`, `chairCharacterId`, `chairMode`, `chairAlignment`, `chairInfamy`, `chairControlsLocked`, `fomcBoard`, `activeFomcMeeting`, `fomcMeetingHistory` (max 24), `lastFomcMeetingTurn`, `reserveBalance`, `forexRevenue`, `spreadFeeReserveBalances`, `nationalSavingsBalance`, `inflationHistory` | Rate, history, board, scrutiny and reserves on the Central Bank page; `chairControlsLocked` is an admin switch |
+| `centralBanks` | `primeRate`, `rateHistory` (max 96), `interestRateHistory`, `lastRateChangeTurn`, `rateChangesThisTerm`, `chairCharacterId`, `chairMode`, `chairAlignment`, `chairInfamy`, `chairControlsLocked`, `chairTermExpiresAtTurn`, `nominations`, `lobbyingPool`, `chairSelectionPending`, `vacancyAwaitingAutomaticSelection`, `fomcBoard`, `activeFomcMeeting`, `fomcMeetingHistory` (max 24), `lastFomcMeetingTurn`, `reserveBalance`, `forexRevenue`, `spreadFeeReserveBalances`, `nationalSavingsBalance`, `inflationHistory` | Rate, history, board, scrutiny, nominations, lobbying and reserves on the Central Bank page; `chairControlsLocked` is an admin switch |
 | `fomcNominations` | `bankId`, `seatId`, `makeChair`, `nomineeCharacterId` or `nomineeNppId`, `occupantType`, `alignment`, votes, `status` | Senate confirmation panel |
 | `exchangeRates` | `rate`, `rateHistory`, `currencyCode`, `monetaryRegime`, `fxRegime`, `capitalControls`, `interventionPolicy` | Rates, charts and regime panel |
 | `characters` | `currencyBalances.{personal, savings, savingsHolder, pendingSavingsInterest}`, `lineOfCredit.{balances, arrears, drawFrozen, paymentMode, paymentModeChangedAt, fundingSource}` | Wallet, savings tab and loan screen |
@@ -229,7 +253,8 @@ Defaults for new worlds are set in `src/lib/seeds/reference/featureFlagDefaults.
 | `centralBanks.chairControlsLocked` | unset | Admin lock on chair actions |
 | `centralBanks.governmentControlled` | unset (era derived) | Explicit override from legislation |
 | `exchangeRates.fxRegime`, `capitalControls`, `monetaryRegime` | float, open, pegged (Bretton Woods era) | Impossible trinity gate; Bretton Woods band and drift |
-| Country config `centralBank.sharedBankId` | per country | Shared banks cannot legislate independence |
+| Country config `centralBank.sharedBankId` | per country | Selects the chair bank; shared banks cannot legislate independence |
+| NPP autonomy level (`src/lib/nppAutonomy/featureFlag.ts`) | per world | Any level other than `off` seats a caretaker chair when no player can be drawn (never for the US) |
 
 ## Timing
 
@@ -275,6 +300,9 @@ A US world in 2025. The committee carries a hike from 4.00% to 4.75%. Inflation 
 - Forex off (`gameState.forexEnabled` false): `forexTurn` is skipped, so exchange rates do not move.
 - Forex rate is clamped between 0.5x and 1.5x of the base (seeded era) rate; the Bretton Woods float widens the band to 0.8.
 - A rate with no usable value in a conversion returns 0 rather than NaN (`convertCurrencyAmount`).
+- Chair nominations cap at 3 per bank and cost the head of government 1 action point each. Only player characters can be nominated, drawn or seated through the draw.
+- A caretaker chair holds the seat for its full 192-turn term even when players are nominated; the draw waits for the term to end.
+- Every chair and FOMC term is 192 turns from acceptance or confirmation. Country office tables list `termYears` 5 or 6 for some governors, but no chair code reads it.
 - Money supply growth readings are `null` until 12 turns of history exist (see [Money Supply and QE](./money-supply-and-quantitative-easing.md)).
 
 ## Invariants
@@ -292,7 +320,8 @@ A US world in 2025. The committee carries a hike from 4.00% to 4.75%. Inflation 
 ## Failure and recovery
 
 - **A stuck FOMC meeting.** A meeting that never reaches a majority is forced to resolve at the turn deadline (`FOMC_VOTE_WINDOW_TURNS = 24`), with non-voters abstaining. If a rate move is blocked at resolution (cooldown, term cap, regime), the meeting records `executionOutcome: "blocked"` with a reason and the rate stays.
-- **An empty board.** If every seat is vacant the committee cannot carry motions. The bank falls back to direct chair or autonomous setting; the board refills only when a nomination is confirmed.
+- **An empty board.** If every seat is vacant the committee cannot carry motions. The bank falls back to direct chair or autonomous setting. Governor seats refill only when a nomination is confirmed; the chair seat can also be filled by an accepted chair draw.
+- **An unanswered chair pick.** A pending pick that is not accepted within 24 turns lapses and is redrawn with the nominee excluded for the cycle, so a silent nominee cannot freeze the seat. With no other candidate the seat goes vacant or to a caretaker (not in the US).
 - **A wrong or stale rate document.** Exchange rates and inflation read through finite checks, so a non-finite input falls back to a sane default instead of poisoning the rate history. A bad stored rate is repaired with a data heal and the next turn recomputes from the base rate.
 - **A mis-seeded bank.** `seedFomcBoards` is idempotent and skips banks that already have a board, so a rerun is safe after a failed seed.
 - **Interrupted savings or loan writes.** Accrual and payment writes are filtered on the state they read; a concurrent change makes the write miss and the next turn catches up. Pending interest is kept in `pendingSavingsInterest`, so an interrupted quarterly credit is paid on the next credit turn.
@@ -319,6 +348,7 @@ Affects:
 | --- | --- |
 | Governance machine, execution policy, jurisdiction | `monetaryGovernance/rules/machine.test.ts`, `monetaryGovernance/executionPolicy.test.ts`, `monetaryGovernance/governanceShell.test.ts`, `monetaryGovernance/jurisdiction.test.ts` |
 | Committee, alignment, nominations, seeding | `centralBank/fomc.test.ts`, `centralBank/chairAlignment.test.ts`, `centralBank/seedFomcBoard.test.ts`, `turn/fomcMeetingTurn.test.ts` |
+| Chair selection, caretaker, lapse | `turn/centralBankChairSelection.test.ts` (nomination window, caretaker mid-term, US left vacant, autonomy off left vacant) |
 | Independence and limits | `centralBank/governance.test.ts`, `centralBank/independence.test.ts`, `centralBank/rateLimits.test.ts`, `centralBank/credibility.test.ts` |
 | Corridor, reserves | `centralBank/rateCorridor.test.ts`, `centralBank/reservePortfolio.test.ts`, `centralBank/reserveCurrencyRanking.test.ts`, `centralBank/reservePoolTransfer.test.ts`, `centralBank/reservePoolTransferCommands.test.ts` |
 | Forex | `currency/rateCalculation.test.ts`, `currency/rateCalculation.fractional.test.ts`, `currency/spreadFees.test.ts`, `currency/tradeFees.test.ts`, `turn/forexTurn.test.ts`, `constants/currencies.test.ts`, `constants/currencies.eraRate.test.ts` |
@@ -334,6 +364,11 @@ Gaps: there is no test file for `updatePrimeRate.ts` itself (the machine under i
 - The committee exists for the US only (`FOMC_COMMITTEE_COUNTRY_IDS`). The Central Banks wiki table agrees.
 - `LOC_DTI_MAX_FRACTION` and `LOC_NET_WORTH_LIMIT_MULTIPLIER` are file-local constants in `locMath.ts`, as is `NPP_CHAIR_HIGH_INFLATION_GAP`, so other code cannot import them.
 - The savings pool-share cap reads a pool total that is one turn old.
+- **Double scrutiny haircut on a chair handover.** `CHAIR_CHANGE_SCRUTINY_RETAINED = 0.75` is applied when a pick is proposed and again when it is accepted, so a normal handover keeps 56.25%, not the single "retained fraction" the code comments describe, and every decline or lapse redraw multiplies again. A dismissal adds 18 first, then the replacement draw applies the same multipliers. A seat left vacant with no candidate (the US, or autonomy off) keeps `vacancyAwaitingAutomaticSelection` set, so the draw reruns each turn and `persistVacancy` multiplies by 0.75 every turn until someone is nominated. Looks unintended; owner decision, not changed.
+- **A caretaker blocks a nominated player for up to 192 turns.** The nomination window is always open on an NPP-chaired bank (the `isNominationWindowOpen` comment says so on purpose), but a nomination does not set the vacancy flag, so no draw runs until the caretaker's term expires. If the intent is "always open", a nomination on an NPP-chaired bank should probably flag the vacancy.
+- **Office tables list a different governor term.** Country office tables give chair `termYears` of 5 or 6 for JP, CN, RU and BLR (for example `src/lib/countries/jp/institutionsFacts.ts`), but every chair term is 192 turns (4 game years) and no chair code reads `termYears`.
+- **FOMC seats and executive office.** The FOMC nominate route does not check a player nominee for executive office, and the executive-removal sweep clears only the chair mirror and chair seat, not other board seats, so a governor who takes executive office keeps voting.
+- 2026-10-29 chair and committee corrections to this page: legislation seeds a board only for the US, not for an independent Bank of England; expired seats are vacated, not replaced with a flipped temperament; the executive draw is the main chair path and the second route to the Fed chair seat, not a legacy path; added Chair selection.
 - 2026-10-29 review corrections to this page: committee majority counts seated governors (not the full board); `rateHistory` keeps 96 entries (not 50); direct rate sets are blocked while a committee is seated; the pool transfer moves `forexRevenue` and `reserveBalance`, not `spreadFeeReserveBalances`; a forex fee is split 25 / 25 / 50, not credited whole to the reserve; traded volume uses the organic channel rather than the intervention channel; the cap on the pool is the stored `nationalSavingsBalance`.
 
 Last checked: 2026-10-29, version 1.18.0
