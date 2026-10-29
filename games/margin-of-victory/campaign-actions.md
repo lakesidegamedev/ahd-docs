@@ -4,7 +4,7 @@ These are the actions in a US campaign, with what each one costs and when it pay
 
 ## Advertising
 
-Costs between $1M and $30M depending on the media market. Targets any state.
+You choose the spend, $1M to $30M per buy. Targets any state. A pricier media market (0.75 to 1.6 times) makes each dollar go less far, and a single huge buy hits diminishing returns (`src/engine/actions.ts`).
 
 Positive ads raise your appeal with blocs already inclined to you. Contrast ads attack the opponent but can depress turnout. Issue ads raise the national weight of an issue you choose.
 
@@ -26,7 +26,7 @@ Weaker than a rally by the candidate, but frees the candidate for somewhere else
 
 Costs one action. National.
 
-The haul depends on the candidate's fundraising skill, national momentum and some luck; about $8M to $12M a day for an average candidate. Do it early and often. It gets easier as you start winning.
+The haul depends on the candidate's fundraising skill, national momentum and some luck; each haul is $8M plus $120K per point of fundraising skill, so about $14M to $17M for a typical candidate, scaled up by national momentum and varied by 15 percent either way (`src/engine/actions.ts`). Do it early and often. It gets easier as you start winning.
 
 ## Field offices
 

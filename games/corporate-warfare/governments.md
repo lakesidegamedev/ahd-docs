@@ -17,7 +17,8 @@ Two parties compete in an election every four years, decided by the economy. A n
 The party in power also sets market laws.
 
 - **Workers' Party:** common carrier rules (owned pipelines, rail and ships sell spare capacity at a capped rate and may not lock a lane up with contracts), review of deals that buy a supplier or customer once their market share reaches 35 percent, a strategic reserve that buys oil, ore and other raw goods in busts and sells in spikes, and nationalisation of failing strategic firms.
-- **Commerce Party:** production quotas in extraction states (output held to 80 percent of capacity while a price is soft), bailout loans for failing strategic firms, and privatisation of state firms once they earn.
+- **Merger review:** a new Commerce Party government reviews deals once a firm's share of a market reaches 40 percent; a Workers' Party government, 30 percent.
+- **Commerce Party:** production quotas in extraction states (output held to 80 percent of capacity while a price is below 92 percent of its reference level), bailout loans for failing strategic firms, and privatisation of state firms once they earn.
 
 State firms price at cost plus five percent. State rescues are rare: only large, operating-profitable strategic firms get one.
 

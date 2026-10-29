@@ -25,7 +25,7 @@ Corporate Warfare is free while in development. There is no account and no sign-
 
 The game is single-player and plays fully offline. Saves stay on your device. Use Save in the in-game menu to keep a save beside the autosave, and Load game to pick any save; each one shows its company, game week and date.
 
-At launch the game can check the public release list for a newer version (you can switch this off in Settings). On Windows, Update now downloads and installs the new version and reopens the game. On Linux, Mac and Android it opens the download.
+At launch the game can check the public release list for a newer version (you can switch this off in Settings). In Settings, Updates you choose between full releases and previews, and you can install any version from 1.8 preview 3 on; going back to an older version backs up your saves first. On Windows, Update now downloads and installs the new version and reopens the game. On Linux, Mac and Android it opens the download.
 
 The game can also send an anonymous market snapshot every five game weeks: prices, sales and stock per good, with a random install id and nothing about you. It never stops play if it fails, and the Analytics switch in Settings turns it off.
 
