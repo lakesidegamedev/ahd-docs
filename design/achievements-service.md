@@ -1,10 +1,10 @@
 # Achievements Service
 
+## Summary
+
+The Achievements Service awards, revokes and queries player achievements. Achievements are **account-bound** (keyed by `userId`) with optional character context for historical tracking. Every function is non-throwing, so a failure in achievements can never block a game action.
+
 Player guide: [Achievements](https://www.ahousedividedgame.com/wiki/achievements). Design: [Achievements](./achievements.md).
-
-## Overview
-
-The Achievements Service provides a comprehensive system for awarding, revoking, and tracking player achievements. Achievements are **account-bound** (keyed by `userId`) with optional character context for historical tracking.
 
 **Location:** `src/lib/achievements/`
 
@@ -13,46 +13,55 @@ The Achievements Service provides a comprehensive system for awarding, revoking,
 - `index.ts` - Core service (award, revoke, query)
 - `cache.ts` - Definition and rarity caching
 - `triggers.ts` - Trigger-based achievement checks
-- `progress.ts` - Progress calculation for in-progress (unearned) achievements, used by the profile page and `src/app/api/characters/[id]/achievements/route.ts`
+- `progress.ts` - Progress calculation for in-progress (unearned) achievements, used by `src/app/api/characters/[id]/achievements/route.ts`
+- `officeHolders.ts`, `officeHolderRules.ts` - Turn-time award of `cabinet_seat` and `central_banker`
 
-## Core Functions
+## Rules
 
-### `getAchievementBySlug(slug)`
+### Core functions
 
-**Purpose:** Fetch achievement definition by slug.
+#### `getAchievementBySlug(slug)`
 
-**Returns:** `Achievement | null`
+**Purpose:** Fetch an achievement definition by slug.
 
-**Caching:** Uses cached definitions when available.
+**Returns:** `Achievement | null` (also `null` on error).
+
+**Caching:** Reads the cached definitions when present. On a cache miss for that slug it falls back to a `findOne` on `achievements`. It never fills the cache itself; only `getAllAchievements` does.
 
 ```typescript
 export async function getAchievementBySlug(slug: string): Promise<Achievement | null> {
-  const cached = getCachedDefinitions();
-  if (cached) {
-    const found = cached.find((a) => a.slug === slug);
-    if (found) return found;
-  }
+  try {
+    const cached = getCachedDefinitions();
+    if (cached) {
+      const found = cached.find((a) => a.slug === slug);
+      if (found) return found;
+    }
 
-  const db = await getDb();
-  return await db.collection<Achievement>("achievements").findOne({ slug });
+    const db = await getDb();
+    const achievement = await db.collection<Achievement>("achievements").findOne({ slug });
+    return achievement;
+  } catch (error) {
+    console.error("[achievements] getAchievementBySlug error:", error);
+    return null;
+  }
 }
 ```
 
-### `getAllAchievements()`
+#### `getAllAchievements()`
 
 **Purpose:** Fetch all achievement definitions.
 
-**Returns:** `Achievement[]` sorted by `order` field.
+**Returns:** `Achievement[]` sorted by `order` ascending (`[]` on error).
 
-**Caching:** Caches full definition list after first fetch.
+**Caching:** Returns the cached list when fresh, otherwise queries, stores the list with a 5 minute TTL and returns it.
 
-### `awardAchievement(userId, slug, characterId?, grantedBy?)`
+#### `awardAchievement(userId, slug, characterId?, grantedBy?)`
 
-**Purpose:** Award single achievement to account.
+**Purpose:** Award a single achievement to an account.
 
-**Returns:** `true` if newly awarded, `false` if already had it or error.
+**Returns:** `true` if newly awarded, `false` if the account already had it, the slug is unknown, or an error occurred.
 
-**Idempotent:** Calling multiple times only awards once.
+**Idempotent:** Calling it multiple times only awards once.
 
 ```typescript
 export async function awardAchievement(
@@ -61,227 +70,135 @@ export async function awardAchievement(
   characterId?: ObjectId,
   grantedBy?: ObjectId
 ): Promise<boolean> {
-  const achievement = await getAchievementBySlug(achievementSlug);
-  if (!achievement) return false;
+  try {
+    const achievement = await getAchievementBySlug(achievementSlug);
+    if (!achievement) {
+      console.warn("[achievements] awardAchievement: achievement not found:", achievementSlug);
+      return false;
+    }
 
-  const db = await getDb();
+    const db = await getDb();
 
-  // Check if already has it
-  const existing = await db
-    .collection<CharacterAchievement>("characterAchievements")
-    .findOne({ userId, achievementId: achievement._id });
-  if (existing) return false;
+    const existing = await db.collection<CharacterAchievement>("characterAchievements").findOne({
+      userId,
+      achievementId: achievement._id,
+    });
+    if (existing) return false;
 
-  // Award it
-  await db.collection<CharacterAchievement>("characterAchievements").insertOne({
-    _id: new ObjectId(),
-    userId,
-    characterId,
-    achievementId: achievement._id,
-    earnedAt: new Date(),
-    grantedBy,
-  });
+    try {
+      await db.collection<CharacterAchievement>("characterAchievements").insertOne({
+        _id: new ObjectId(),
+        userId,
+        characterId,
+        achievementId: achievement._id,
+        earnedAt: new Date(),
+        grantedBy,
+      });
+    } catch (insertError: unknown) {
+      // E11000 (duplicate key) means a concurrent call inserted first.
+      const isDuplicate =
+        insertError != null &&
+        typeof insertError === "object" &&
+        "code" in insertError &&
+        (insertError as { code: number }).code === 11000;
+      if (!isDuplicate) throw insertError;
+      return false;
+    }
 
-  invalidateRarityCache();
-  return true;
+    invalidateRarityCache();
+    await maybeAwardCompletionist(userId, [achievementSlug], characterId);
+    return true;
+  } catch (error) {
+    console.error("[achievements] awardAchievement error:", error);
+    return false;
+  }
 }
 ```
 
-### `awardAchievements(userId, slugs, characterId?, grantedBy?)`
+#### `awardAchievements(userId, slugs, characterId?, grantedBy?)`
 
 **Purpose:** Award multiple achievements in batch.
 
-**Returns:** Number of newly awarded achievements.
+**Returns:** Number of newly awarded achievements (`0` on error).
 
-**Efficiency:** Reduces N+1 queries:
+**Efficiency:** Reduces N+1 queries to 1 definition lookup (skipped when the cache is fresh), 1 existing check and 1 `insertMany`, plus the Completionist check described below.
 
-- 1 definition lookup (cached or single query)
-- 1 existing check
-- 1 `insertMany`
+- An empty list returns `0`. A single slug is delegated to `awardAchievement`.
+- With a fresh cache, definitions come from `cached.filter(...)` with no database fallback, so a slug missing from the cache is skipped silently until the cache expires.
+- `insertMany` uses `{ ordered: false }` so a duplicate-key race on one document does not abort the rest. A duplicate-key error (code 11000) is swallowed; any other error is rethrown to the outer catch and returns `0`.
+- The returned count is `toInsert.length`, the number attempted, even if a race made some inserts fail.
 
 ```typescript
-export async function awardAchievements(
-  userId: ObjectId,
-  achievementSlugs: string[],
-  characterId?: ObjectId,
-  grantedBy?: ObjectId
-): Promise<number> {
-  if (achievementSlugs.length === 0) return 0;
-  if (achievementSlugs.length === 1) {
-    return (await awardAchievement(userId, achievementSlugs[0], characterId, grantedBy)) ? 1 : 0;
-  }
+// 1. Resolve all definitions (cache filter or one $in query)
+// 2. Find the account's existing rows for those achievementIds (projection: achievementId)
+// 3. Insert only the missing ones in one batch
+await db
+  .collection<CharacterAchievement>("characterAchievements")
+  .insertMany(toInsert, { ordered: false });
+invalidateRarityCache();
+await maybeAwardCompletionist(userId, achievements.map((a) => a.slug), characterId);
+return toInsert.length;
+```
 
-  const db = await getDb();
+#### `maybeAwardCompletionist(userId, awardedSlugs, characterId?)`
 
-  // 1. Resolve all definitions
-  const cached = getCachedDefinitions();
-  let achievements: Achievement[];
-  if (cached) {
-    achievements = cached.filter((a) => achievementSlugs.includes(a.slug));
-  } else {
-    achievements = await db
-      .collection<Achievement>("achievements")
-      .find({ slug: { $in: achievementSlugs } })
-      .toArray();
-  }
-  if (achievements.length === 0) return 0;
+Internal. Runs after every successful award. It returns immediately if `awardedSlugs` includes `completionist` (this stops recursion). Otherwise it loads all definitions through `getAllAchievements`, takes every definition except `completionist` as the required set, counts the account's rows whose `achievementId` is in that set, and if the count equals the set size calls `awardAchievement(userId, "completionist", characterId)`. Its own errors are logged and swallowed.
 
-  // 2. Check which ones account already has
-  const achievementIds = achievements.map((a) => a._id);
-  const existing = await db
-    .collection<CharacterAchievement>("characterAchievements")
-    .find({ userId, achievementId: { $in: achievementIds } }, { projection: { achievementId: 1 } })
-    .toArray();
-  const existingIds = new Set(existing.map((e) => e.achievementId.toString()));
+#### `revokeAchievement(userId, slug)`
 
-  // 3. Insert only new ones
-  const toInsert: CharacterAchievement[] = achievements
-    .filter((a) => !existingIds.has(a._id.toString()))
-    .map((a) => ({
-      _id: new ObjectId(),
-      userId,
-      characterId,
-      achievementId: a._id,
-      earnedAt: new Date(),
-      grantedBy,
-    }));
-  if (toInsert.length === 0) return 0;
+**Purpose:** Revoke an achievement from an account.
 
-  await db.collection<CharacterAchievement>("characterAchievements").insertMany(toInsert);
+**Returns:** `true` if revoked, `false` if the account did not have it, the slug is unknown, or an error occurred.
+
+```typescript
+const result = await db
+  .collection<CharacterAchievement>("characterAchievements")
+  .deleteOne({ userId, achievementId: achievement._id });
+
+if (result.deletedCount > 0) {
   invalidateRarityCache();
-  return toInsert.length;
+  return true;
 }
+return false;
 ```
 
-### `revokeAchievement(userId, slug)`
+#### `getAccountAchievements(userId)`
 
-**Purpose:** Revoke achievement from account.
+**Purpose:** Get all achievements earned by an account with details.
 
-**Returns:** `true` if revoked, `false` if didn't have it or error.
+**Returns:** `Array<{ achievement, earnedAt }>` sorted by achievement `order` ascending. Rows whose definition no longer exists are dropped. Returns `[]` on error or when the account has none.
 
-```typescript
-export async function revokeAchievement(
-  userId: ObjectId,
-  achievementSlug: string
-): Promise<boolean> {
-  const achievement = await getAchievementBySlug(achievementSlug);
-  if (!achievement) return false;
+#### `getAchievementRarityMap()`
 
-  const db = await getDb();
-  const result = await db
-    .collection<CharacterAchievement>("characterAchievements")
-    .deleteOne({ userId, achievementId: achievement._id });
+**Purpose:** Get the rarity map `achievementId (string) -> % of accounts with it`.
 
-  if (result.deletedCount > 0) {
-    invalidateRarityCache();
-    return true;
-  }
-  return false;
-}
-```
+**Denominator:** `users` with `hasCompletedSetup: true`.
 
-### `getAccountAchievements(userId)`
+**Formula:** `count / totalAccounts * 100`, where `count` is the number of `characterAchievements` rows grouped by `achievementId`.
 
-**Purpose:** Get all achievements earned by account with details.
+**Returns:** `Map<string, number>`. Empty when there are no completed accounts, and an uncached empty map on error.
 
-**Returns:** `Array<{ achievement, earnedAt }>` sorted by achievement order.
+**Caching:** Cached for 2 minutes; invalidated on grant and revoke.
 
-```typescript
-export async function getAccountAchievements(
-  userId: ObjectId
-): Promise<Array<{ achievement: Achievement; earnedAt: Date }>> {
-  const db = await getDb();
-  const cas = await db
-    .collection<CharacterAchievement>("characterAchievements")
-    .find({ userId })
-    .toArray();
+#### `resolveUserIdFromCharacter(characterId)`
 
-  const achievementIds = cas.map((ca) => ca.achievementId);
-  if (achievementIds.length === 0) return [];
+**Purpose:** Resolve a character id to its owning user id (`characters.userId`, projection `userId`).
 
-  const achievements = await db
-    .collection<Achievement>("achievements")
-    .find({ _id: { $in: achievementIds } })
-    .toArray();
+**Use case:** Turn processing and routes that act on another character have a `characterId` and need the `userId` for an award. Returns `null` if the character is missing or on error.
 
-  const aMap = new Map(achievements.map((a) => [a._id.toString(), a]));
-  return cas
-    .map((ca) => {
-      const a = aMap.get(ca.achievementId.toString());
-      if (!a) return null;
-      return { achievement: a, earnedAt: ca.earnedAt };
-    })
-    .filter((x): x is { achievement: Achievement; earnedAt: Date } => x !== null)
-    .sort((x, y) => x.achievement.order - y.achievement.order);
-}
-```
+### Trigger system
 
-### `getAchievementRarityMap()`
+The trigger system checks for achievement conditions when game events occur. All triggers are **non-blocking**: errors are logged and swallowed. Each trigger takes `userId` and `characterId`, and counts are read per `characterId`, not per account.
 
-**Purpose:** Get rarity map: `achievementId → % of accounts with it`.
-
-**Denominator:** Total accounts with completed setup (have characters).
-
-**Returns:** `Map<string, number>` (percentage per achievement)
-
-**Caching:** Caches rarity map for 2 minutes; invalidated on grant/revoke.
-
-```typescript
-export async function getAchievementRarityMap(): Promise<Map<string, number>> {
-  const cached = getCachedRarity();
-  if (cached) return cached;
-
-  const db = await getDb();
-  const totalAccounts = await db.collection("users").countDocuments({ hasCompletedSetup: true });
-  if (totalAccounts === 0) {
-    const empty = new Map<string, number>();
-    setCachedRarity(empty);
-    return empty;
-  }
-
-  const counts = await db
-    .collection<CharacterAchievement>("characterAchievements")
-    .aggregate<{ _id: ObjectId; count: number }>([
-      { $group: { _id: "$achievementId", count: { $sum: 1 } } },
-    ])
-    .toArray();
-
-  const map = new Map<string, number>();
-  for (const c of counts) {
-    map.set(c._id.toString(), (c.count / totalAccounts) * 100);
-  }
-  setCachedRarity(map);
-  return map;
-}
-```
-
-### `resolveUserIdFromCharacter(characterId)`
-
-**Purpose:** Resolve character ID to owning user ID.
-
-**Use case:** Turn processing has `characterId`, needs `userId` for achievement award.
-
-```typescript
-export async function resolveUserIdFromCharacter(characterId: ObjectId): Promise<ObjectId | null> {
-  const db = await getDb();
-  const character = await db
-    .collection<{ _id: ObjectId; userId: ObjectId }>("characters")
-    .findOne({ _id: characterId }, { projection: { userId: 1 } });
-  return character?.userId ?? null;
-}
-```
-
-## Trigger System
-
-The trigger system automatically checks for achievement conditions when game events occur. All triggers are **non-blocking** - errors are logged and swallowed.
-
-### Action Achievements
+#### Action achievements
 
 **Trigger:** `checkActionAchievements(userId, characterId, actionType, currentTurn?)`
 
-**Called from:** Action handlers (fundraise, campaign, poll, etc.)
+**Called from:** `executeAction` (`src/lib/actions/commands/executeAction.ts`) and the poll route (`src/app/api/actions/poll/route.ts`).
 
-**Achievements checked (per-actionType thresholds):**
+It reads, in parallel, the count of `actionLogs` for the character and `actionType`, and the count of all `actionLogs` for the character, then runs the checks below and one batched `awardAchievements`.
+
+**Per-actionType thresholds:**
 
 | Action             | Achievement       | Threshold     |
 | ------------------ | ----------------- | ------------- |
@@ -296,208 +213,190 @@ The trigger system automatically checks for achievement conditions when game eve
 
 **Plus three checks that run on every call regardless of `actionType`:**
 
-| Condition                                          | Achievement    | Threshold                |
-| --------------------------------------------------- | -------------- | ------------------------- |
-| Total `actionLogs` count for the character           | `century_club` | 100                       |
-| `currentTurn` argument passed and `<= 1`             | `turn_one`     | 1 (first turn)            |
+| Condition                                                | Achievement    | Threshold                                    |
+| -------------------------------------------------------- | -------------- | -------------------------------------------- |
+| Total `actionLogs` count for the character               | `century_club` | 100                                          |
+| `currentTurn` argument passed and `<= 1`                 | `turn_one`     | 1 (first turn)                               |
 | Server local hour is `0` (`new Date().getHours() === 0`) | `night_shift`  | 1 (any action taken at midnight server time) |
 
-### Passive Profile Achievements
+#### Passive profile achievements
 
 **Trigger:** `checkPassiveProfileAchievements(userId, characterId, facts)`
 
-**Called from:** `src/app/profile/page.tsx` and `src/app/api/characters/[id]/achievements/route.ts`, passing a `facts` object computed from current character/account state (not from action logs).
+**Called from:** `src/app/profile/page.tsx` only (fire and forget), passing a `facts` object computed from current character and account state, not from action logs. The character achievements route does not call it.
 
 **Achievements checked, one per fact:**
 
-| Fact                                                                 | Achievement          |
-| --------------------------------------------------------------------- | -------------------- |
-| `iteration.type === "Iteration"` and `iteration.number === 1`         | `iteration4_founder` |
-| `hasCeoCorp`                                                          | `corner_office`      |
-| `hasCabinetSeat`                                                      | `cabinet_seat`       |
-| `hasCentralBankChair`                                                 | `central_banker`     |
-| `bondIncomePerTurn > 0`                                               | `bondholder`         |
-| `dividendIncomePerTurn > 0`                                           | `dividend_day`       |
-| `characterCreatedAt` is 30+ days old                                  | `elder_statesman`    |
-| `statsAllocated`                                                      | `built_different`    |
-| `onboardingComplete`                                                  | `onboarded`          |
-| `hallOfFameTop10`                                                     | `hall_of_famer`      |
-| `hasElectedOffice && hasCabinetSeat && isPartyChair` (all three)      | `iron_triangle`      |
+| Fact                                                             | Achievement          |
+| ---------------------------------------------------------------- | -------------------- |
+| `iteration.type === "Iteration"` and `iteration.number === 1`    | `iteration4_founder` |
+| `hasCeoCorp`                                                     | `corner_office`      |
+| `hasCabinetSeat`                                                 | `cabinet_seat`       |
+| `hasCentralBankChair`                                            | `central_banker`     |
+| `bondIncomePerTurn > 0`                                          | `bondholder`         |
+| `dividendIncomePerTurn > 0`                                      | `dividend_day`       |
+| `characterCreatedAt` is 30+ days old (`30 * 24 * 60 * 60 * 1000` ms) | `elder_statesman` |
+| `statsAllocated`                                                 | `built_different`    |
+| `onboardingComplete`                                             | `onboarded`          |
+| `hallOfFameTop10`                                                | `hall_of_famer`      |
+| `hasElectedOffice && hasCabinetSeat && isPartyChair` (all three) | `iron_triangle`      |
 
-### Election Entry Achievements
+The profile page currently passes `hallOfFameTop10: false`, so `hall_of_famer` is never awarded from here.
+
+#### Office holder achievements (turn)
+
+`awardOfficeHolderAchievements(db, characters)` in `officeHolders.ts` runs at the end of `processActionRefresh` (`src/lib/turn/actionRefresh.ts`). It reads `cabinetMembers` rows with a `characterId` and `centralBanks` rows with a `chairCharacterId`, and `resolveOfficeHolderGrants` (`officeHolderRules.ts`) returns one `cabinet_seat` or `central_banker` grant per account per slug. Existing `(userId, achievementId)` pairs are skipped, and the remainder is written with `insertMany(..., { ordered: false })` and a rarity cache invalidation. It does not run the Completionist check.
+
+#### Election entry achievements
 
 **Trigger:** `checkElectionEntryAchievements(userId, characterId, election)`
 
-**Called from:** Election entry handlers
+**Called from:** `src/app/api/elections/[id]/enter/route.ts`
 
-**Achievements:**
+**Achievements** (candidacy count is `electionCandidates` for the character; type from `election.electionType`):
 
-- `first_candidate` - First candidacy ever
-- `house_candidate` - House candidacy
-- `senate_candidate` - Senate candidacy
-- `governor_candidate` - Governor candidacy
-- `president_candidate` - Presidential candidacy
+- `first_candidate` - at least one candidacy
+- `house_candidate` - `house`
+- `senate_candidate` - `senate`
+- `governor_candidate` - `governor`
+- `president_candidate` - `president`
 
-### Election Win Achievements
+#### Election win achievements
 
 **Trigger:** `checkElectionWinAchievements(userId, characterId, electionType)`
 
-**Called from:** Election resolution
+**Called from:** General election and presidential resolution in the turn processor.
 
 **Achievements:**
 
-- `house_member` - Win House election
-- `senator` - Win Senate election
-- `governor` - Win governor election
-- `state_senator` - Win state senate election
-- `three_terms` - Win 3+ elections total
+- `house_member` - `house`
+- `senator` - `senate`
+- `governor` - `governor`
+- `state_senator` - `stateSenate`
+- `three_terms` - 3 or more `electedOfficials` records for the character
 
-### Office Held Achievements
+#### Office held achievements
 
 **Trigger:** `checkOfficeHeldAchievements(userId, characterId, officeType)`
 
-**Called from:** Office assumption
+**Called from:** Presidential resolution and admin appointments.
 
 **Achievements:**
 
-- `president` - Become President
-- `vice_president` - Become Vice President
+- `president` - `officeType === "president"`
+- `vice_president` - `officeType === "vicePresident"`
 
-### Influence Achievements
+#### Influence achievements
 
 **Trigger:** `checkInfluenceAchievements(userId, characterId)`
 
-**Called from:** Influence action handlers
+**Called from:** `src/app/api/characters/[id]/influence/route.ts`
 
 **Achievements:**
 
-- `influencer` - 5+ influence actions
-- `barnstormer` - 1+ barnstorm actions
+- `influencer` - 5+ `actionLogs` of type `supportPlayer`, `attackPlayer` or `barnstorm`
+- `barnstormer` - 1+ `barnstorm` actions
 
-### Subscriber Achievements
+#### Subscriber achievements
 
 **Trigger:** `checkSubscriberAchievements(userId, characterId)`
 
-**Called from:** Subscription handlers
+**Called from:** The subscribe route, for the character being subscribed to (`userSubscriptions.subscribedToCharacterId`).
 
 **Achievements:**
 
 - `popular` - 5+ subscribers
 - `celebrity` - 20+ subscribers
 
-### Funds Achievements
+#### Funds achievements
 
 **Trigger:** `checkFundsAchievements(userId, characterId, funds)`
 
-**Called from:** Fund update handlers
+**Called from:** `executeAction` and both transfer routes, with the balance converted to the anchor currency.
 
 **Achievements:**
 
-- `millionaire` - Reach $1,000,000
+- `millionaire` - `funds >= 1_000_000`
 
-### Bill Achievements
+#### Bill achievements
 
 **Trigger:** `checkBillSponsoredAchievements(userId, characterId)`
 
-**Called from:** Bill sponsorship
+**Called from:** `src/lib/legislature/commands/proposeNationalBill.ts`
 
 **Achievements:**
 
-- `first_bill` - Sponsor first bill
+- `first_bill` - 1+ `bills` with `sponsorId` equal to the character
 
-### News Achievements
+#### News achievements
 
 **Trigger:** `checkNewsPostAchievements(userId, characterId)` and `checkNewsReplyAchievements(userId, characterId)`
 
-**Called from:** News post creation
+**Called from:** `src/lib/news/commands/newsCommands.ts`
 
 **Achievements:**
 
-- `first_post` - First original post
-- `commenter` - 5+ reply posts
+- `first_post` - 1+ `newsPosts` by the author with `parentId: null`
+- `commenter` - 5+ `newsPosts` by the author with `parentId` not null
 
-## Progress Calculation
+### Progress calculation
 
 **Function:** `getAchievementProgress(db, character, achievement)` in `src/lib/achievements/progress.ts`
 
-**Purpose:** Compute `{ current, target }` progress for an achievement the character hasn't earned yet, driven by the achievement definition's `triggerType` and `triggerConfig` fields rather than by re-running the trigger checks above. Returns `null` for unrecognized `triggerType` values or on error.
+**Purpose:** Compute `{ current, target }` progress for an achievement the character has not earned yet, driven by the achievement definition's `triggerType` and `triggerConfig` fields rather than by re-running the trigger checks above. Returns `null` for unrecognized `triggerType` values, for a non-finite `count` on `action_count` and `election_won`, or on error. It is called only for achievements the account has not earned.
 
 **Supported `triggerType` values:**
 
-| `triggerType`       | Source of `current`                                                            | `target` from `triggerConfig`         |
-| -------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
-| `action_count`        | `actionLogs` count for the character, filtered by `actionType` or `actionTypes` | `count`                                |
-| `election_won`        | `electedOfficials` count for the character                                       | `count`                                |
-| `influence_count`      | `actionLogs` count where `actionType` in `["supportPlayer", "attackPlayer", "barnstorm"]` | `count`                        |
-| `subscriber_count`     | `userSubscriptions` count for the character                                      | `count`                                |
-| `funds_threshold`      | `character.funds`                                                                | `amount`                               |
-| `news_reply`           | `newsPosts` count with non-null `parentId` for the character                     | `count` (defaults to 5)               |
+| `triggerType`      | Source of `current`                                                                       | `target` from `triggerConfig` |
+| ------------------ | ----------------------------------------------------------------------------------------- | ----------------------------- |
+| `action_count`     | `actionLogs` count for the character, filtered by `actionType` or `actionTypes`           | `count`                       |
+| `election_won`     | `electedOfficials` count for the character                                                | `count`                       |
+| `influence_count`  | `actionLogs` count where `actionType` in `["supportPlayer", "attackPlayer", "barnstorm"]` | `count`                       |
+| `subscriber_count` | `userSubscriptions` count for the character                                               | `count`                       |
+| `funds_threshold`  | `character.funds` (0 if unset)                                                            | `amount`                      |
+| `news_reply`       | `newsPosts` count with non-null `parentId` for the character                              | `count` (defaults to 5)       |
 
-## Caching System
+### Caching constants
 
-### Definition Cache
-
-Both caches are in-memory and expire on a timer (`src/lib/achievements/cache.ts`).
+Both caches are in-memory, per process, and expire on a timer (`src/lib/achievements/cache.ts`).
 
 ```typescript
 const DEFS_TTL_MS = 5 * 60 * 1000;
 const RARITY_TTL_MS = 2 * 60 * 1000;
 
 let definitionsCache: { data: Achievement[]; expiresAt: number } | null = null;
-
-export function getCachedDefinitions(): Achievement[] | null {
-  if (!definitionsCache || Date.now() > definitionsCache.expiresAt) return null;
-  return definitionsCache.data;
-}
-
-export function setCachedDefinitions(data: Achievement[]): void {
-  definitionsCache = { data, expiresAt: Date.now() + DEFS_TTL_MS };
-}
-
-export function invalidateDefinitionsCache(): void {
-  definitionsCache = null;
-}
-```
-
-### Rarity Cache
-
-```typescript
 let rarityCache: { data: Map<string, number>; expiresAt: number } | null = null;
-
-export function getCachedRarity(): Map<string, number> | null {
-  if (!rarityCache || Date.now() > rarityCache.expiresAt) return null;
-  return rarityCache.data;
-}
-
-export function setCachedRarity(data: Map<string, number>): void {
-  rarityCache = { data, expiresAt: Date.now() + RARITY_TTL_MS };
-}
-
-export function invalidateRarityCache(): void {
-  rarityCache = null;
-}
 ```
 
-**Invalidation:** Definitions expire after 5 minutes and rarity after 2 minutes. The definitions cache is also cleared on create and update, and the rarity cache on every grant, revoke and bulk grant. `invalidateAllAchievementCaches()` clears both.
+Public functions: `getCachedDefinitions` / `setCachedDefinitions` / `invalidateDefinitionsCache`, `getCachedRarity` / `setCachedRarity` / `invalidateRarityCache`, and `invalidateAllAchievementCaches()` which clears both. A getter returns `null` once `Date.now() > expiresAt`.
 
-## Data Model
+**Invalidation:** Definitions expire after 5 minutes and rarity after 2 minutes. The definitions cache is also cleared by the admin create, update and seed routes (`src/app/api/admin/achievements/`), and the rarity cache on every grant, revoke and bulk grant. The contest and office-holder awards invalidate rarity themselves.
+
+## Data
 
 ### Collections
 
-| Collection              | Purpose                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------- |
-| `achievements`          | Achievement definitions (slug, name, description, order)                            |
-| `characterAchievements` | Account-achievement links (userId, achievementId, characterId, earnedAt, grantedBy) |
+| Collection              | Purpose                                                                                          | Player-visible                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| `achievements`          | Achievement definitions (slug, name, description, icon, category, trigger fields, hidden, order) | Yes, through the profile and public API |
+| `characterAchievements` | Account-achievement links (userId, achievementId, characterId, earnedAt, grantedBy)              | Yes, earned list and `earnedAt`         |
 
-### Document Types
+Read by triggers and progress: `actionLogs`, `electionCandidates`, `electedOfficials`, `userSubscriptions`, `bills`, `newsPosts`, `cabinetMembers`, `centralBanks`, `users` (`hasCompletedSetup`) and `characters` (`userId`). See [Achievements](./achievements.md) for what each trigger counts.
+
+### Document types
 
 ```typescript
+// src/lib/db/types/achievement.ts
 interface Achievement {
   _id: ObjectId;
   slug: string;
   name: string;
   description: string;
-  icon?: string;
+  icon: string;
+  category: AchievementCategory; // "milestone" | "election" | "legislation" | "social" | "action" | "special"
+  triggerType: string;
+  triggerConfig?: Record<string, unknown>;
+  isHidden: boolean;
   order: number;
   createdAt: Date;
   updatedAt: Date;
@@ -509,70 +408,150 @@ interface CharacterAchievement {
   characterId?: ObjectId; // Optional: which character earned it
   achievementId: ObjectId;
   earnedAt: Date;
-  grantedBy?: ObjectId; // Optional: admin who granted
-  createdAt: Date;
-  updatedAt: Date;
+  grantedBy?: ObjectId; // Optional: set by admin and moderator grants
 }
 ```
 
-## Usage Patterns
+Seed indexes: `achievements.slug` unique; `characterAchievements` unique on `{ characterId, achievementId }`; `characterAchievements.achievementId`. There is no unique index on `userId`.
 
-### In API Routes
+## Configuration
+
+The service has no `gameConfig` field, era preset, country preset or scenario override. Fixed settings:
+
+| Setting | Default | Where set |
+| --- | --- | --- |
+| `DEFS_TTL_MS` | 5 minutes | `src/lib/achievements/cache.ts` |
+| `RARITY_TTL_MS` | 2 minutes | `src/lib/achievements/cache.ts` |
+| Rarity denominator | `users` with `hasCompletedSetup: true` | `src/lib/achievements/index.ts` |
+| Completionist required set | every definition except `completionist` | `src/lib/achievements/index.ts` |
+| Definitions present | the seed list | `src/lib/seeds/achievements.ts` |
+
+Behaviour that depends on feature flags (`gameState.onboardingChecklistEnabled` for `onboarded`) is documented in [Achievements](./achievements.md).
+
+## Timing
+
+The service has no turn phase of its own; it runs inline with the request or turn step that calls it. Turn-time callers:
+
+```
+actionRefresh phase     -> awardOfficeHolderAchievements
+election resolution     -> checkElectionWinAchievements -> checkOfficeHeldAchievements
+primary resolution      -> awardAchievement ("presidential_nominee")
+post-turn contests      -> contest reconciler (direct bulkWrite, own rarity invalidation)
+```
+
+Within one `awardAchievement` or `awardAchievements` call the order is: resolve definition(s), check existing rows, insert, invalidate the rarity cache, run the Completionist check. Callers that fire several checks in parallel (for example `executeAction`) can interleave these steps for the same account.
+
+## Worked trace
+
+Character C of account A wins a Senate seat; resolution calls `checkElectionWinAchievements(A, C, "senate")`. C already has 3 `electedOfficials` rows including this win. A holds neither `senator` nor `three_terms`, and the definitions cache is fresh. The world has 66 definitions and 2,000 completed accounts.
+
+1. `typeSlugs["senate"]` is `senator`, so `slugs = ["senator"]`.
+2. `electedOfficials.countDocuments({ characterId: C })` returns 3, and `3 >= 3` adds `three_terms`. `slugs = ["senator", "three_terms"]`.
+3. `awardAchievements(A, slugs, C)`: length 2, so the batch path. `cached.filter` returns 2 definitions.
+4. Existing query on `{ userId: A, achievementId: { $in: [2 ids] } }` returns 0 rows, so `toInsert` has 2 documents `{ userId: A, characterId: C, achievementId, earnedAt: now, grantedBy: undefined }`.
+5. `insertMany(toInsert, { ordered: false })` succeeds. `invalidateRarityCache()` runs. The function returns 2.
+6. `maybeAwardCompletionist(A, ["senator", "three_terms"], C)`: `completionist` is not in the list, `requiredIds` has 65 ids, and A holds say 20 of them. `20 !== 65`, so nothing more is awarded.
+7. The next rarity read recomputes. If 150 accounts now hold `senator`, its value is `150 / 2000 * 100 = 7.5`.
+
+If the same call repeated: step 4 finds both rows, `toInsert` is empty, and the function returns `0` with no insert and no cache invalidation.
+
+## Edge cases and limits
+
+- **Idempotent.** Awarding an already held achievement returns `false`/`0`; duplicate-key (11000) races are tolerated.
+- **Unknown slug.** `awardAchievement` and `revokeAchievement` log a warning and return `false`.
+- **Cache blind spot.** `awardAchievements` filters the cached list without a database fallback, so a newly added definition is skipped for up to 5 minutes in a process with a warm cache. `awardAchievement` falls back to a `findOne` and is not affected.
+- **Batch count.** `awardAchievements` returns the number of documents it tried to insert.
+- **`characterId` is optional.** An award with no `characterId` stores no field; because the unique index is on `{ characterId, achievementId }`, such awards collide at null across accounts.
+- **Error handling.** All achievement functions are **non-throwing**: they return `false`, `0`, `null`, `[]` or an empty map on failure, log with an `[achievements] <function> error:` prefix, and never block game flow.
+- **Revocation is not sticky.** Triggers can re-award a revoked achievement when their condition is next checked.
+- **Rarity.** Empty when no accounts completed setup; the numerator counts all rows, so values above 100 are possible.
+- **Missing definitions.** `getAccountAchievements` drops rows whose definition is gone.
+
+## Invariants
+
+- No function in the service throws to its caller. Enforced by try/catch in each function; `src/lib/achievements.test.ts` asserts the return values for the not-found and idempotent paths only.
+- A successful grant or revoke clears the rarity cache. Enforced in code; the cache itself is tested in `src/lib/achievements/cache.test.ts`, the call sites are not.
+- At most one row per `(userId, achievementId)`. Enforced by the pre-check, not a database index.
+- `completionist` is never required for itself. Enforced by the `slug !== "completionist"` filter and the early return in `maybeAwardCompletionist`; tested by "awarding completionist itself stops before the completion check recurses".
+- Cache entries are never served past their TTL (`Date.now() > expiresAt` returns `null`), tested in `cache.test.ts`.
+
+## Failure and recovery
+
+- **Database errors.** The call logs and returns a failure value; the achievement is not awarded. It is awarded the next time its trigger condition is checked, since most conditions are counts or states, not events.
+- **Missing definitions.** Awards return `false` with a warning until definitions are seeded or migrated in.
+- **Stale cache.** Definitions lag up to 5 minutes and rarity up to 2 in other processes; restarting the process or waiting clears it.
+- **Wrong state.** Use the admin and moderator grant routes, or the revoke route, to correct individual accounts; the next qualifying trigger may re-award a revoked achievement.
+- **Duplicate rows.** Only possible when two characters of one account race past the pre-check; delete the extra row.
+
+## Connections
+
+**Driven by**
+
+- **Action Logs:** `actionLogs` (written by `src/lib/actions/commands/executeAction.ts`) is the source of truth for action counts.
+- **Election candidates:** `electionCandidates` and `src/app/api/elections/[id]/enter/route.ts` for candidacy tracking.
+- **Elected officials:** `src/lib/turn/election/` for win tracking.
+- **News Posts:** `src/app/api/news/` and `src/lib/news/commands/newsCommands.ts` for post counting.
+- **Turn processing:** `src/lib/turn/actionRefresh.ts` for office-holder awards.
+
+**Affects**
+
+- **Profile Page:** `src/app/profile/page.tsx` calls `checkPassiveProfileAchievements`.
+- **Character Achievements Route:** `src/app/api/characters/[id]/achievements/route.ts` calls `getAccountAchievements`, `getAchievementRarityMap`, `getAllAchievements` and `getAchievementProgress`.
+- **Settings:** `src/app/api/settings/achievements/route.ts` validates highlights against earned rows.
+
+### Usage patterns
+
+#### In API routes
 
 ```typescript
 export async function POST(request: Request) {
-  const auth = await requireAuth();
+  const auth = await requireAuthWithCharacter();
   if (!auth.ok) return auth.response;
 
   // ... perform action ...
 
-  // Award achievement
-  await awardAchievement(auth.user.userId, "first_action", auth.user.character?._id);
+  // Award achievement (userId must be an ObjectId)
+  await awardAchievement(new ObjectId(auth.user.userId), "policy_shift", auth.user.character._id);
 
   return NextResponse.json({ success: true });
 }
 ```
 
-### In Turn Processing
+#### In turn processing
 
 ```typescript
 // Turn processing has characterId, needs userId
 const { resolveUserIdFromCharacter } = await import("@/lib/achievements");
 const userId = await resolveUserIdFromCharacter(characterId);
 if (userId) {
-  await awardAchievement(userId, "election_winner", characterId);
+  await awardAchievement(userId, "presidential_nominee", characterId);
 }
 ```
 
-### Batch Awards
+#### Batch awards
 
 ```typescript
 // Efficient batch award (single lookup, single insert)
-await awardAchievements(userId, ["first_win", "third_term", "millionaire"], characterId);
+await awardAchievements(userId, ["first_candidate", "senate_candidate"], characterId);
 ```
 
-## Error Handling
+## Tests
 
-All achievement functions are **non-throwing**:
+| File | Covers |
+| --- | --- |
+| `src/lib/achievements.test.ts` | `awardAchievement` (not found, idempotent, insert, Completionist recursion stop), `revokeAchievement` |
+| `src/lib/achievements/cache.test.ts` | TTL expiry and invalidation for both caches |
+| `src/lib/achievements/triggers.test.ts` | `checkPassiveProfileAchievements` batch |
+| `src/lib/achievements/officeHolderRules.test.ts`, `src/lib/achievements/officeHolders.test.ts` | Turn-time cabinet and central bank awards |
+| `src/app/api/admin/achievements/admin-achievements.integration.test.ts` | Admin list route |
 
-- Return `false` on failure
-- Log errors to console
-- Never block game flow
+Gaps: no tests for `awardAchievements` batching (including the cache blind spot and `ordered: false` race), `maybeAwardCompletionist` success path, `getAchievementRarityMap`, `getAccountAchievements`, `resolveUserIdFromCharacter`, `getAchievementProgress`, or any trigger other than the passive profile one. `checkActionAchievements` is only mocked in `executeAction` and poll route tests.
 
-```typescript
-try {
-  await awardAchievement(userId, slug, characterId);
-} catch (error) {
-  console.error("[achievements] awardAchievement error:", error);
-  return false;
-}
-```
+## Known issues and history
 
-## Related Systems
+- `awardAchievements` serves definitions from a warm cache with no database fallback, so newly seeded slugs are silently skipped for up to 5 minutes.
+- `awardAchievements` returns the attempted insert count rather than the confirmed count after a duplicate-key race.
+- The unique index does not include `userId`, so account-level uniqueness depends on the pre-check.
+- `hall_of_famer` is not awarded in practice: the profile page hardcodes `hallOfFameTop10: false`.
 
-- **Action Logs:** `src/lib/actionLogs/` - Source of truth for action counts
-- **Election Candidates:** `src/lib/electionEngine/` - Candidacy tracking
-- **Elected Officials:** `src/lib/turn/election/` - Win tracking
-- **News Posts:** `src/app/api/news/` - Post counting
-- **Profile Page:** `src/app/profile/page.tsx` - Calls `checkPassiveProfileAchievements` and renders progress from `getAchievementProgress`
-- **Character Achievements Route:** `src/app/api/characters/[id]/achievements/route.ts` - Calls `checkPassiveProfileAchievements` and `getAchievementProgress`
+Last checked: 2026-10-29, version 1.18.0

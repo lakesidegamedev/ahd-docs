@@ -12,6 +12,7 @@ Standard patterns for API routes in A House Divided.
   if (!auth.ok) return auth.response;
   const { admin } = auth; // when you need admin.userId, admin.username, etc.
   ```
+- **Wrapper alternatives:** `withAdminAuth(handler)` from `@/lib/api/withAdminAuth` runs the same check and passes the narrowed `auth` as the handler's first argument; it does not add error handling. `withAdminRoute(handler)` in the same file also wraps the handler in the standard error boundary.
 
 ## Error Handling
 
@@ -53,3 +54,5 @@ Some routes (e.g. `/api/elections/snapshot`) allow both cron and admin auth. Che
 ## Admin or API Key
 
 Scripts can call some admin routes with an `X-Api-Key` header instead of a session. Use `requireAdminOrApiKey(request)` from `@/lib/api/requireAdminOrApiKey`. A wrong key returns 401, a missing session returns 403, and a server without `INTERNAL_API_KEY` configured returns 500.
+
+Last checked: 2026-10-29, version 1.18.0

@@ -1,10 +1,12 @@
 # Vacancy Handling
 
+## Summary
+
 When elected officials resign, retire, die or are removed from office, their seats are filled in one of three ways: by gubernatorial appointment (US Senate), by an off-calendar by-election (US and Russian Governors, UK Commons), or by waiting for the next regular election (US House, US State Senate and other offices).
 
 Time units: one turn is one real hour and 48 turns make one game year (`MS_PER_TURN`, `TURNS_PER_YEAR` in `src/lib/constants/calendar.ts`). A 24-turn window is half a game year, or 24 real hours.
 
-No dedicated player guide page covers vacancies yet. The nearest player-facing pages are [Election Mechanics](https://www.ahousedividedgame.com/wiki/election-mechanics) (cycles) and [Reference: Offices](https://www.ahousedividedgame.com/wiki/reference-offices) (what each office does).
+Player guide: no dedicated player page covers vacancies yet. The nearest player-facing pages are [Election Mechanics](https://www.ahousedividedgame.com/wiki/election-mechanics) (cycles) and [Reference: Offices](https://www.ahousedividedgame.com/wiki/reference-offices) (what each office does).
 
 ## Rules
 
@@ -101,6 +103,33 @@ Two code paths exist.
 
 An admin removal uses the same endpoint with admin auth and has the same effect.
 
+## Data
+
+| Collection | Use | Fields |
+| --- | --- | --- |
+| `electedOfficials` | the seat; vacancy is a holder-less record | `isAppointment`, `appointedBy`, `senateClass`, `termEnds` (`src/lib/db/types/officials.ts`) |
+| `ukCommonsVacancies` | durable UK vacancy record | `countryId`, `state`, `officialId`, `seats`, `reason`, `vacatedTurn`, `vacatedAt`, `status` (`open`, `scheduled`, `filled`, `subsumed`), `electionId` (`src/lib/countries/uk/db/ukByElectionTypes.ts`) |
+| `ukRecallPetitions` | recall watch and petitions | signatures, trigger, status |
+| elections and races | `special_governor` and `special_commons` races | 48 hours each (24 primary, 24 general), `src/lib/constants/electionDurations.ts` |
+| characters | `currentOffice` set or cleared | |
+| office-transition records | written on appointment and resignation | |
+| notifications | governor and appointee messages | |
+
+Player-visible: the race and results, notifications, empty seats in chamber counts, and a recall petition's progress. The vacancy bookkeeping documents are not shown directly.
+
+## Configuration
+
+| Setting | Default | Set in |
+| --- | --- | --- |
+| `BY_ELECTION_COUNTRIES` | US, RU | `src/lib/turn/byElections.ts` |
+| Russia watcher gating | runs only when the country is beta or active | country status in `byElections.ts` |
+| Founding period | both watchers skipped while `gameState.preIteration.active` | `src/simulation/phases/turnPhaseRegistry.ts` |
+| By-election durations and cooldowns | 24, 24, 48 (see Constants) | `byElections.ts`, `commonsRecallRules.ts` |
+| Recall thresholds | infamy 70, favorability 25, 4 turns, 5 signatures, 12 turns | `commonsRecallRules.ts` |
+| Country-scoped election types | `special_governor`, `special_commons` | `electionDurations.ts` |
+
+No gameConfig field or era preset changes this system; the UK Commons seat map follows the era preset (see [United Kingdom](./united-kingdom.md)).
+
 ## Timing
 
 All watchers run in the hourly turn (`src/simulation/phases/turnPhaseRegistry.ts`), in the election coverage group:
@@ -114,6 +143,19 @@ Within the Commons watcher the order is: backstop untracked holder-less records 
 
 Senate appointment is not a turn event: it happens when the governor calls the API, at any time while the seat is empty.
 
+## Worked trace
+
+UK London, modern map (75 seats), one MP dies at turn 2000.
+
+1. The holder-less `commons` record is backstopped into a `UkCommonsVacancy` with `reason: "death"`, `seats: 1`, `status: "open"`, `vacatedTurn: 2000`.
+2. The Commons watcher checks the gate: no live `special_commons` for LON, no regular or snap general resolving first, no special resolved in the last 48 turns. It spawns one `special_commons` race and moves the vacancy to `scheduled`.
+3. Carve fraction: `computeByElectionCarveFraction = 1 / 75 = 0.0133`, clamped to 0-1. The regional electorate is scaled by 0.0133 with its group mix preserved.
+4. The race runs 24 turns of filing and primary (turns 2000 to 2024), then 24 turns of general (to 2048).
+5. The winner is seated as a plain Commons member and the vacancy moves to `filled`. The Commons is back to 650 seats.
+6. If nobody wins a seat, the seat stays vacant and the next by-election can spawn no earlier than turn 2048 + 48 = 2096.
+
+Senate example (from Rules): resignation at turn 110, class term ends turn 288, so the appointee serves `288 - 110 = 178` turns, which is `178 / 48 = 3.7` game years.
+
 ## Edge cases and limits
 
 - **No governor, no appointment.** If the sitting governor is an NPP or the office is itself vacant, no notification is sent and no player can appoint. The seat stays vacant until the next class election.
@@ -122,6 +164,24 @@ Senate appointment is not a turn event: it happens when the governor calls the A
 - **Duplicate trigger.** Vacancy creation is idempotent per record, so a turn retry or simultaneous triggers do not double a race.
 - **Appointee rules.** Anyone who already holds an office, an NPP that is retired, and anyone from another state is refused.
 - **Deliberately excluded:** House and State Senate special elections (no per-district race design), Lieutenant Governor succession, death and expulsion by chamber vote.
+
+## Invariants
+
+- A vacancy is filled by one path only (appointment, by-election or regular election). Enforced by the suppression checks (`regularRaceFillsSeatFirst`, `commonsByElectionGate`); covered by `src/lib/turn/byElections.test.ts` and `src/lib/turn/commonsByElections.test.ts`.
+- At most one live special per region. Enforced by the gate; tested ("does not spawn while a live special or an imminent general covers the region").
+- A vacancy is recorded exactly once per holder-less record. Tested ("records a removal vacancy ... exactly once").
+- Vacancies claimed by a race are marked `filled`, `subsumed` or reopened. Tested (reconcile cases in `commonsByElections.test.ts`).
+- An appointed senator must live in the governor's state and hold no office. Enforced in `appointSenator`; no dedicated test was found.
+- Chamber seat totals never exceed their statutory size. Not enforced by a dedicated check.
+
+## Failure and recovery
+
+- **Vacancy never recorded** (a holder-less UK record that no code path hooked): the Commons watcher backstops untracked records into vacancies each turn.
+- **Claimed race vanished**: the reconcile step reopens the vacancy and retries the spawn in the same pass.
+- **General resolved while a vacancy was scheduled**: marked `subsumed`, not filled.
+- **Duplicate spawn after a turn retry**: vacancy creation is idempotent per record and the live-special check blocks a second race.
+- **Governor seat stuck empty with no race**: look for the suppression reasons (cooldown, live regular race); otherwise a data repair re-creates the holder-less record so the watcher picks it up.
+- **Senate seat left vacant**: no automatic recovery before the class election; only a governor can appoint.
 
 ## Connections
 
@@ -138,17 +198,30 @@ Senate appointment is not a turn event: it happens when the governor calls the A
 - Chamber seat counts and party seat counts (House, State Senate, Senate, Commons).
 - Action and fund bonuses: an appointed senator receives the Senate office bonuses at the next refresh (see [Stats & Actions](./stats-actions.md)).
 
-## Future enhancements (not built)
+Related pages:
+
+- [Election Mechanics](./elections.md) - Election cycles and perpetual races
+- [United Kingdom](./united-kingdom.md) - Commons vacancies and by-elections
+- [State-Level Power](./state-level-power.md) - Governors and appointments
+
+## Tests
+
+- `src/lib/turn/byElections.test.ts`: governor by-election watcher, cooldown, suppression, RU gating.
+- `src/lib/turn/commonsByElections.test.ts`: UK vacancy recording, carve sizing, spawn and reconcile, recall triggers.
+- `src/lib/countries/uk/elections/byElectionCarve.test.ts`, `src/lib/countries/uk/elections/commonsVacancyStatus.test.ts`: carve fraction and vacancy status.
+- `src/lib/settings/resignations.test.ts`: settings resignation path.
+- Gaps: no test found for `appointSenator` or the eligible-appointees route, none for the resign endpoint's rate limit, and none for recall petition signature or support-check resolution.
+
+## Known issues and history
+
+Not built (deliberately excluded):
 
 1. Special elections for House and State Senate.
 2. Lieutenant Governor office with automatic succession.
 3. Death and mortality events that trigger vacancies.
 4. Chamber expulsion by a two-thirds vote.
 
-## Related pages
-
-- [Election Mechanics](./elections.md) - Election cycles and perpetual races
-- [United Kingdom](./united-kingdom.md) - Commons vacancies and by-elections
-- [State-Level Power](./state-level-power.md) - Governors and appointments
+- The Senate appointment fallback term (6 years) is a fixed 6 * 365 days, not game-calendar based.
+- The two resignation code paths differ: the settings path tombstones UK Commons seats and writes a vacancy, while the resign endpoint deletes non-executive records outright.
 
 Last checked: 2026-10-29, version 1.18.0

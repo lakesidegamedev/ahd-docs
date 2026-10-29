@@ -1,32 +1,50 @@
 # Technical Architecture
 
-## Technology Stack
+## Summary
+
+A House Divided is one Next.js application that serves the UI, every API route and the hourly turn processor from a single process, backed by MongoDB. There is no separate backend or external scheduler: the turn clock is `node-cron` started inside the web process at boot. This page records the stack, how a turn is scheduled and locked, the phase ordering that is load-bearing, the core collections, and how the pieces fail and recover.
+
+Player guide: none; this is an engineering page. Player-facing turn timing is described in the [Wiki](https://www.ahousedividedgame.com/wiki).
+
+## Rules
+
+### Technology stack
+
+Versions come from `package.json`.
 
 | Layer        | Technology                                    | Version    |
 | ------------ | --------------------------------------------- | ---------- |
-| Framework    | Next.js (App Router)                          | 16.4       |
-| UI           | React                                         | 19.3       |
-| Language     | TypeScript                                    | 6.0        |
-| Styling      | Tailwind CSS                                  | 4          |
-| Database     | MongoDB native driver                         | 7.4        |
-| Auth         | Custom JWT via `jose`                         | 6.2        |
-| Testing      | Vitest (unit/integration) + Playwright (E2E)  | 5.0 / 1.64 |
-| Deployment   | Railway (Nixpacks build, `next start`)        | n/a        |
+| Framework    | Next.js (App Router)                          | ^16.4.2    |
+| UI           | React                                         | 19.3.1     |
+| Language     | TypeScript                                    | 6.0.2      |
+| Styling      | Tailwind CSS                                  | ^4         |
+| Database     | MongoDB native driver                         | ^7.4.0     |
+| Auth         | Custom JWT via `jose`                         | ^6.2.9     |
+| Scheduler    | `node-cron`                                   | ^4.6.0     |
+| Testing      | Vitest (unit/integration) + Playwright (E2E)  | ^5.0.1 / ^1.64.0 |
+| Deployment   | Railway (Nixpacks build, `next start`)        | `railway.toml` |
 | File Storage | Cloudflare R2 (prod) / local filesystem (dev) | n/a        |
 
-## Architecture Pattern
+### Request flow
 
-### Request Flow
-
-- **Next.js App Router** handles all UI (React Server Components + client components) and API routes. No separate backend server.
+- **Next.js App Router** handles all UI (React Server Components and client components) and API routes. No separate backend server.
 - All game logic lives in API routes (`src/app/api/`). Domain logic is extracted into service modules under `src/lib/`.
-- **Client-server communication** is primarily HTTP. The active client hook polls `/api/game/turn/status` and synthesizes turn events; `src/lib/events.ts` provides a lightweight in-process event emitter for turn/theme events, but it is not a durable cross-instance push bus.
+- **Client-server communication** is primarily HTTP. The active client hook polls `/api/game/turn/status` and synthesizes turn events; `src/lib/events.ts` provides a lightweight in-process event emitter for turn and theme events, but it is not a durable cross-instance push bus.
 
-### Turn Processor
+### Turn processor
 
-- `processTurn()` in `src/lib/turnSystem.ts` is the single entry point. It is fired in-process by `node-cron` (`src/lib/cron.ts`), scheduled from `instrumentation.ts` at server boot, not by an external cron service. Schedule is `0 * * * *` (hourly, or `30 * * * *` when the `TURN_CRON_MINUTE` environment variable is 30), or `0,30 * * * *` when `GameState.fastMode` is on (schedule helpers in `src/lib/cron/turnCronMinute.ts`). `GET /api/cron/turn` also exists as an HTTP-triggerable fallback (protected by `requireCron()`/`CRON_SECRET`) with a backup fire half an hour after the primary (`30 * * * *` by default) that only runs if the primary missed its slot.
-- The phase list now lives in a registry (`src/simulation/phases/turnPhaseRegistry.ts`, phase names enumerated in `src/simulation/phases/turnPhaseNames.ts`) rather than being inlined in `turnSystem.ts`. `BASE_TURN_PHASE_NAMES` currently has **151 phases**, plus per-country election phases from `COUNTRY_ELECTION_PHASES`. Each phase runs through the shared turn-phase runtime (`src/simulation/engine/turnPhaseRuntime.ts`), failures log to Sentry but don't halt subsequent phases.
-- **Election-resolution ordering is critical:** primaries must resolve before vote accumulation; votes must accumulate before timers advance; timers must advance before elections resolve. The table below groups phases by concern; it is illustrative, not an exhaustive phase-by-phase listing (see the registry files for the full current set, which also includes governor/SCOTUS, extraction/prospecting, decolonization, spheres of influence, impeachment, by-elections, and ledger-reconciliation phases not shown below).
+- `processTurn()` in `src/lib/turnSystem.ts` is the single entry point. It is fired in-process by `node-cron` (`src/lib/cron.ts`), scheduled from `instrumentation.ts` at server boot, not by an external cron service.
+- Schedule helpers are in `src/lib/cron/turnCronMinute.ts`. The primary schedule is `turnCronSchedule(minute, fastMode)`: `0 * * * *` (hourly) by default, `30 * * * *` when the `TURN_CRON_MINUTE` environment variable is `30`, and `0,30 * * * *` when `GameState.fastMode` is on. Any other `TURN_CRON_MINUTE` value logs a warning and falls back to 0.
+- `backupTurnSchedule(minute)` is `(minute + 30) % 60` past the hour. The backup only fires when the primary missed its slot (`shouldFireBackupTurn` in `src/lib/cron/backupFireGuard.ts`): in normal mode it fires only if no turn completed inside the current turn hour (`turnHourBucket`); in fast mode it always fires, because `:00` and `:30` are both real turns.
+- `GET /api/cron/turn` (`maxDuration = 800` seconds, `src/app/api/cron/turn/route.ts`) is an HTTP-triggerable fallback guarded by `requireCron()` (`src/lib/api/requireCron.ts`, `Authorization: Bearer ${CRON_SECRET}`).
+- The phase list lives in a registry (`src/simulation/phases/turnPhaseRegistry.ts`, names in `src/simulation/phases/turnPhaseNames.ts`), not inlined in `turnSystem.ts`. `BASE_TURN_PHASE_NAMES` has **151 phases**, plus per-country election phases from `COUNTRY_ELECTION_PHASES` (`src/lib/turn/countryPhases.ts`) and per-country bill phases from `COUNTRY_BILL_PHASES`. Each phase runs through the shared turn-phase runtime (`src/simulation/engine/turnPhaseRuntime.ts`); failures are logged (Sentry) and do not halt subsequent phases.
+- **Election-resolution ordering is critical:** primaries must resolve before vote accumulation; votes must accumulate before timers advance; timers must advance before elections resolve.
+- Server-enforced `lastTurnProcessed` prevents clock drift. `getGameTime()` (`src/lib/time/gameTime.ts`) uses it as `effectiveNow`, not `new Date()`, so election phase display stays correct after batch turns.
+- `clearCabinetOnTransition` (`src/lib/cabinetTransition.ts`) clears all cabinet members when a new government takes office; it is called from election resolution, not from the turn loop directly.
+
+### Phase groups
+
+The table groups phases by concern. It is illustrative, not exhaustive (the registry also holds governor/SCOTUS, extraction and prospecting, decolonization, spheres of influence, impeachment, by-elections and ledger-reconciliation phases not shown).
 
 | Section                    | Phases                                                                                                                                                                                                                                                                       | Key constraint                                      |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -45,55 +63,78 @@
 | 13. History & health       | `metricHistory`, `approvalSnapshot`, `interestRateSnapshot`, `partyHistorySnapshot`, `gameHealthSnapshot`, `suspiciousDetection`                                                                                                                                             | After metrics and central-bank updates              |
 | 14. Persistence            | `GameState` update, `TurnLog` insert, in-process event emit                                                                                                                                                                                                                  | **Critical, not wrapped in try/catch**              |
 
-- Server-enforced `lastTurnProcessed` timestamp prevents clock drift. `getGameTime()` (`src/lib/time/gameTime.ts`) uses this as `effectiveNow`, not `new Date()`, so election phase display stays correct even after batch turns.
-- `src/lib/cabinetTransition.ts` (`clearCabinetOnTransition`), clears all cabinet members when a new president takes office; called from election resolution, not the turn loop directly.
+### Multi-country support
 
-### Multi-Country Support
+- 29 country configs in `COUNTRY_CONFIGS` (`src/lib/constants/countries.ts`): US, UK, DE, JP, IE, SCO, WAL, BR, CN, NG, HU, PL, RO, YU, BG, BLR, CS, UKR, BAL, RU, FR, IT, ES, SE, TR, GR, AT, FI and DD. Raw string literals (`"US"`, `"UK"`) are banned by the custom ESLint rule `local/no-country-literals` (`eslint.config.*`); use `CountryId` and `COUNTRY_CONFIGS`.
+- Each country has its own legislature type, election schedule and regional structure, driven by per-country config rather than hardcoded branching.
+- UK: House of Commons, 650 seats in the modern map (625 in the 1953 preset), with a 240-turn (5 game year) regular cycle (`CYCLE_TURNS.commons` in `src/lib/constants/partyOrg.ts`); constituency MPs are stored in `electedOfficials`. See [UK Elections](./uk-elections.md).
+- JP: National Diet (Shugiin 465 seats and Sangiin 248 seats); full bill lifecycle via `jpBillLifecycle`; snap elections supported.
+- Germany: Bundestag and Bundesrat labels, Chancellor executive, EUR/ECB currency mapping, DAX exchange and DE regional budget processing.
 
-- 29 country configs in `COUNTRY_CONFIGS` (`src/lib/constants/countries.ts`), covering the US, UK, and Ireland/Scotland/Wales alongside a broader eastern-bloc and western-Europe roster (Japan, China, Nigeria, Brazil, France, Italy, Spain, Sweden, Turkey, Greece, Austria, Finland, and the RU/DD/PL/CS/HU/RO/BG/YU/UKR/BLR/BAL one-party-bloc set). Raw string literals (`"US"`, `"UK"`, etc.) are banned by a custom ESLint rule (`local/no-country-literals`), use `CountryId`/`COUNTRY_CONFIGS`.
-- Each country has its own legislature type (Congress / House of Commons / National Diet / etc.), election schedule, and regional structure, driven by per-country config rather than hardcoded branching.
-- UK: House of Commons (650 seats, 480-turn cycles); constituency MPs stored in `electedOfficials`.
-- JP: National Diet (Shugiin 465 seats + Sangiin 248 seats); full bill lifecycle via `jpBillLifecycle`; snap elections supported.
-- Germany: active configuration with Bundestag/Bundesrat labels, Chancellor executive, EUR/ECB currency mapping, DAX exchange, and DE regional budget processing.
+### Communication and notifications
 
-## Communication & Notifications
+- Notifications are stored in the `notifications` collection and surfaced on the next page load. There are 146 types (`NOTIFICATION_TYPES` in `src/lib/db/types/notifications.ts`). The UI offers a paginated list, type filter, search, bulk delete, mark-all-read, URL-based filters and date grouping.
+- Hero banners are served through `/api/images/hero/[slug]`, which answers with a 307 redirect to the hosted image (no server-side proxying). The slug set (`HERO_URLS` in `src/app/api/images/hero/[slug]/route.ts`) covers government and institution banners per country plus one banner per commodity sector. Component: `<HeroImage>` (`src/components/HeroImage.tsx`).
+- Client toasts use `useToast()` from `@/contexts/ToastContext`: `showToast("Message", "success" | "error" | "info")`.
 
-### Notifications
+### Security and fairness
 
-- Stored in MongoDB `notifications` collection; surfaced on next page load.
-- 146 notification types (`NOTIFICATION_TYPES` in `src/lib/db/types/notifications.ts`): election results, leadership events, bill lifecycle, cabinet, party events, NPP influence, achievements, and more.
-- UI: paginated list, type filter, search, bulk delete, mark-all-read, URL-based filters, date grouping.
+- All game logic is validated server-side; client actions are verified before execution.
+- Rate limiting applies to sensitive endpoints (elections, Congress, feedback).
+- Admin routes require `requireAdmin()`; cron routes require `requireCron()`.
 
-### Hero Image System
+### Notable API routes
 
-- Tall gradient banners served through `/api/images/hero/[slug]`, which answers with a 307 redirect to the hosted image for the slug (no server-side proxying, so it costs no function time).
-- Slug set covers government/institution banners per country (`white-house`, `house-of-commons`, `downing-street`, `national-diet`, `bank-of-england`, `federal-reserve`, `great-hall-of-the-people`, etc.) plus one banner per commodity sector (`commodity-steel`, `commodity-oil`, `commodity-software`, ...). See `HERO_URLS` in `src/app/api/images/hero/[slug]/route.ts` for the current list.
-- Component: `<HeroImage>` (`src/components/HeroImage.tsx`) wraps Next.js `<Image>` with the proxy URL.
+| Route                                                | Method              | Purpose                                                                                     |
+| ---------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------- |
+| `/api/cron/turn`                                     | GET                 | Turn processor HTTP fallback (primary is in-process `node-cron`)                            |
+| `/api/cron/fog-update`                               | GET                 | Campaign fog-of-war visibility update                                                       |
+| `/api/auth/me`                                       | GET                 | Current user and character                                                                  |
+| `/api/elections`                                     | GET                 | All elections (filter by type/state/status)                                                 |
+| `/api/elections/[id]`                                | GET                 | Single election with candidates and tally                                                   |
+| `/api/elections/[id]/state/[stateId]/county-results` | GET                 | County-level vote distribution                                                              |
+| `/api/elections/[id]/state/[stateId]/cd-results`     | GET                 | Congressional district seat assignments                                                     |
+| `/api/country/[code]/legislature/members`            | GET                 | Chamber composition by country                                                              |
+| `/api/country/[code]/legislature/bills`              | GET/POST            | Bills list for the country's legislature; propose a bill (member/admin)                     |
+| `/api/country/[code]/legislature/leaders`            | GET                 | Presiding officer, head of government and opposition leader                                 |
+| `/api/whitehouse/cabinet`                            | GET                 | All cabinet positions with member and nomination data                                       |
+| `/api/whitehouse/cabinet/nominations`                | POST                | President nominates a character                                                             |
+| `/api/whitehouse/cabinet/nominations/[id]/vote`      | POST                | Senator votes on a nomination                                                               |
+| `/api/whitehouse/cabinet/fire`                       | POST                | President fires a cabinet member                                                            |
+| `/api/campaigns/[id]`                                | GET                 | Campaign detail (owner/party/public access tiers)                                           |
+| `/api/campaigns/mine`                                | GET                 | Current user's campaign                                                                     |
+| `/api/news`                                          | GET/POST            | News feed and post creation                                                                 |
+| `/api/country/[code]/approval`                       | GET                 | National government approval, per country                                                   |
+| `/api/country/[code]/budget/federal`                 | GET                 | Federal budget data, per country                                                            |
+| `/api/images/hero/[slug]`                            | GET                 | Hero banner redirect (307 to the image URL)                                                 |
+| `/api/roadmap`                                       | GET                 | Public roadmap data for wiki page                                                           |
+| `/api/admin/seed`                                    | GET/POST            | Universal game seeder (admin only)                                                          |
+| `/api/admin/roadmap`                                 | GET/POST/PUT/DELETE | Roadmap item management (admin only)                                                        |
+| `/api/admin/roadmap/categories`                      | GET/POST/PUT/DELETE | Roadmap category management (admin only)                                                    |
+| `/api/admin/law-types`                               | POST                | Create custom legislation type (admin only)                                                 |
+| `/api/performance`                                   | GET                 | Game performance metrics                                                                    |
 
-### Toast Notifications
+## Data
 
-- Client-side feedback via `useToast()` from `@/contexts/ToastContext`.
-- Usage: `showToast("Message", "success" | "error" | "info")`.
+The high-level core collections the application reads and writes. Player-visible data is surfaced through API routes; `users`, `adminLogs`, `actionLogs` and `gameConfig` are internal.
 
-## Database Schema (High-Level)
+### Core
 
-### Core Collections
-
-| Collection                     | Purpose                                                                 |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `users`                        | Auth credentials, ban status, fingerprints                              |
-| `characters`                   | Player stats, funds, actions, office, policy positions, bio             |
-| `npps`                         | AI politicians with personality traits, cooldowns, influence state      |
-| `elections`                    | Active/upcoming/completed races (all types)                             |
-| `electionCandidates`           | Per-candidate rows; status active/withdrawn                             |
-| `electionVoteTallies`          | General-phase vote totals, turn snapshots, seats estimate               |
-| `primarySnapshots`             | Hourly primary standings for trend display                              |
-| `electedOfficials`             | Current office holders (players + NPPs); canonical post-election source |
-| `politicalParties`             | Party data, treasury, action pool, leadership IDs                       |
-| `statePartyOrg`                | Per-state-party org level, treasury, leadership, tax rate               |
-| `statePartyElections`          | Leadership elections for Chair/VC/Treasurer                             |
-| `statePartyVotes`              | Votes cast in state party leadership elections                          |
-| `statePartyElectionCandidates` | Candidates in state party leadership elections                          |
+| Collection                     | Purpose                                                                 | Player-visible |
+| ------------------------------ | ----------------------------------------------------------------------- | -------------- |
+| `users`                        | Auth credentials, ban status, fingerprints                              | No             |
+| `characters`                   | Player stats, funds, actions, office, policy positions, bio             | Yes            |
+| `npps`                         | AI politicians with personality traits, cooldowns, influence state      | Yes            |
+| `elections`                    | Active/upcoming/completed races (all types)                             | Yes            |
+| `electionCandidates`           | Per-candidate rows; status active/withdrawn                             | Yes            |
+| `electionVoteTallies`          | General-phase vote totals, turn snapshots, seats estimate               | Yes            |
+| `primarySnapshots`             | Hourly primary standings for trend display                              | Yes            |
+| `electedOfficials`             | Current office holders (players and NPPs); canonical post-election source | Yes          |
+| `politicalParties`             | Party data, treasury, action pool, leadership IDs                       | Yes            |
+| `statePartyOrg`                | Per-state-party org level, treasury, leadership, tax rate               | Yes            |
+| `statePartyElections`          | Leadership elections for Chair/VC/Treasurer                             | Yes            |
+| `statePartyVotes`              | Votes cast in state party leadership elections                          | Partly         |
+| `statePartyElectionCandidates` | Candidates in state party leadership elections                          | Yes            |
 
 ### Legislation
 
@@ -105,7 +146,7 @@
 | `committeeAssignments` | Committee positions (Chair, Ranking Member) per legislation type           |
 | `statePolicies`        | Base policy per legislation type for nation and each state                 |
 
-### Elections & Leadership
+### Elections and leadership
 
 | Collection                    | Purpose                                                                        |
 | ----------------------------- | ------------------------------------------------------------------------------ |
@@ -121,150 +162,152 @@
 | Collection           | Purpose                                                                    |
 | -------------------- | -------------------------------------------------------------------------- |
 | `cabinetNominations` | Pending and resolved cabinet nominations; status active/confirmed/rejected |
-| `cabinetMembers`     | Confirmed cabinet members (position → character mapping)                   |
+| `cabinetMembers`     | Confirmed cabinet members (position to character mapping)                  |
 
-### Campaigns & Economy
+### Campaigns, geography and metrics
 
-| Collection           | Purpose                                                              |
-| -------------------- | -------------------------------------------------------------------- |
-| `campaigns`          | Campaign state: resource allocation, manager assignment              |
-| `campaignOperations` | Log of campaign spending, upgrades, activities                       |
-| `countyElectionData` | County-level partisan lean and population for election visualization |
+| Collection              | Purpose                                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| `campaigns`             | Campaign state: resource allocation, manager assignment              |
+| `campaignOperations`    | Log of campaign spending, upgrades, activities                       |
+| `countyElectionData`    | County-level partisan lean and population for election visualization |
+| `states`                | Population, GDP, lean, house districts                               |
+| `stateDemographics`     | Per-state demographic groups, category weights                       |
+| `demographicCategories` | Category definitions (race, gender, etc.) and groups                 |
+| `stateMetrics`          | 9-category metrics per state                                         |
 
-### Geography & Metrics
+### Social, NPP and content
 
-| Collection              | Purpose                                              |
-| ----------------------- | ---------------------------------------------------- |
-| `states`                | Population, GDP, lean, house districts               |
-| `stateDemographics`     | Per-state demographic groups, category weights       |
-| `demographicCategories` | Category definitions (race, gender, etc.) and groups |
-| `stateMetrics`          | 9-category metrics per state                         |
+| Collection             | Purpose                                              |
+| ---------------------- | ---------------------------------------------------- |
+| `newsPosts`            | News posts created by players                        |
+| `newsReactions`        | Reactions and comments on news posts                 |
+| `notifications`        | Per-player notification queue (146 types, paginated) |
+| `feedback`             | Bug reports and suggestions (with captured context)  |
+| `nppInfluenceAttempts` | Records of influence attempts                        |
+| `nppRelationships`     | Player-NPP relationship scores                       |
+| `nppEndorsements`      | NPP endorsements of candidates                       |
+| `playerEndorsements`   | Player endorsements                                  |
 
-### Social & Content
-
-| Collection      | Purpose                                              |
-| --------------- | ---------------------------------------------------- |
-| `newsPosts`     | News posts created by players                        |
-| `newsReactions` | Reactions and comments on news posts                 |
-| `notifications` | Per-player notification queue (146 types, paginated) |
-| `feedback`      | Bug reports and suggestions (with captured context)  |
-
-### NPP Relations
-
-| Collection             | Purpose                        |
-| ---------------------- | ------------------------------ |
-| `nppInfluenceAttempts` | Records of influence attempts  |
-| `nppRelationships`     | Player-NPP relationship scores |
-| `nppEndorsements`      | NPP endorsements of candidates |
-| `playerEndorsements`   | Player endorsements            |
-
-### Admin & System
+### Admin and system
 
 | Collection          | Purpose                                                                    |
 | ------------------- | -------------------------------------------------------------------------- |
 | `adminLogs`         | Admin activity audit trail                                                 |
 | `actionLogs`        | Records of player action execution                                         |
 | `gameConfig`        | Turn config, action costs, office bonuses, starting stats                  |
-| `gameState`         | Current turn number, pause state, `lastTurnProcessed`, next scheduled turn |
+| `gameState`         | Current turn number, pause state, `lastTurnProcessed`, `isProcessing` lock, `fastMode`, next scheduled turn |
 | `roadmapItems`      | Admin-managed roadmap entries with phase, category, status                 |
 | `roadmapCategories` | Category/subcategory groupings for roadmap items                           |
 
-## Deployment Considerations
+The list is not exhaustive; economy, central bank, corporation and trade collections are documented in their own pages. Indexes are managed by versioned migration entries under `src/lib/migrations/entries/` and the index seeder (`src/lib/admin/seed/seedIndexes.ts`).
 
-### Hosting
+## Configuration
 
-- **App**: Deployed on Railway (`railway.toml`, Nixpacks build, `next start`). Any Node.js-compatible host would work in principle, but the boot path (`instrumentation.ts` starting `node-cron`, `NODE_OPTIONS=--max-old-space-size` heap cap, `/api/health` healthcheck) is tuned for Railway specifically.
-- **Database**: MongoDB Atlas or self-hosted.
-- **Cron**: `node-cron` (`src/lib/cron.ts`) runs inside the Next.js process, started from `instrumentation.ts` at boot, the same in every environment, not just locally. `GET /api/cron/turn` exists as an HTTP-triggerable fallback protected by `CRON_SECRET`, but the primary turn cron is in-process, not an external scheduler.
+| Setting | Default | Where set |
+| --- | --- | --- |
+| `TURN_CRON_MINUTE` | `0` (only `0` or `30` accepted; other values fall back to 0 with a warning) | environment, read by `resolveTurnCronMinute` in `src/lib/cron/turnCronMinute.ts` |
+| `GameState.fastMode` | off; when on, the turn schedule is `0,30 * * * *` | `gameState` document, read in `src/lib/cron.ts` |
+| `TURN_PHASE_TIMEOUT_MS` | 4 minutes (`DEFAULT_PHASE_TIMEOUT_MS`); clamped to 1 to 30 minutes | environment, `resolvePhaseTimeoutMs` in `src/lib/turn/processingLock.ts` |
+| `TURN_LOCK_STALE_MS` | 20 minutes | `src/lib/turn/processingLock.ts` |
+| `TURN_LOCK_HEARTBEAT_MS` | 30 seconds | `src/lib/turn/processingLock.ts` |
+| `CRON_SECRET` | none; required by `requireCron()` | environment |
+| `NODE_OPTIONS` | `--max-old-space-size=3072 --max-semi-space-size=64` | `startCommand` in `railway.toml` |
+| Health check | path `/api/health`, timeout 300 s, restart on failure, 5 retries | `railway.toml` |
+| `GameState.forexEnabled` | gates the forex phase | `gameState` document |
+| Game time cache | 5 seconds (`CACHE_TTL_MS`), invalidated by `sync-date` | `src/lib/time/gameTime.ts` |
+| Cron route `maxDuration` | 800 seconds | `src/app/api/cron/turn/route.ts` |
 
-### Scaling
+Other in-process schedules registered in `src/lib/cron.ts`: the stuck-lock sweep (`*/5 * * * *`), fog of war, stock-exchange refresh, share-fill recovery, retention, money journal prune and alt scoring, among others.
 
-- **DB indexes**: managed via versioned migration entries under `src/lib/migrations/entries/` and the index seeder (`src/lib/admin/seed/seedIndexes.ts`); too many to enumerate here.
-- **Turn processor**: Single-threaded sequential; `/api/cron/turn` allows up to `maxDuration = 800` seconds for the full phase pipeline, well above the old 60-second target.
-- **Game time cache**: `getGameTime()` (`src/lib/time/gameTime.ts`) caches for 5 seconds; invalidated explicitly by `sync-date`.
+## Timing
 
-## Testing
+```mermaid
+flowchart TD
+  A[node-cron primary :00 or :30] --> L{turn lock free?}
+  B[backup cron +30 min] --> G{turn completed this hour?}
+  G -- no --> L
+  G -- yes --> X[skip]
+  L -- held --> S[skip, log]
+  L -- free --> P[acquire isProcessing lock, heartbeat 30 s]
+  P --> R[run registry phases in order, 4 min timeout each]
+  R --> W[persist GameState and TurnLog]
+  W --> U[release lock, emit event]
+  C[stuck-lock sweep every 5 min] -. repossess stale lock .-> L
+```
 
-| Layer       | Tool       | Command            | Notes                                                                             |
-| ----------- | ---------- | ------------------ | --------------------------------------------------------------------------------- |
-| Unit        | Vitest     | `npm test`         | `src/**/*.test.ts`                                                                |
-| Integration | Vitest     | `npm test`         | API route tests with mocked MongoDB                                               |
-| E2E         | Playwright | `npm run test:e2e` | `e2e/*.spec.ts`; requires `npm run dev`; set `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` |
+- The primary fires at the top of each turn hour; the backup 30 minutes later; the stuck-lock sweep every 5 minutes. Phase order inside the turn is the registry order in `src/simulation/phases/turnPhaseRegistry.ts`.
+- Within a turn, ordering that matters: share-price recompute before market snapshots; the election chain in section 7 strictly in order; parliamentary government after election resolution; `inflationRecalc` after national metrics; history snapshots last; persistence is the final step.
+- One game year is 48 turns (`fiscalYear` runs at turn 40 of 48).
 
-## Security & Fairness
+## Worked trace
 
-- All game logic validated server-side. Client actions verified before execution.
-- Server-enforced `lastTurnProcessed` timestamps prevent clock manipulation.
-- Rate limiting on sensitive endpoints (elections, Congress, feedback).
-- Custom ESLint rule `local/no-country-literals` prevents hardcoded country ID comparisons.
-- Admin routes require `requireAdmin()`; cron routes require `requireCron()` with `Authorization: Bearer ${CRON_SECRET}`.
+Normal mode, `TURN_CRON_MINUTE` unset (0), one world.
 
-## Notable API Routes
+1. 14:00 UTC: `turnCronSchedule(0, false)` is `0 * * * *`, so the primary cron fires. `getGameState()` shows `isActive` and no live lock, the lock is taken and heartbeated every 30 s, and the registry phases run in order.
+2. The turn completes at 14:02 and `TurnLog` is written with real time 14:02.
+3. 14:30 UTC: `backupTurnSchedule(0)` is `(0 + 30) % 60 = 30`, so `30 * * * *` fires. `shouldFireBackupTurn` computes `turnHourBucket(14:02, 0) = floor(14:02 / 1h) = hour 14` and `turnHourBucket(14:30, 0) = hour 14`. Same bucket, so `alreadyRanThisHour` is true and the backup returns false: no second turn.
+4. Alternative, primary missed: no completed turn in hour 14, buckets differ from the latest completed turn (hour 13), so the backup fires and runs the turn at 14:30.
+5. With `TURN_CRON_MINUTE=30`: the turn fires at 14:30 and completes at 14:31. `turnHourBucket(14:31, 30) = floor((14:31 - 0:30) / 1h)` is bucket 14; the backup at 15:00 gives `floor((15:00 - 0:30) / 1h)` is also 14, so it skips. The backup is `(30 + 30) % 60 = 0`, i.e. `0 * * * *`.
+6. If the process died mid-turn at 14:00 with the last heartbeat at 14:05, the lock is considered stale after `TURN_LOCK_STALE_MS` (20 minutes), i.e. from 14:25; the stuck-lock sweep (every 5 minutes) can then repossess it and the 14:30 backup can run.
 
-| Route                                                | Method              | Purpose                                                                                     |
-| ---------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------- |
-| `/api/cron/turn`                                     | GET                 | Hourly turn processor (in-process `node-cron`; this route is the HTTP-triggerable fallback) |
-| `/api/cron/fog-update`                               | GET                 | Campaign fog-of-war visibility update                                                       |
-| `/api/auth/me`                                       | GET                 | Current user + character                                                                    |
-| `/api/elections`                                     | GET                 | All elections (filter by type/state/status)                                                 |
-| `/api/elections/[id]`                                | GET                 | Single election with candidates and tally                                                   |
-| `/api/elections/[id]/state/[stateId]/county-results` | GET                 | County-level vote distribution                                                              |
-| `/api/elections/[id]/state/[stateId]/cd-results`     | GET                 | Congressional district seat assignments                                                     |
-| `/api/country/[code]/legislature/members`            | GET                 | Chamber composition by country (e.g. UK Commons: 650 seats, party breakdown)                |
-| `/api/country/[code]/legislature/bills`              | GET/POST            | Bills list for the country's legislature; propose a bill (member/admin)                     |
-| `/api/country/[code]/legislature/leaders`            | GET                 | Presiding officer / head of government / opposition leader for the country                  |
-| `/api/whitehouse/cabinet`                            | GET                 | All cabinet positions with member + nomination data                                         |
-| `/api/whitehouse/cabinet/nominations`                | POST                | President nominates a character                                                             |
-| `/api/whitehouse/cabinet/nominations/[id]/vote`      | POST                | Senator votes on a nomination                                                               |
-| `/api/whitehouse/cabinet/fire`                       | POST                | President fires a cabinet member                                                            |
-| `/api/campaigns/[id]`                                | GET                 | Campaign detail (owner/party/public access tiers)                                           |
-| `/api/campaigns/mine`                                | GET                 | Current user's campaign                                                                     |
-| `/api/news`                                          | GET/POST            | News feed and post creation                                                                 |
-| `/api/country/[code]/approval`                       | GET                 | National government approval, per country                                                   |
-| `/api/country/[code]/budget/federal`                 | GET                 | Federal budget data, per country                                                            |
-| `/api/images/hero/[slug]`                            | GET                 | Hero banner redirect (307 to the image URL)                                                           |
-| `/api/roadmap`                                       | GET                 | Public roadmap data for wiki page                                                           |
-| `/api/admin/seed`                                    | GET/POST            | Universal game seeder (admin only)                                                          |
-| `/api/admin/roadmap`                                 | GET/POST/PUT/DELETE | Roadmap item management (admin only)                                                        |
-| `/api/admin/roadmap/categories`                      | GET/POST/PUT/DELETE | Roadmap category management (admin only)                                                    |
-| `/api/admin/law-types`                               | POST                | Create custom legislation type (admin only)                                                 |
-| `/api/performance`                                   | GET                 | Game performance metrics                                                                    |
+## Edge cases and limits
 
-## Implementation Status
+- **Fast mode** makes `:00` and `:30` both real turns; the backup never suppresses itself and the stuck-lock path leaves `:30` to the main cron.
+- **Another turn already processing:** `processTurn` logs "Skipping - another turn is already processing" and returns.
+- **Only `0` and `30` are valid turn minutes** because every other schedule (market tick `:15/:45`, share-fill sweep `:07/:22/:37/:52`) is placed relative to those two.
+- **Gameplay-visible time is `lastTurnProcessed`-based**, not wall clock, so batch catch-up turns do not misplace election phases.
+- **Shared lock:** the `gameState` processing lock is also taken by other long operations (for example a forex migration), so lock recovery only repossesses a lock tagged as a turn lock.
+- **Phase timeout:** a phase that exceeds its timeout is reported as failed promptly; later work does not overlap it. A permanently hung function needs process recovery.
+- Notification and country counts quoted on this page (146, 29) change when types or countries are added.
 
-| System                                                                             | Status         |
-| ---------------------------------------------------------------------------------- | -------------- |
-| Authentication + characters                                                        | ✅ Complete    |
-| Turn system (modular, 150+ phases via a phase registry)                            | ✅ Complete    |
-| Elections (all 5 types, perpetual, Electoral College)                              | ✅ Complete    |
-| NPP system (entry, dropout, influence, Speaker/leadership auto-vote)               | ✅ Complete    |
-| Bill lifecycle (two chambers + President)                                          | ✅ Complete    |
-| Party system (national + state, leadership elections)                              | ✅ Complete    |
-| Cabinet (nomination → Senate vote → confirm/fire)                                  | ✅ Complete    |
-| Congress leadership (Speaker + House/Senate leaders, auto-trigger after elections) | ✅ Complete    |
-| Campaign fund generation + taxes                                                   | ✅ Complete    |
-| Campaign manager pages (3-tier access, dedicated `/campaign/[id]`)                 | ✅ Complete    |
-| Campaign song (YouTube embed, autoplay controls)                                   | ✅ Complete    |
-| Demographics + state metrics (9 categories)                                        | ✅ Complete    |
-| County/district election maps                                                      | ✅ Complete    |
-| News / posts system                                                                | ✅ Complete    |
-| Admin panel (fully modularised, Law Types, Universal Seeder)                       | ✅ Complete    |
-| Map view (real geographic paths, Political Lean mode)                              | ✅ Complete    |
-| Player bio + profile page                                                          | ✅ Complete    |
-| Achievements system (rarity tiers; `src/lib/achievements/`)                                | ✅ Complete    |
-| Notifications (146 types, pagination, filtering)                                   | ✅ Complete    |
-| Discord integration                                                                | ✅ Complete    |
-| Multi-country support (29 configured countries)                                    | ✅ Complete    |
-| UK House of Commons (composition, bills, leadership)                               | ✅ Complete    |
-| Roadmap system (admin-managed, public wiki page)                                   | ✅ Complete    |
-| Public + developer changelog page                                                  | ✅ Complete    |
-| API validation (Zod schemas, admin + key routes)                                   | ✅ Complete    |
-| API testing (Vitest integration + Playwright E2E)                                  | ✅ Complete    |
-| API hardening (rate limiting, request logging)                                     | ✅ Complete    |
-| Legislative amendments                                                             | 🔲 Placeholder |
-| US Senate filibuster / cloture and veto override                                   | ✅ Complete    |
-| Policy effects on state metrics and granular demographics                          | ✅ Complete    |
-| Presidential and regional executive orders                                         | ✅ Complete    |
-| Special executive appointments beyond the existing cabinet and succession systems  | 🔲 Planned     |
+## Invariants
+
+- At most one turn processes at a time: the `isProcessing` lock on `gameState`, with heartbeat and stale reclaim in `src/lib/turn/processingLock.ts`. Tested in `src/lib/turn/processingLock.test.ts`.
+- The backup turn does not double-run a completed turn hour: `src/lib/cron/backupFireGuard.test.ts`.
+- Turn minute is 0 or 30: `src/lib/cron/turnCronMinute.test.ts`.
+- Phase registry content and ordering: `src/simulation/phases/turnPhaseRegistry.test.ts` and `src/simulation/phases/countryElectionPhaseNames.test.ts`.
+- No raw country literals: enforced by the `local/no-country-literals` ESLint rule at lint time.
+- Persistence of `GameState` and `TurnLog` is not wrapped in try/catch by design, so a failure there is loud rather than silent.
+- Not enforced: that the election-resolution phases stay in their documented order beyond what the registry test pins; the order is a convention of the registry list.
+
+## Failure and recovery
+
+- **Missed primary cron:** the backup fires half an hour later and runs the turn if none completed that hour.
+- **Stale or stuck lock:** a turn that stops heart-beating leaves the lock held. After the 20-minute stale window the 5-minute sweep repossesses turn locks only and does not start a turn itself; the next scheduled cron then runs.
+- **Crash or memory trip mid-turn:** the process exits cleanly, releasing the lock where it can (the in-flight lock release in `src/lib/turnSystem.ts`). Crash recovery resumes from the last durable phase result (`src/simulation/engine/turnPhaseDurability.test.ts`, `turnPhaseResumeResults.test.ts`); work that crash recovery skips is repaired by the next scheduled reconciliation.
+- **Slow phase:** the per-phase timeout reports failure and the turn proceeds; results later phases depended on are dropped for that turn and recomputed on the next.
+- **Scheduler silent while the process is alive:** monitored by a cron monitor that raises an alert on missed check-ins; the HTTP fallback route can be fired by an authorized caller.
+- **Data drift in a collection:** repaired by a targeted data heal or a re-run of the owning phase; the individual system pages list their heals.
+
+## Connections
+
+**Driven by:**
+
+- The hosting platform start command and environment (`railway.toml`, `instrumentation.ts`).
+- `gameState` flags (`isActive`, `fastMode`, `forexEnabled`).
+
+**Affects:**
+
+- Every other system: each runs as a phase or a library called by one. Key pages: [Elections](./elections.md), [Parliamentary Government](./parliamentary-government.md), [Cabinet](./cabinet.md), [UK Elections](./uk-elections.md), [Bills and legislation](./bills-legislation.md), [National Budget](./national-budget.md).
+- Notifications and the player UI read the output collections listed under Data.
+
+## Tests
+
+- Scheduling: `src/lib/cron.test.ts`, `src/lib/cron/turnCronMinute.test.ts`, `src/lib/cron/backupFireGuard.test.ts`.
+- Lock and turn engine: `src/lib/turn/processingLock.test.ts`, `src/lib/turnSystem.autoPauseDrift.test.ts`, `src/lib/turnSystem.initializeGameState.test.ts`, `src/simulation/engine/turnEngine.test.ts`, `turnPhaseRuntime.test.ts`, `turnPhaseDurability.test.ts`, `turnPhaseResumeResults.test.ts`, `turnCompletion.test.ts`.
+- Registry: `src/simulation/phases/turnPhaseRegistry.test.ts`, `countryElectionPhaseNames.test.ts`.
+- Integration: `src/app/api/cron/turn/turn.integration.test.ts`, `fullTurnFlow.integration.test.ts`; auth guard `src/lib/api/requireCron.test.ts`.
+- Health: `src/app/api/health/route.test.ts`.
+- End to end (Playwright, `e2e/`): `smoke.spec.ts`, `critical-flows.spec.ts`, `performance.spec.ts`, `cache-privacy.spec.ts`; requires `npm run dev` and the `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` variables.
+- Gaps: no test pins the full phase-order table above; the ordering constraints are verified only through the phase tests that cover individual pairs.
+
+## Known issues and history
+
+- An earlier version of this page described the UK Commons cycle as 480 turns; the code value is 240 (`CYCLE_TURNS.commons`).
+- An earlier version described a fixed hourly or half-hourly schedule only; `TURN_CRON_MINUTE` now lets two worlds on one host take turns half an hour apart.
+- The phase list was moved out of `turnSystem.ts` into the registry; the count is 151 base phases.
+- Legislative amendments are still a placeholder; special executive appointments beyond the cabinet and succession systems are planned. All other systems in the earlier status table (authentication, turn system, elections, NPPs, bills, parties, cabinet, Congress leadership, campaigns, demographics, maps, news, admin, achievements, notifications, Discord, multi-country, UK Commons, roadmap, changelog, API validation and hardening, filibuster and veto override, policy effects, executive orders) are shipped.
+- The Railway heap and semi-space settings were raised after a turn-time memory watchdog tripped mid-turn; the reasoning is recorded in the comments in `railway.toml`.
 
 Last checked: 2026-10-29, version 1.18.0

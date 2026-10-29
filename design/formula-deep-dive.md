@@ -1,22 +1,31 @@
 # Formula Deep-Dive
 
+## Summary
+
 This reference documents the key formulas and calculations that drive election, influence, turnout, fund and action mechanics. Every constant is listed with its value and the source file it lives in, so the page can be checked against the code.
 
 Player guide: [Reference: Formulas](https://www.ahousedividedgame.com/wiki/reference-formulas)
 
-## Election Vote Calculation
+The formulas split into seven groups, each a subsection of Rules: the general-election vote (turn pool, candidate weight, bonuses, floors), political influence, presidential and state primary scoring, demographic turnout, fund generation, the action economy, and state lean. Each group has at least one worked example inline, and the Worked trace section carries one case through the whole vote path to a stored tally.
 
-### Vote Turn Pool
+## Rules
+
+### Election Vote Calculation
+
+#### Vote Turn Pool
 
 Each turn, votes are allocated to candidates based on:
 
 ```
-effectiveTurnPool = turnPool × (1 + (stateApproval - 0.5) × 0.2) × officeStrength
+effectiveTurnPool = turnPool × approvalVoteMultiplier × officeStrength
+approvalVoteMultiplier = 1 + (stateApproval - 0.5) × slope
+slope = LEGISLATIVE_APPROVAL_VOTE_SLOPE = 0.2   (every race except the presidency)
+slope = PRESIDENTIAL_APPROVAL_VOTE_SLOPE = 0.5  (presidential general)
 ```
 
 `turnPool` is the share of the race's total vote pool cast this turn (`turnVoteWeight`, `src/lib/electionEngine/voteCalculations.ts`). The general-election window is split into three bands: the early band casts `EARLY_POOL_SHARE = 0.5` of the pool, the ramp band (up to `RAMP_TURNS = 8` turns) casts `RAMP_POOL_SHARE = 0.2`, and the final `ELECTION_DAY_TURNS = 4` turns cast `FINAL_POOL_SHARE = 0.3`. Races of 4 turns or fewer spread the pool evenly. If there is no early band, its share folds into the ramp so the shares still sum to 1. The window starts at the end of the primary, not at the race start, so primary turns do not dilute the early band.
 
-Approval is a small modifier, not a direct multiplier: 50% approval gives 1.0x, and each 10 points of approval above or below 50 shifts the pool by about 2% (`tallyManagement.ts`). `officeStrength` comes from `partyStrengthWeight` in the country's office-type config (`src/lib/constants/countries.ts`), defaulting to 0.9 when unset. US values:
+Approval is a small modifier, not a direct multiplier: 50% approval gives 1.0x. In every race except the presidency each 10 points of approval above or below 50 shifts the pool by about 2% (`tallyManagement.ts`); the presidential general uses the steeper slope, about 5% per 10 points, up to 25% at the extremes (`src/lib/presidentialElectionEngine.ts`). Both slopes live in `src/lib/electionEngine/approvalVoteMultiplier.ts`. `officeStrength` comes from `partyStrengthWeight` in the country's office-type config (field defined in `src/lib/constants/countries.ts`, looked up with a 0.9 default when unset; US values in `src/lib/countries/us/institutionsFacts.ts`). US values:
 
 - Governor: 1.0
 - President: 1.0
@@ -28,7 +37,7 @@ Why: the pool is scaled by how the state judges the party in power, but only by 
 
 **Worked example.** A House race has a 20 turn general window and a total pool of 1,000,000 votes. The early band has 8 turns (20 - 4 - 8), so each early turn casts 0.5 x 1,000,000 / 8 = 62,500. Each ramp turn casts 0.2 x 1,000,000 / 8 = 25,000. Each of the final 4 turns casts 0.3 x 1,000,000 / 4 = 75,000. With state approval at 60%, strength is (1 + (0.6 - 0.5) x 0.2) x 0.9 = 0.918, so a final-turn pool is 75,000 x 0.918 = 68,850 votes, split among candidates by weight.
 
-### Candidate Vote Share
+#### Candidate Vote Share
 
 Votes are allocated per demographic group, not with a single state-wide formula. For each group, every candidate gets a weight:
 
@@ -52,7 +61,7 @@ Factors a player can move: appeal (change position or build influence), reach (p
 
 Other terms in the stack, in plain words: `regResistance` is own-registration making voters harder to peel away, 1.0x to 1.3x (`REG_RESISTANCE_MAX_BONUS = 0.3`); `regBaseline` prices a party's current registration where a world authors partisan baselines; `supportMood` is the candidate's Support, 0.6x to 1.4x and neutral 1.0x at Support 50 (`SUPPORT_MOOD_FLOOR`, `SUPPORT_MOOD_CEILING`); `nppPenalty` is the NPP multiplier, `pgfMult` is the party-group favorability boost from addresses, `regimeMult` is the regime multiplier, and `partyFit` is the candidate's fit with the party platform.
 
-### State Org and Home State Bonuses
+#### State Org and Home State Bonuses
 
 Not part of the vote-share formula above but stack into it as `stateOrgMult` / `homeStateMult` (`src/lib/electionEngine/constants.ts`):
 
@@ -63,13 +72,13 @@ Not part of the vote-share formula above but stack into it as `stateOrgMult` / `
 
 Both bonuses multiply the weight as `1 + bonus`. **Worked example.** At org level 10 in a general election the org bonus is 0.15 x 0.75 = 0.1125, and at home the candidate adds 0.05, so the weight is multiplied by 1.1125 x 1.05 = 1.168. In a primary at level 10 it is 1.1875 x 1.2 = 1.425.
 
-### Minimum Vote Floor
+#### Minimum Vote Floor
 
 There is no 50%-of-base-vote floor. The actual floors are on the individual factors that feed the weight: `VOTE_REACH_FLOOR` clamps reach to at least ~0.1x, and `APPEAL_POSITION_FLOOR` (0.5, about 2% of max appeal) keeps position score above zero per axis. Together these keep even a badly-misaligned, low-influence candidate from hitting a literal zero weight in a group, but they do not guarantee any fixed share of the base vote pool.
 
-## Political Influence
+### Political Influence
 
-### Decay
+#### Decay
 
 ```
 decay = clamp(influence, 0, 100) × POLITICAL_INFLUENCE_DECAY_RATE × multiplier
@@ -82,19 +91,19 @@ Why: holding power costs home-state standing, and a government that is popular p
 
 **Worked example.** Influence 40 loses 40 x 0.0075 = 0.30 per turn, so 39.70 next turn. A member of the governing party at 50% approval loses 0.30 x 1.5 = 0.45.
 
-### Floors
+#### Floors
 
 - Players: floor 0 (decay cannot take influence below 0).
 - NPPs: floor `NPP_POLITICAL_INFLUENCE_FLOOR = 10`. The floor is a barrier, not a pull: an NPP already below 10 (a deliberately low-profile shell at 1, for example) is held in place, not raised.
 - New characters start at `NEW_CHARACTER_STARTING_INFLUENCE = 10` (a minimum over the configured starting value, `shared/constants/formulas.ts`).
 
-### National influence
+#### National influence
 
 Decay is `NATIONAL_INFLUENCE_DECAY_RATE = 0.01` of current national influence per turn. Passive gain from state influence (`calculateNationalInfluenceGain`) is `si / 50 - 0.5` for state influence `si` up to 50, and `0.5 + (si - 50) x 0.03` above 50 (so -0.5 at 0, 0 at 25, +0.5 at 50, +1.25 at 75, +2.0 at 100). Each turn applies decay first, then the gain, floored at 0 (`applyNationalInfluenceTurn`). Every role settles where gain equals decay, at 100 x gain.
 
-## Presidential Election Scoring
+### Presidential Election Scoring
 
-### Primary Score
+#### Primary Score
 
 ```
 score = alignmentScore(0-40) + partyInfluenceScore(0-20) + nationalReachScore(0-15) + favorabilityScore(0-25)
@@ -110,7 +119,7 @@ The component curves are in `src/lib/utils/normalizeNPI.ts`:
 - Favorability: `favorability / 100 x 25`.
 - The infamy multiplier above is applied to the total, and the result is rounded to one decimal.
 
-### State-level primary score
+#### State-level primary score
 
 Used for House, Senate, Governor and State Senate style races (`calcPrimaryScore`, `src/lib/primaryScore.ts`):
 
@@ -128,24 +137,23 @@ With no cached state lean the alignment collapses to a single party-only term, `
 
 Why the presidential weights differ: the presidential primary is national, so no state lean is involved, and favorability gets the larger weight because it is the most decisive variable in the general election.
 
-### Electoral College
+#### Electoral College
 
-- 538 total electoral votes
-- 270 needed to win
-- ME and NE split by congressional district with lean proxies (UNIT_LEAN)
-- 269-269 tie: deterministic coin flip (SHA-256 of election + candidate IDs)
+- 538 total electoral votes and 270 needed to win (`TOTAL_ELECTORAL_VOTES`, `ELECTORAL_MAJORITY`, `src/lib/constants/states.ts`). These are the modern tables. The 1953 and 1991 presets use their own tables (`ELECTORAL_VOTES_1953`, `ELECTORAL_VOTES_1991`, picked by `getElectoralVotes`), and the majority follows the era's total (`electoralMajorityFor`, `src/lib/elections/presidentialResolutionDisplay.ts`).
+- ME and NE split by congressional district with lean proxies (`UNIT_LEAN`, `src/lib/constants/states.ts`).
+- No candidate at a majority (including a 269-269 split): the result goes to the contingent election, where state delegations in the House vote for President (see [Contingent Election](./contingent-election.md)). SHA-256 is used only to break ties inside that process (`src/lib/elections/contingentElection.ts`), not to flip a coin on the Electoral College result.
 
-### Independent Penalty
+#### Independent Penalty
 
 Independent presidential candidates receive a 0.3x vote multiplier (`src/lib/presidentialElectionEngine.ts`).
 
-## Demographic Turnout
+### Demographic Turnout
 
-### Turnout Modifier Range
+#### Turnout Modifier Range
 
 Each demographic group: -20 to +20 percentage points (`TURNOUT_CAP = 20`, `src/lib/campaignTargeting/rules.ts`; the legacy path clamps at the same 20 in `src/lib/utils/diminishingReturns.ts`).
 
-### Decay
+#### Decay
 
 ```
 modifier = modifier × 2^(-1/6)   (TURNOUT_HALF_LIFE = 6 turns, about 10.9% per turn)
@@ -160,7 +168,7 @@ Values with magnitude under 0.01 snap to 0. This is the rule for races created u
 | 10 | 31% | 82% |
 | 20 | 10% | 67% |
 
-### Canvassing Effectiveness (campaign rules version 1)
+#### Canvassing Effectiveness (campaign rules version 1)
 
 ```
 distanceSquared = ((charEcon - demoEcon)² + (charSocial - demoSocial)²) / 2
@@ -185,7 +193,7 @@ boost         = applyDiminishingReturns(current, rawBoost)   // × (1 - |current
 
 The alignment multiplier floor of 0.1 is reached at distance 6.
 
-### Party GOTV
+#### Party GOTV
 
 Party budgets have a GOTV allocation targeted at a specific category or group (`gotvTargetCategory` / `gotvTargetGroup`), which feeds turnout for the tally (`processPartyGOTV`, `src/lib/turn/demographicTurnoutTurn.ts`).
 
@@ -199,9 +207,9 @@ A national budget divides the spend evenly across the country's regions before a
 
 **Worked example.** A party with 200,000 revenue an hour and a 5% GOTV budget spends 10,000, which is 2 points at alignment 1.0, or 0.8 points at alignment 0.4. At a current modifier of +10 the 0.8 becomes 0.4.
 
-## Fund Generation
+### Fund Generation
 
-### Passive Income
+#### Passive Income
 
 ```
 income = round((baseRate + donorBonus) × gdpScalar × priceLevel) + round(officeBonus × priceLevel)
@@ -223,7 +231,7 @@ Source: `getTotalFundGeneration`, `src/lib/utils/fundGeneration.ts`. Rates are p
 
 **Worked example.** A medium state, donor level 10, state influence 50, GDP scalar 1.0, price level 1: donor bonus is 200 x 10 x 1.5 = 3,000; base plus donor is 13,000; a House member adds $5,000 for $18,000 per hour.
 
-### Office Fund Bonuses
+#### Office Fund Bonuses
 
 Flat per hour, not scaled by GDP (`OFFICE_FUND_BONUS`, `src/lib/utils/fundGeneration.ts`):
 
@@ -235,9 +243,9 @@ Flat per hour, not scaled by GDP (`OFFICE_FUND_BONUS`, `src/lib/utils/fundGenera
 | Vice President | +$25,000/hr |
 | President, Prime Minister, Chancellor | +$50,000/hr |
 
-## Action Economy
+### Action Economy
 
-### Base Actions
+#### Base Actions
 
 `baseActionsPerTurn = 4`, plus the per-turn office bonus from `officeActionBonus` (`src/lib/seeds/reference/gameConfig.ts`, used by `src/lib/actions/officeActionBonus.ts`):
 
@@ -249,11 +257,11 @@ Flat per hour, not scaled by GDP (`OFFICE_FUND_BONUS`, `src/lib/utils/fundGenera
 
 A cabinet bonus stacks on top of the holder's legislative seat. The central bank chair adds `chairActionBonus = 3`. These are game-config values, so a world may override them.
 
-### Action Costs
+#### Action Costs
 
 Action costs vary by action and target. For example, setting a travel or primary campaign state costs 3, 5, 7 or 10 actions depending on the state's electoral votes (`getTravelActionCost` in `src/lib/constants/states.ts`). Advertise, fundraise and influence actions have their own costs.
 
-### State Adjacency Costs
+#### State Adjacency Costs
 
 - Home state: 1.0x
 - Neighboring state: 1.25x (`NEIGHBORING_STATE`, `src/lib/states/adjacency.ts`)
@@ -261,7 +269,7 @@ Action costs vary by action and target. For example, setting a travel or primary
 
 These multipliers apply to the action cost of Support and Attack only. Campaign, Advertise and Barnstorm have no distance multiplier.
 
-## State Lean Calculation
+### State Lean Calculation
 
 ```
 stateLean = weightedAverage(groupLeans, groupPopulations × groupTurnout)
@@ -273,7 +281,41 @@ Economic axis: Far Left (-5), Strong Left (-4), Left (-3), Lean Left (-2), Cente
 
 Social axis: Far Liberal (-5), Strong Liberal (-4), Liberal (-3), Lean Liberal (-2), Center-Liberal (-1), Moderate (0), Center-Trad (1), Lean Trad (2), Traditional (3), Strong Trad (4), Far Traditional (5).
 
+## Data
+
+The formulas read from and write to these collections. Intermediate weights are recomputed every turn from the inputs below; the stored result of the election path is the cumulative tally.
+
+| Collection | Fields read | Fields written | Where it comes from |
+| --- | --- | --- | --- |
+| `characters` | `favorability`, `infamy`, `politicalInfluence`, `donorBaseLevel`, `currentOffice`, `homeState`, `party`, `stats` | `politicalInfluence`, `politicalInfluenceDecayMultiplier`, `funds` or `currencyBalances.campaign` (income), the action pool | `actionRefresh.ts`, `turn/fundGeneration.ts` |
+| `states` | `population`, `gdp`, state lean | none by these formulas | Seeds and metric turns |
+| `stateDemographics`, `demographicDefaults`, `demographicCategories` | group shares, leans, per-archetype approvals | none by these formulas (the granular layer writes them, see [granular electorate](./granular-electorate-as-shipped.md)) | Seeds, legislation effects |
+| `stateDemographicTurnout` | per-group turnout modifiers | modifiers (canvass boost, decay, party GOTV) | `campaignTargeting/rules.ts`, `demographicTurnoutTurn.ts` |
+| `statePartyOrg` | `org`, `registration`, `registrationShare`, `stateTaxRate` | `treasury` (tax credits) | Party systems |
+| `politicalParties` | `nationalTaxRate` | `treasury` | Party systems |
+| `elections`, `electionCandidates` | window, race type, `campaignRulesVersion`, candidate stats | none | Election setup |
+| `electionVoteTallies` | running tally | per-candidate votes added each turn | `tallyManagement.ts` |
+| `governmentApprovals`, `stateApprovalHistory` | stored approval (coattails, history) | none here, see [government approval](./government-approval.md) | Approval snapshot |
+
+Player-visible results: election tallies (as results and polls), each character's own stats, funds and actions, party treasuries, and state approval. Raw modifiers and weights are not shown directly.
+
+## Configuration
+
+| Setting | Default | Where set | Effect |
+| --- | --- | --- | --- |
+| `gameConfig.baseActionsPerTurn` | 4 | `src/lib/seeds/reference/gameConfig.ts` | Base actions per turn |
+| `gameConfig.officeActionBonus` | per office (House 1, Senate 2, President 4) | `src/lib/seeds/reference/gameConfig.ts` | Per-turn office action bonus |
+| `gameConfig.chairActionBonus` | 3 | `src/lib/seeds/reference/gameConfig.ts` | Central bank chair bonus |
+| `gameConfig.campaignEraPriceLevelEnabled` | true on fresh worlds | `src/lib/seeds/reference/featureFlagDefaults.ts` | Scales fund generation by the era price level; off means 1 |
+| `gameState.preset`, `gameState.startingYear`, `gameState.currentYear` | world-specific | World reset | Era tables for electoral votes, GDP baseline, price level |
+| `Election.campaignRulesVersion` | 1 for new races, absent (0) for legacy | Stamped at election creation (`src/lib/db/types/election.ts`) | Canvass and decay rule set (see Demographic Turnout) |
+| `partyStrengthWeight` | 0.9 if unset | Office-type config per country (`src/lib/constants/countries.ts`) | Office strength in the vote pool |
+| Party tax rates | 0 to 33 | Party and state party settings | Share of fund generation taxed |
+
+Every constant named in Rules (for example `ORG_WEIGHT_EXPONENT`, `TURNOUT_HALF_LIFE`) is a source constant, not a runtime setting; changing it needs a code change.
+
 ## Timing
+
 
 The formulas run in different parts of the hourly turn (1 turn = 1 game week). The order is set in the turn processor (`src/lib/turn/`).
 
@@ -285,7 +327,49 @@ The formulas run in different parts of the hourly turn (1 turn = 1 game week). T
 
 Vote accumulation (`src/lib/electionEngine/tallyManagement.ts`) runs once per active race per turn, after turnout decay has already moved the modifiers it reads.
 
+Order of operations across one turn, with the source of each step:
+
+```
+group 1  Resources              action refresh (influence decay), fund generation
+group 2  Demographics           turnout decay, party GOTV
+group 7  Election resolution    primary resolution -> vote accumulation -> campaign spend reset
+...
+state effects stage             demographic effects, era checkpoints, approval snapshot
+```
+
+The state effects stage runs after election resolution in the same turn, so vote accumulation reads approval and demographic overlays as left by the previous turn's stage (approval is also recomputed live from current metrics, see [government approval](./government-approval.md)).
+
+## Worked trace
+
+One House general election, final-band turn, one demographic group, two candidates. Pool and approval come from the pool worked example above (20-turn window, total pool 1,000,000, state approval 60%, House strength 0.9).
+
+**Step 1, pool.** Final turn casts 0.3 x 1,000,000 / 4 = 75,000. Multiplier (1 + (0.6 - 0.5) x 0.2) x 0.9 = 0.918. Effective pool 68,850. Assume this group is 10% of the turnout-weighted pool: 6,885 votes.
+
+**Step 2, appeal.** Group sits at economic 0, social 0, so the direction bonus is 0 for both.
+
+| | Candidate A | Candidate B |
+| --- | --- | --- |
+| Position (econ, social) | (1, 1) | (-2, 1) |
+| `positionRaw` = 50 - 5 x 1 - 5 x 1, and 50 - 10 - 5 | 40 | 35 |
+| `positionScore` = 25 x (raw / 50)^1.5 + 0.5 | 25 x 0.7155 + 0.5 = 18.39 | 25 x 0.5857 + 0.5 = 15.14 |
+
+**Step 3, other terms.**
+
+| | A | B |
+| --- | --- | --- |
+| Influence 49 and 16, reach = sqrt(PI / 100) | 0.70 | 0.40 |
+| Favorability 64 and 50, group approval 0, approval = (fav / 100)^0.8 | 0.6998 | 0.5743 |
+| Party org 60 and 20 of 80, `(share)^0.2` | 0.75^0.2 = 0.9441 | 0.25^0.2 = 0.7579 |
+| Personal org floor 0.1 x reach x approval | 0.049, below party org | 0.023, below party org |
+| Infamy 40 and 0, `1 - 0.05 x infamy / 100` | 0.98 | 1.00 |
+| Other factors | 1.0 | 1.0 |
+
+**Step 4, weight.** A = 18.39 x 0.70 x 0.6998 x 0.9441 x 0.98 = 8.33. B = 15.14 x 0.40 x 0.5743 x 0.7579 = 2.64.
+
+**Step 5, share and votes.** A share 8.33 / 10.97 = 75.97%, B 24.03%. Of the 6,885 votes, A gets about 5,230 and B about 1,655. These are added to the candidates' running totals in `electionVoteTallies`. Rounding of individual group slices happens in the engine, so a real tally can differ by a vote or two.
+
 ## Edge cases and limits
+
 
 - Influence: player decay floors at 0, NPP decay floors at 10, and influence is clamped to 0 to 100 inside the decay and in `normalizeNPI`. Above 100 it counts as 100 in the general election.
 - Reach never reaches zero: `VOTE_REACH_FLOOR` is 0.1, and `APPEAL_POSITION_FLOOR` keeps position score above zero per axis. This is why even a badly placed, unknown candidate gets a small share.
@@ -293,8 +377,32 @@ Vote accumulation (`src/lib/electionEngine/tallyManagement.ts`) runs once per ac
 - Turnout modifiers clamp at +/-20 points, snap to 0 under 0.01, and decay by half-life on current races, 2% per turn on legacy races.
 - Tenure erosion stops at 15%. A first-term holder, open seat or fresh nominee is untouched.
 - Races of 4 turns or fewer have no early or ramp band: the pool is spread evenly.
-- A tie at 269-269 in the Electoral College is a deterministic coin flip (SHA-256 of election and candidate IDs), so the same inputs always give the same result.
+- No Electoral College majority, including 269-269, hands the race to the contingent election; ties inside that process are broken deterministically (SHA-256 of a seed and the sorted candidate ids), so the same inputs always give the same result.
 - Presidential party influence is uncapped (live values exceed 200), unlike national reach, which saturates toward 1.
+- Fund generation and action-cost scalars need a GDP baseline for the country and era; a country with no baseline row throws rather than inheriting the US denomination (`getGdpBaseline`).
+- State lean is stored on the integer -5 to +5 scale, so the 11 display labels are exact buckets, not ranges.
+- Deliberately excluded: there is no 50%-of-base-vote floor, no separate state-lean multiplier (lean is inside appeal), and no automatic demographic boost for being near the party position.
+
+## Invariants
+
+| Invariant | Enforced by |
+| --- | --- |
+| The three pool bands sum to 1, so per-turn weights integrate to the total pool (an empty early band folds into the ramp) | `src/lib/elections/electionTiming.test.ts` (conserves the pool over the General phase) and the fold-forward branch in `turnVoteWeight` |
+| Candidate shares in a group sum to about 100% | `src/lib/electionEngine/voteDistribution.test.ts` (shares sum) |
+| Normalised org shares sum to 1 across parties present | `src/lib/electionEngine/electionFormulaFactors.test.ts` |
+| Reach never falls below `VOTE_REACH_FLOOR`, so no weight is zero from influence alone | `applyVoteReachFloor` in `electionFormulaFactors.ts`; covered by `electionFormulaFactors.test.ts` |
+| Turnout modifiers stay within +/-20 points | Clamp in `canvassingBoost` and `addTurnoutBoost`; `src/lib/campaignTargeting/rules.test.ts` |
+| Influence stays within 0 to 100 (NPP floor 10) | `shared/constants/formulas.ts`; `shared/constants/formulas.test.ts` |
+| Money is conserved in party tax: character receives gross minus both taxes | Arithmetic in `src/lib/turn/fundGeneration.ts`; `src/lib/turn/fundGeneration.test.ts`. No runtime reconciliation specific to this step |
+| Presidential and legislative approval slopes stay at 0.5 and 0.2 | Constants only; not enforced by a dedicated test |
+
+## Failure and recovery
+
+- **A formula change shifts live tallies mid-race.** Weights are recomputed each turn from current inputs, so a deploy that changes a constant changes the next turn's slice, not past votes. Repair is a code revert; accumulated tallies are not rewritten.
+- **Missing inputs.** Missing state metrics treat approval as 50%; missing org data is neutral; a state with no census row skips the granular electorate and has no cells. These degrade quietly instead of failing the turn.
+- **Stale or mis-seeded demographics or party org** show up as implausible shares in one state. The repair is a data heal or reseed of the affected collection, then the next turn recomputes.
+- **Fund generation errors** (missing baseline row for a country) surface as turn-phase errors in monitoring; the fix is to add the baseline row and rerun the phase.
+- **Phase failures** are logged by the phase runner and show in turn diagnostics; the repair is to fix the cause and let the next turn recompute, since these formulas keep no state of their own beyond the tallies and modifiers listed in Data.
 
 ## Connections
 
@@ -310,11 +418,39 @@ Vote accumulation (`src/lib/electionEngine/tallyManagement.ts`) runs once per ac
 - [Fundraising & Ads](./fundraising-ads.md): fund generation feeds the campaign treasury.
 - [Canvassing](./canvassing.md): turnout boosts and decay are the canvassing mechanic's numbers.
 
-## Related Pages
+### Related pages
 
 - [Election Mechanics](./elections.md), Election system overview
 - [Demographics & Targeting](./demographics-targeting.md), Demographic details
 - [Stats & Actions](./stats-actions.md), Action costs and stats
 - [Government Approval](./government-approval.md), Approval system
+
+## Tests
+
+| Area | Test files |
+| --- | --- |
+| Pool bands and timing | `src/lib/elections/electionTiming.test.ts`, `src/lib/electionEngine/voteCalculations.test.ts` |
+| Weight factors (org, reach, tenure, support) | `src/lib/electionEngine/electionFormulaFactors.test.ts`, `src/lib/electionEngine/rules/tenureRetention.test.ts` |
+| Appeal and normalisation | `src/lib/utils/demographicAppeal.test.ts`, `src/lib/utils/normalizeNPI.test.ts`, `src/lib/utils/infamy.test.ts` |
+| Group vote distribution | `src/lib/electionEngine/voteDistribution.test.ts`, `src/lib/electionEngine/voteDistributionSwingFlow.test.ts` |
+| Vote accumulation | `src/lib/electionEngine/tallyManagement.test.ts` |
+| Primary score | `src/lib/primaryScore.test.ts` |
+| Presidential engine | `src/lib/presidentialElectionEngine.test.ts` |
+| Influence decay | `shared/constants/formulas.test.ts` |
+| Turnout and canvassing | `src/lib/campaignTargeting/rules.test.ts`, `src/lib/utils/turnoutDecay.test.ts`, `src/lib/turn/demographicTurnoutTurn.test.ts` |
+| Fund generation | `src/lib/utils/fundGeneration.test.ts`, `src/lib/utils/fundGeneration.era.test.ts`, `src/lib/turn/fundGeneration.test.ts` |
+| Action bonus | `src/lib/actions/officeActionBonus.test.ts`, `src/lib/turn/actionRefresh.test.ts` |
+
+Gaps: no direct unit test of `approvalVoteMultiplier`, and no test pins the presidential 0.5 slope. The Electoral College tie path is covered by the contingent election tests, not by a formula test.
+
+## Known issues and history
+
+- 2026-08-19: presidential primary weights rebalanced (favorability raised from 10 to 25, see Rules).
+- Tenure erosion was reworked from a flat points subtraction per term into a retention fraction (3% per term, cap 15%) after the old form wiped out ordinary long-serving holders' influence.
+- The general-election window starts at the end of the primary; counting primary turns had inflated the final turns to about two thirds of the vote.
+- Code comment drift: `src/lib/electionEngine/singleSeatIncumbency.ts` still refers to older erosion numbers in a comment; the constants in `electionFormulaFactors.ts` are authoritative.
+- `calcCandidateVotePotential` in `src/lib/electionEngine/voteCalculations.ts` is a legacy function that returns 0 at zero influence and is still tested; it is not on the live path, which uses `VOTE_REACH_FLOOR`.
+- Corrected 2026-10-29 (code contradicted this page): approval slope for the presidential general is 0.5, not 0.2; a 269-269 Electoral College split goes to the contingent election, not a coin flip; 538 and 270 are the modern tables only.
+- Unused code: `logarithmicPopulationScale` and `getDonorBaseBonusLogarithmic` in `src/lib/utils/fundGeneration.ts` are not used by the live income path (only referenced in a comment in `src/lib/npp/economyDefaults.ts`).
 
 Last checked: 2026-10-29, version 1.18.0
