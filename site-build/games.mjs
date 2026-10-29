@@ -16,7 +16,10 @@
 // sibling-checkout layout so a fresh clone still resolves something sane.
 const REPO_ROOT = process.env.LAKESIDE_REPO_ROOT
   || new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
-const gameRepo = (name) => `${REPO_ROOT}/${name}`;
+// DOCS_REPO_<NAME> (e.g. DOCS_REPO_GRAND_CENTURY) points one game at a clean
+// checkout of its release branch, so a stale or dirty working copy never ships.
+const gameRepo = (name) =>
+  process.env[`DOCS_REPO_${name.replace(/-/g, "_").toUpperCase()}`] || `${REPO_ROOT}/${name}`;
 
 // The Lakeside Docs mark, used as the logo for any game without its own icon.
 export const LAKESIDE_MARK = process.env.LAKESIDE_MARK
