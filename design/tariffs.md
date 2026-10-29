@@ -68,7 +68,7 @@ export function isFtaActive(pairs: FtaPairSet, a: string, b: string): boolean {
 **Critical:** Only tariffs where `tariff.countryId === sectorCountryId` are consulted. A tariff imposed by the US on Chinese corps only applies to sectors operating **in the US**, not to Chinese sectors operating in third countries.
 
 ```typescript
-// getEffectiveTariffRate():51
+// getEffectiveTariffRate()
 if (t.countryId !== sectorCountryId) continue;
 ```
 
@@ -79,7 +79,7 @@ if (t.countryId !== sectorCountryId) continue;
 Foreign corporations pay **half** the effective tariff rate as a margin penalty, not the full rate:
 
 ```typescript
-// getForeignTariffMarginModifier():283-305
+// getForeignTariffMarginModifier()
 const rate = getEffectiveTariffRate(tariffs, sectorCountryId, sectorType, corpHqCountryId, corpId, activeFtaPairs);
 if (rate === 0) return 0;
 // Halved: a 40% tariff gives -20pp margin penalty, not -40pp.
@@ -95,7 +95,7 @@ return -rate / 2;
 Domestic corporations pay a smaller **supply-chain friction malus** from economy-wide and sector tariffs only:
 
 ```typescript
-// getDomesticTariffMalus():324-352
+// getDomesticTariffMalus()
 let total = 0;
 for (const t of tariffs) {
   if (t.countryId !== sectorCountryId) continue;
@@ -120,7 +120,7 @@ return -(T / 100) * 10; // -0 to -10pp
 The effective rate is the sum of all applicable tariffs:
 
 ```typescript
-// getEffectiveTariffRate():33-70
+// getEffectiveTariffRate()
 if (sectorCountryId === corpHqCountryId) return 0; // Domestic corps pay no tariff
 
 for (const t of tariffs) {
@@ -147,7 +147,7 @@ return Math.min(100, total);
 Commodity margin calculation blends three price sources: global, national, and local (state-level). Tariffs shift weight from **global to national**, not to local; the local weight is fixed:
 
 ```typescript
-// getTariffBlendWeights():194-244
+// getTariffBlendWeights()
 let blendRate = 0;
 for (const t of tariffs) {
   if (t.countryId !== sectorCountryId) continue;
@@ -187,7 +187,7 @@ FTA coverage scales the broad scopes (`economy_wide`, `sector`) down by `(1 - pa
 Tariffs affect market capture during sector split attacks:
 
 ```typescript
-// getSplitCaptureMultiplier():364-373
+// getSplitCaptureMultiplier()
 const T = Math.max(0, Math.min(100, effectiveTariffRate));
 if (isDomesticSplittingForeign) {
   return 1.0 + (T / 100) * 0.5; // 1.0 → 1.5× (domestic bonus)
@@ -209,7 +209,7 @@ return 1.0 - (T / 100) * 0.5; // 1.0 → 0.5× (foreign penalty)
 Tariffs are enacted via legislation:
 
 ```typescript
-// applyTariffProvision():392-424 (upsert; the surrounding function runs 392-492)
+// applyTariffProvision() (upsert; the surrounding function runs 392-492)
 const filter = {
   countryId,
   scopeType: provision.scopeType,
@@ -254,7 +254,8 @@ await db.collection<Tariff>("tariffs").updateOne(
 | `src/lib/tariffs/tariffEffects.ts`      | All tariff effect calculations            |
 | `src/lib/tariffs/ftaOverrides.ts`       | Free trade agreement pair loading + lookup |
 | `src/lib/budget/fiscalYear.ts`          | Tariff rate application in budget context |
-| `src/app/api/bills/[id]/enact/route.ts` | Tariff provision enactment                |
+| `src/lib/billEnactment.ts`              | Tariff provision enactment (routes to `applyTariffProvision`) |
+| `src/lib/legislationEffects.ts`         | Legislation effects on enactment          |
 
 ## Related Documentation
 

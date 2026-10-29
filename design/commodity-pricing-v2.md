@@ -15,7 +15,7 @@
 4. **National layer** uses **summed** state S/D across the country; apply a **small** stabilizer floor on national supply/demand (much smaller than global’s `BASE_COMMODITY_SUPPLY_DEMAND`).
 5. **Every real state** gets persisted **state-layer** price inputs (and implied state raw price); no “only states with sector activity.”
 6. **Charts and corp margins** stay **consistent**: same three layers and the same weight formula relative to **T**.
-7. **Rollout**: **everywhere at once** (no long-lived feature flag).
+7. **Rollout** (historical): shipped everywhere at once, with no long-lived feature flag.
 
 ## Storage model (no divergence)
 
@@ -45,11 +45,11 @@ Existing **`statePrices[stateId]`** on `commodityPrices` (and history) may remai
 
 Let `α = clamp(T, 0, 100) / 100`.
 
-- `wG = 0.5 − α/6`
-- `wR = 0.25 + α/12`
-- `wN = 0.25 + α/12`
+- `wG = 0.5 − 0.25α`
+- `wR = 0.25` (fixed)
+- `wN = 0.25 + 0.25α`
 
-Check: `α = 0` → `0.5, 0.25, 0.25`; `α = 1` → `⅓, ⅓, ⅓`.
+Check: `α = 0` → `0.5, 0.25, 0.25`; `α = 1` → `0.25, 0.25, 0.5`. Source: `getTariffBlendWeights` in `src/lib/tariffs/tariffEffects.ts`.
 
 ## Turn processing
 
@@ -67,7 +67,7 @@ v2 adds fields (exact names TBD) for **national** S/D and/or implied national pr
 ## Implementation checklist (high level)
 
 1. Extend types + `processCommodityPriceTurn` to compute and write **national aggregates** and **three-layer implied prices** (+ national stabilizer constant in `commodities.ts`).
-2. Add **`getCommodityTriBlendWeights(T)`** (or equivalent) next to tariff helpers; wire **stacked `T`** from existing tariff resolution.
+2. Historical: this shipped as **`getTariffBlendWeights`** in `src/lib/tariffs/tariffEffects.ts`, returning `globalWeight`, `nationalWeight` and `localWeight`; wire **stacked `T`** from existing tariff resolution.
 3. Replace any **single** blended price used for corp economics with **blend at read time** from components + **`T`**.
 4. Update **`computeBlendedMarginModifiers`** (or successor) to **three** balance maps / three modifier paths, blended with the **same** `(wG, wR, wN)` for that sector’s **`T`**.
 5. Grep consumers of `statePrices` / `globalPrice` for “final price”; migrate to component + blend.
@@ -84,10 +84,12 @@ v2 adds fields (exact names TBD) for **national** S/D and/or implied national pr
 
 ## Open implementation details
 
+Historical: these were open during design and are resolved in the shipped code.
+
 - Exact **field names** and whether **history** stores full national maps or deltas.
 - **Peg/nudge** semantics when only one layer is pegged.
 - **Default `T`** for public commodity views.
 
 ---
 
-_See also: [commodities](./commodities.md) - current shipped behavior until v2 is merged._
+_See also: [commodities](./commodities.md) - current shipped behavior._

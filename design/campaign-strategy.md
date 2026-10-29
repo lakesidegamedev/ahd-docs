@@ -61,8 +61,8 @@ Any player can donate personal Cash on Hand to any campaign. Party chairs can do
 
 Your campaign generates a pool of **campaign actions** each turn, separate from your character's action pool.
 
-- **Base floor** - Every campaign generates at least 1 action/turn.
-- **Endorsements** - NPP and player endorsements (presidential only) increase actions via `1 + floor(sqrt(endorsements) × 3)`.
+- **Base floor** - Every campaign generates at least 1 action/turn, more for a more active player.
+- **Endorsements** - NPP and player endorsements (presidential only) increase actions via `baseline + floor(sqrt(endorsements) × 3)`, where the baseline is your own base action gain (at least 1; `src/lib/campaigns/actions.ts`).
 
 Campaign actions are spent on strategic upgrades.
 
@@ -80,6 +80,8 @@ Upgrade four dimensions of your campaign from the campaign page. Each has up to 
 ### Upgrade Costs
 
 **Entry point:** `src/lib/campaigns/upgradeCosts.ts`
+
+The tables below are the baseline ladder, sized for a US presidential campaign. Costs, maintenance and fundraising income are multiplied by a per-race scalar (`CAMPAIGN_FAMILY_SCALAR_BY_ELECTION_TYPE`): president 1.0, senate, governor and commons 0.5, special commons and house 0.3, state senate 0.2. Each lever is now bought as a starter unlock plus three branches (a, b, c) of up to 3 levels each, for example Grassroots, Bundlers and Direct Mail under Fundraising; the branch definitions are in the same file. Ground game and media upkeep is doubled, and their tier 3 purchase costs 1.5×.
 
 **Fundraising** (10 levels):
 
@@ -191,8 +193,8 @@ No player action is required - the multiplier activates automatically based on t
 
 Your party's organization level provides a vote multiplier applied across all your party's votes:
 
-- **Formula** - `1.0 + (org/100) × 0.6` → 1.0× at org=0, 1.6× at org=100
-- **No penalty** - Low org gives baseline (1.0×), not a handicap
+- **Formula** - in general elections each party's vote weight is its share of all party organization in the state, raised to the power 0.2 (`orgVoteWeight` and `ORG_WEIGHT_EXPONENT` in `src/lib/electionEngine/electionFormulaFactors.ts`). The exponent softens a dominant party's edge: a 3:1 organization lead gives about a 1.25:1 vote weight.
+- **Primaries** - organization is a neutral 1× inside a party
 - Building org rewards your whole party's electoral performance
 
 ## Fog of War

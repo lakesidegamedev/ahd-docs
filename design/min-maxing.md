@@ -28,7 +28,7 @@ You have limited actions each turn. Every action should produce maximum value.
 
 ### The Influence Sweet Spot
 
-- At high influence, 1% decay per turn means you lose more each turn
+- At high influence, 0.75% decay per turn (`shared/constants/formulas.ts`) means you lose more each turn
 - Maintain 40-60% influence outside election season; surge to 80%+ during campaigns
 - Don't waste actions maintaining 90%+ influence when no election is near
 

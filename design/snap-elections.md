@@ -45,7 +45,7 @@ Only the sitting PM (matched by `governmentFormations.pmCharacterId`) may call t
 - `governmentFormations.status === "formed"`.
 - `snapElectionsUsed < 2` per appointment (counter resets on new PM seated).
 - `currentTurn - lastSnapElectionTurn >= 336` (2 real-time weeks) if prior snap was triggered this appointment.
-- **No active `noConfidenceVotes` doc exists for the country.** A sitting PM cannot preempt a pending VONC with a snap. Admin-forced snaps bypass this gate.
+- **No active confidence motion exists for the UK.** A sitting PM cannot call a snap while a `pmAppointmentVotes` document with `isConfidenceMotion: true` and `status: "active"` is pending (`src/lib/turn/snapElection.ts`). This check applies to PM-triggered snaps and is independent of the snap limit bypass.
 
 **Effects (on success, in order):**
 

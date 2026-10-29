@@ -34,16 +34,9 @@ The Congress Speaker System manages Speaker of the House elections in the US Con
 - **End condition:** Time expires OR admin force-ends
 - **Resolution:** Plurality wins (most votes, no majority required)
 
-### NPP Voting
+### NPPs
 
-NPPs in the majority party automatically vote for the incumbent Speaker if running, otherwise follow party leadership preferences.
-
-```typescript
-// src/lib/turn/npp/speakerVoting.ts
-export async function recalculateNPPSpeakerVotes(): Promise<void> {
-  // NPPs vote for incumbent if running, otherwise party leadership choice
-}
-```
+Speaker races are player-only. NPPs do not run or vote (`src/app/api/congress/speaker/route.ts`).
 
 ## Action Handlers
 
@@ -57,7 +50,6 @@ export async function recalculateNPPSpeakerVotes(): Promise<void> {
 2. Clear failed nominations
 3. Create new 24-hour election window
 4. Auto-nominate incumbent Speaker if eligible (has seat, majority party)
-5. Trigger NPP vote recalculation
 
 **Response:**
 
@@ -94,14 +86,14 @@ export async function recalculateNPPSpeakerVotes(): Promise<void> {
 **Behavior:**
 
 1. Immediately resolve current election
-2. Install winner or assign to NPP
+2. Install the winner, or vacate the office if there are no candidates
 
 **Response:**
 
 ```json
 {
   "success": true,
-  "message": "Speaker election ended. Winner or NPP assignee is set."
+  "message": "Speaker election ended. The winner is installed, or the office is vacant if nobody ran."
 }
 ```
 
@@ -113,7 +105,7 @@ export async function recalculateNPPSpeakerVotes(): Promise<void> {
 
 1. Election is in voting phase
 2. Character is from majority party
-3. No existing candidacy (self or NPP)
+3. No existing candidacy
 4. Not running for other leadership position (House/Senate)
 
 **Cost:** None
@@ -122,7 +114,6 @@ export async function recalculateNPPSpeakerVotes(): Promise<void> {
 
 1. Create SpeakerNomination record
 2. Trigger achievement check (`speaker_candidate`)
-3. Recalculate NPP votes
 
 **Response:**
 
@@ -151,7 +142,6 @@ export async function recalculateNPPSpeakerVotes(): Promise<void> {
 1. Deduct 3 NPI from character
 2. Log influence history
 3. Set candidacy status to "failed"
-4. Recalculate NPP votes
 
 **Response:**
 
@@ -219,8 +209,7 @@ export async function resolveSpeakerElection(
     .toArray();
 
   if (nominations.length === 0) {
-    // No candidates - assign to NPP
-    await assignNPPSpeaker(db, partyMap);
+    // No candidates - close the election and vacate the office
   } else {
     // Winner is top vote-getter
     const winner = nominations[0];
@@ -238,10 +227,7 @@ export async function resolveSpeakerElection(
 
 ### Tie Breaking
 
-Ties are broken by:
-
-1. First to reach the vote total (earlier `updatedAt`)
-2. If still tied, NPP assignment
+Ties are broken by the first nominee to reach the vote total (earlier `updatedAt`).
 
 ## Auto-Vacate Logic
 
@@ -375,24 +361,6 @@ votes: {
 1. Previous vote is `$unset` from old nomination
 2. New vote is `$set` on new nomination
 3. `votesFor` counters are adjusted atomically
-
-## NPP Vote Recalculation
-
-NPP votes are recalculated when:
-
-1. New candidate declares
-2. Candidate withdraws
-3. Election starts (incumbent auto-nomination)
-
-```typescript
-await recalculateNPPSpeakerVotes();
-```
-
-**NPP voting logic:**
-
-- Vote for incumbent if running
-- Otherwise vote for party leadership's choice
-- Based on NPP's home state and party alignment
 
 ## Integration with Turn Processing
 

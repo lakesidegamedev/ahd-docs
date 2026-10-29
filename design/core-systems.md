@@ -1,6 +1,6 @@
 # Core Systems
 
-The core loop is a persistent shared world. One real hour is one game turn and one turn advances the in-game calendar by one week. Forty-eight turns make one game year.
+The core loop is a persistent shared world. One real hour is one game turn and one turn advances the in-game calendar by roughly one week (about 7.6 days). Forty-eight turns make one game year.
 
 ## Actions and character resources
 

@@ -40,6 +40,8 @@ Everything in `computeResults.ts` is display-only and deterministic on its input
 
 ## Call Rules
 
+These rules cover the generic path in `computeResults.ts`. US presidential races use `presidentialNight.ts` instead: states close their polls in real-world order during the final hour, and a state is only called once the remaining final turn provably cannot flip it, not by a fixed margin. Primary nights use `primaryNight.ts`.
+
 `CALL_MARGIN_PCT = 5`, margin (percentage points) a leader needs before a unit is called.
 
 A unit is `called` when: not tied, has votes, has a leader, and either the election has ended or (the unit has been revealed by the drip AND `leaderMarginPct >= CALL_MARGIN_PCT`). Mid-campaign, nothing is called, only leads are shown; calls wait for the final-hour reveal or election end. Ties are never called.
@@ -61,7 +63,7 @@ A unit is `called` when: not tied, has votes, has a leader, and either the elect
 
 ## National Aggregation
 
-`buildNationalElectionNight(db, election, partyMap, finalHourProgress, isEnded, majoritarianBonus?, orgRankingByState?)` (`electionNight.ts`) builds the country-wide seat board across sibling elections of the same `electionType` + `cycle`:
+`buildNationalElectionNight(db, election, partyMap, finalHourProgress, isEnded, majoritarianBonus?, orgRankingByState?)` (`electionNight.ts`) builds the country-wide seat board across sibling elections of the same `countryId`, `electionType` and `cycle` (plus the same `chamberClass` for Sangiin half-elections):
 
 1. Returns `null` if `electionType` is not in `NATIONAL_AGGREGATION_TYPES`, or fewer than 2 sibling elections exist.
 2. Loads each sibling's `ElectionVoteTally`, using the stored `seatsEstimate` if present or computing one via `computeSeatEstimates` (falls back to majoritarian-bonus org ranking per region, ticket #1032 note: the FPTP boost keys on each region's own party-organization ranking, so per-region rankings must be passed rather than one shared config).

@@ -4,13 +4,13 @@
 
 | Layer        | Technology                                    | Version    |
 | ------------ | --------------------------------------------- | ---------- |
-| Framework    | Next.js (App Router)                          | 16.3       |
-| UI           | React                                         | 19.2       |
+| Framework    | Next.js (App Router)                          | 16.4       |
+| UI           | React                                         | 19.3       |
 | Language     | TypeScript                                    | 6.0        |
 | Styling      | Tailwind CSS                                  | 4          |
 | Database     | MongoDB native driver                         | 7.4        |
 | Auth         | Custom JWT via `jose`                         | 6.2        |
-| Testing      | Vitest (unit/integration) + Playwright (E2E)  | 4.1 / 1.61 |
+| Testing      | Vitest (unit/integration) + Playwright (E2E)  | 5.0 / 1.64 |
 | Deployment   | Railway (Nixpacks build, `next start`)        | n/a        |
 | File Storage | Cloudflare R2 (prod) / local filesystem (dev) | n/a        |
 
@@ -25,7 +25,7 @@
 ### Turn Processor
 
 - `processTurn()` in `src/lib/turnSystem.ts` is the single entry point. It is fired in-process by `node-cron` (`src/lib/cron.ts`), scheduled from `instrumentation.ts` at server boot, not by an external cron service. Schedule is `0 * * * *` (hourly), or `0,30 * * * *` when `GameState.fastMode` is on. `GET /api/cron/turn` also exists as an HTTP-triggerable fallback (protected by `requireCron()`/`CRON_SECRET`) with a `30 * * * *` backup fire that only runs if the primary missed its slot.
-- The phase list now lives in a registry (`src/simulation/phases/turnPhaseRegistry.ts`, phase names enumerated in `src/simulation/phases/turnPhaseNames.ts`) rather than being inlined in `turnSystem.ts`. `BASE_TURN_PHASE_NAMES` currently has **123 phases**, plus per-country election phases from `COUNTRY_ELECTION_PHASES`. Each phase runs through the shared turn-phase runtime (`src/simulation/engine/turnPhaseRuntime.ts`), failures log to Sentry but don't halt subsequent phases.
+- The phase list now lives in a registry (`src/simulation/phases/turnPhaseRegistry.ts`, phase names enumerated in `src/simulation/phases/turnPhaseNames.ts`) rather than being inlined in `turnSystem.ts`. `BASE_TURN_PHASE_NAMES` currently has **151 phases**, plus per-country election phases from `COUNTRY_ELECTION_PHASES`. Each phase runs through the shared turn-phase runtime (`src/simulation/engine/turnPhaseRuntime.ts`), failures log to Sentry but don't halt subsequent phases.
 - **Election-resolution ordering is critical:** primaries must resolve before vote accumulation; votes must accumulate before timers advance; timers must advance before elections resolve. The table below groups phases by concern; it is illustrative, not an exhaustive phase-by-phase listing (see the registry files for the full current set, which also includes governor/SCOTUS, extraction/prospecting, decolonization, spheres of influence, impeachment, by-elections, and ledger-reconciliation phases not shown below).
 
 | Section                    | Phases                                                                                                                                                                                                                                                                       | Key constraint                                      |
@@ -61,7 +61,7 @@
 ### Notifications
 
 - Stored in MongoDB `notifications` collection; surfaced on next page load.
-- 129 notification types (`NOTIFICATION_TYPES` in `src/lib/db/types/notifications.ts`): election results, leadership events, bill lifecycle, cabinet, party events, NPP influence, achievements, and more.
+- 146 notification types (`NOTIFICATION_TYPES` in `src/lib/db/types/notifications.ts`): election results, leadership events, bill lifecycle, cabinet, party events, NPP influence, achievements, and more.
 - UI: paginated list, type filter, search, bulk delete, mark-all-read, URL-based filters, date grouping.
 
 ### Hero Image System
@@ -146,7 +146,7 @@
 | --------------- | ---------------------------------------------------- |
 | `newsPosts`     | News posts created by players                        |
 | `newsReactions` | Reactions and comments on news posts                 |
-| `notifications` | Per-player notification queue (129 types, paginated) |
+| `notifications` | Per-player notification queue (146 types, paginated) |
 | `feedback`      | Bug reports and suggestions (with captured context)  |
 
 ### NPP Relations
@@ -252,7 +252,7 @@
 | Map view (real geographic paths, Political Lean mode)                              | ✅ Complete    |
 | Player bio + profile page                                                          | ✅ Complete    |
 | Achievements system (58 achievements, rarity tiers)                                | ✅ Complete    |
-| Notifications (129 types, pagination, filtering)                                   | ✅ Complete    |
+| Notifications (146 types, pagination, filtering)                                   | ✅ Complete    |
 | Discord integration                                                                | ✅ Complete    |
 | Multi-country support (29 configured countries)                                    | ✅ Complete    |
 | UK House of Commons (composition, bills, leadership)                               | ✅ Complete    |

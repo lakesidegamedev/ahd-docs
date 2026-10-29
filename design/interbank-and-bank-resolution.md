@@ -1,6 +1,6 @@
 # Interbank Lending and Bank Resolution
 
-This covers three related pieces of the private banking system: the interbank market and central-bank margin line (`src/lib/banking/interbank.ts`), what happens to a bank's outstanding loan book after it fails (`src/lib/banking/deadBankLoans.ts`), and the NPP-run banks that seed into every eligible country (`src/lib/banking/npcBanks.ts`). All three sit inside the wider private banking system in `src/lib/banking/`, which also covers charters, deposits, reserves, capital adequacy, the discount window, and deposit insurance (not documented here). Every path in this doc is gated behind `privateBankingEnabled` on `gameConfig`, which the ops notes describe as currently OFF in production; the code confirms the gate exists (`src/lib/banking/featureFlag.ts`) but this doc does not speak to current prod state beyond that.
+This covers three related pieces of the private banking system: the interbank market and central-bank margin line (`src/lib/banking/interbank.ts`), what happens to a bank's outstanding loan book after it fails (`src/lib/banking/deadBankLoans.ts`), and the NPP-run banks that seed into every eligible country (`src/lib/banking/npcBanks.ts`). All three sit inside the wider private banking system in `src/lib/banking/`, which also covers charters, deposits, reserves, capital adequacy, the discount window, and deposit insurance (not documented here). Every path in this doc is gated behind the `privateBankingEnabled` flag on `gameConfig` (`src/lib/banking/featureFlag.ts`).
 
 ## Feature Flags
 
@@ -28,7 +28,7 @@ A deposit-taking bank (retail or universal charter) lends non-reserved cash to a
 ### Sizing constraints
 
 ```
-INTERBANK_MAX_SHARE_OF_LENDABLE = 0.5   // provisional
+INTERBANK_MAX_SHARE_OF_LENDABLE = 0.5   // provisional, src/lib/banking/rules/decide.ts
 ```
 
 Lendable headroom is computed via `getLendableHeadroom(lenderCharter, reserveRatio)` (see `reserves.ts`), where `reserveRatio = getReserveRequirement(db, currency)`. The lender may place at most `0.5 x headroom` on the interbank market, checked as a running total across all of that lender's current interbank loans (`sumLenderInterbankOutstanding`, summed over `status: "current"`). A new loan is rejected if it alone exceeds the cap, or if adding it to already-outstanding interbank lending would exceed the cap. Separately, the lender must have enough liquid `cashReserves` to cover the amount.
@@ -64,7 +64,7 @@ payment = min(interestDue, borrower's available cashReserves)
 
 - If `payment` covers `interestDue` (within 1e-9), full interest is paid borrower -> lender via `payInterbankInterest`, `arrearsTurns` resets to 0.
 - If not, the shortfall is a partial payment: whatever cash is available is paid, `arrearsTurns` increments by 1.
-  - If `arrearsTurns >= ARREARS_DEFAULT_TURNS` (= 8, same constant used for player loan defaults), the loan is written off: no cash moves for the remaining principal, the borrower's `bankCharter.interbankDebt` is reduced by the outstanding amount, and loan status becomes `"defaulted"`.
+  - If `arrearsTurns >= ARREARS_DEFAULT_TURNS` (= 8, in `src/lib/banking/rules/loans.ts`, same constant used for player loan defaults), the loan is written off: no cash moves for the remaining principal, the borrower's `bankCharter.interbankDebt` is reduced by the outstanding amount, and loan status becomes `"defaulted"`.
   - Below that threshold, only `arrearsTurns` and `lastProcessedTurn` update; the loan stays `"current"`.
 
 Interest payments are logged via `emitTx`/`payInterbankInterest` moving cash on both bank charters' `cashReserves`.
@@ -78,10 +78,10 @@ If the LENDER on an interbank loan fails, `writeOffLenderSideInterbankOnFailure`
 A separate facility: prop-book-collateralized borrowing directly from the country's central bank, available to the same investment/universal charters.
 
 ```
-CB_MARGIN_SPREAD_PP = 1.5                 // provisional
+CB_MARGIN_SPREAD_PP = 1.5                 // provisional, src/lib/banking/rules/decide.ts
 cbMarginRatePercent(primeRate) = max(0, primeRate + 1.5)
 
-CB_MARGIN_COLLATERAL_FRACTION = 0.5       // provisional
+CB_MARGIN_COLLATERAL_FRACTION = 0.5       // provisional, src/lib/banking/rules/decide.ts
 maxDebt = 0.5 x propBookMarkValue
 ```
 
@@ -151,7 +151,7 @@ When enabled, `runNpcBankPolicy` iterates every corp with `ceoType: "npp"`, acti
 - `src/lib/banking/deadBankLoans.ts`, dead-bank loan discovery and recovery routing
 - `src/lib/banking/npcBanks.ts`, NPC bank seeding and rate-corridor policy
 - `src/lib/banking/featureFlag.ts`, `privateBankingEnabled` / `bankPropTradingEnabled` / `bankContagionEnabled` gates
-- `src/lib/turn/bankingTurn.ts`, turn-phase orchestration: `serviceInterbankAndCbMargin`, `serviceOneInterbankLoan`, `payInterbankInterest`, `processDeadBankLoans` invocation, `ARREARS_DEFAULT_TURNS = 8`
+- `src/lib/turn/bankingTurn.ts`, turn-phase orchestration: `serviceInterbankAndCbMargin`, `serviceOneInterbankLoan`, `payInterbankInterest`, `processDeadBankLoans` invocation. `ARREARS_DEFAULT_TURNS = 8` is defined in `src/lib/banking/rules/loans.ts`
 - `src/lib/turn/bankSolvencyTurn.ts`, `writeOffLenderSideInterbankOnFailure`, `sumInterbankDefaultsLastTurn`
 - `src/lib/db/types/bank.ts`, `InterbankLoan`, `BankLoan`, `DepositInsuranceFund` type definitions
 - `src/simulation/phases/turnPhaseRegistry.ts`, registers `npcBankPolicyTurn` phase

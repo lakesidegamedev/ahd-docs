@@ -239,7 +239,7 @@ Map services are called from client components:
 
 ```typescript
 // Client-side fetch
-const response = await fetch(`/api/map/house?countryId=${countryId}`);
+const response = await fetch(`/api/map/overview?countryId=${countryId}`);
 const data = await response.json();
 ```
 
@@ -248,9 +248,10 @@ const data = await response.json();
 Map services are exposed via API routes:
 
 ```typescript
-GET /api/map/house?countryId=US
-GET /api/map/senate?countryId=US
-GET /api/map/lean?countryId=US
+GET /api/map/overview?countryId=US
+GET /api/map/metrics?countryId=US
+GET /api/map/logistics?countryId=US
+GET /api/map/resources?countryId=US&resource=oil
 ```
 
 ## Performance Optimizations

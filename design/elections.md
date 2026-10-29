@@ -68,22 +68,22 @@ Durations are configurable per election; new elections inherit from the most rec
 
 ## Turn Processing Order
 
-Election-related steps in `processTurn()` (`src/lib/turnSystem.ts`):
+Election steps run as strictly sequential sub-phases of the `electionResolutionAndGovernment` phase in `src/simulation/phases/turnPhaseRegistry.ts`:
 
-1. **NPP behavior**, NPPs cast speaker votes, bill votes, evaluate dropout, and enter elections (`processNPPTurn`)
-2. Bill lifecycle
-3. Campaign turn (income, actions, maintenance)
-4. **Candidate party sweep**, withdraws stale candidacies after party switches
-5. **Resolve primaries**, eliminates losers when `primaryEndTime` passes; must run before vote accumulation
-6. **Accumulate general election votes**, one turn of votes for all active general-phase elections; **must run before timer advancement**
-7. **Advance election timers**, marks elections "completed" when `endTime` passes
-8. **Record primary snapshots**, for elections still in primary phase (trend data)
-9. **Resolve completed general elections**, determines winners, updates `electedOfficials`, spawns next cycle
-10. **Vacate leadership**, removes leadership from members who lost/changed office
-11. **Ensure perpetual elections**, spawns missing elections for all race types
-12. **Clean up stale candidates**, withdraws candidates still attached to completed elections
+1. **Withdraw inactive candidates**
+2. **Candidate party sweep**, withdraws stale or ineligible candidacies after party switches
+3. **Resolve primaries**, eliminates losers when `primaryEndTime` passes; must run before vote accumulation
+4. **Accumulate general election votes**, one turn of votes for all active general-phase elections; **must run before timer advancement**
+5. **Campaign spend reset**, clears `Campaign.spendThisTurn` after the tallies have read it
+6. **Advance election timers**, marks elections "completed" when `endTime` passes
+7. **Record primary snapshots**, for elections still in primary phase (trend data)
+8. **Resolve completed general elections**, determines winners, updates `electedOfficials`, spawns next cycle
+9. **Clear resolved support, vacate leadership**, removes leadership from members who lost/changed office
+10. **Parliamentary government formation**
 
-> **Critical ordering** (documented in `turnSystem.ts`): primaries resolve → votes accumulate → timers advance → elections resolve. Reordering would lose final-turn votes or include eliminated candidates in tallies.
+NPP behavior, bill lifecycle and the campaign turn (income, actions, maintenance) run in other phases.
+
+> **Critical ordering** (documented in the registry): primaries resolve → votes accumulate → timers advance → elections resolve. Reordering would lose final-turn votes or include eliminated candidates in tallies.
 
 ## Primary Resolution
 
@@ -168,7 +168,7 @@ In RCV states, **no vote-splitting adjustment is applied**. Third parties compet
 
 ### Total Appeal System (Pipeline)
 
-**Two distribution paths exist.** Primaries and commissioned polls use the **group-level competitive allocation** model described below (each demographic group votes as a bloc, splitting its vote pool among candidates by relative appeal). General-election vote accumulation defaults to the **swing-flow model** (`distributeVotesBySwingFlow()` in `src/lib/electionEngine/voteDistributionSwingFlow.ts`, set unconditionally in `tallyManagement.ts`); group-level allocation remains available as a fallback/legacy path for generals but is not the live default. See [Election Engine](./election-engine.md) for the swing-flow driver stack (coattails, median-voter, persuasion, party-tenure fatigue, incumbency). The appeal/reach/approval math below is the shared foundation both paths build on.
+**Two distribution paths exist.** Primaries and commissioned polls use the **group-level competitive allocation** model described below (each demographic group votes as a bloc, splitting its vote pool among candidates by relative appeal). General-election vote accumulation defaults to the **swing-flow model** (`distributeVotesBySwingFlow()` in `src/lib/electionEngine/voteDistributionSwingFlow.ts`, set unconditionally in `tallyManagement.ts`); group-level allocation remains available as a fallback/legacy path for generals but is not the live default. See [Election Engine](./election-engine.md) for the swing-flow driver stack (coattails, median-voter, persuasion, incumbency; term fatigue now lives in the economic referendum channel, `src/lib/electionEngine/economicReferendum.ts`). The appeal/reach/approval math below is the shared foundation both paths build on.
 
 The full pipeline from candidate and state to votes per turn (shared with poll and NPP dropout via `src/lib/utils/demographicAppeal.ts`):
 
@@ -214,8 +214,8 @@ Campaign actions raise favorability and influence; ads raise recognition and fav
 
 - **House**: Real seat distribution (e.g., CA 52, TX 38). See `HOUSE_SEATS` in `src/lib/turn/electionResolution.ts`
 - **Proportional allocation**: Largest-remainder method
-- **Minimum share**: 20% of votes to be eligible for seats (`MULTI_SEAT_MIN_SHARE`). **Exception**: State Senate and Regional Council use 10% to allow smaller parties to win seats in larger districts.
-- **2-seat House special case**: Winner takes both seats unless at least one opponent reaches the minimum share threshold (20% for House, 10% for State Senate)
+- **Minimum share**: set per chamber by `getMultiSeatMinShare()` in `src/lib/turn/election/rules/seatEligibility.ts`. The US House gate scales with the state delegation, `clamp(1 / (seats + 1), 10%, 20%)`, so small delegations sit at 20% and large ones drop toward 10%. State Senate, Regional Council and most other legislatures use a flat 10% so smaller parties can win seats in larger districts. Chambers not listed there, and non-US House races (such as Nigeria's), keep 20%.
+- **2-seat House special case**: Winner takes both seats unless at least one opponent reaches the minimum share threshold (the House gate above, 10% for State Senate)
 - **Seats estimate**: Updated each vote turn; `voteFraction × totalSeats` per candidate
 
 ## Senate Elections
@@ -372,8 +372,8 @@ See [NPP System](./npp-system.md) for full documentation. NPPs autonomously ente
 ### Entry
 
 - **Eligibility**: Not retired, not on cooldown for that election, not already in an active race
-- **Scope**: Home state for all regional races (House, Senate, Governor, State Senate, Commons, Shugiin, Sangiin, Regional Council, Bundestag). **NPPs are barred from presidential races**, players always have the opportunity to contest the presidency without NPP auto-entry distorting the field.
-- **Types**: All race types except president
+- **Scope**: Home state for all regional races (House, Senate, Governor, State Senate, Commons, Shugiin, Sangiin, Regional Council, Bundestag). **NPPs are barred from presidential races in player-enabled countries**, so players always have the opportunity to contest the presidency without NPP auto-entry distorting the field. The bar is lifted in countries where NPP autonomy is active and there is no player to contest the presidency, and for the first round of Russian direct presidential ballots.
+- **Types**: All race types except president (subject to the exceptions above)
 - **Timing**: Only during primary phase (`primaryEndTime > now`)
 - **Priority order** (highest to lowest): State Senate → Regional Council → Sangiin → House → Senate → Shugiin → Governor → President → Commons
 - **One NPP per party per primary**: Each primary gets exactly one NPP candidate per party to avoid splitting the party vote
@@ -394,7 +394,7 @@ Admin → Elections → NPP Management: spawn 1-500 NPPs per party with weightin
 During the general election phase, presidential candidates can travel to specific states to campaign in person.
 
 - **Cost**: `getTravelActionCost()` scales with the target state's electoral votes: EV ≤ 5 → 3 actions, EV ≤ 10 → 5, EV ≤ 20 → 7, EV > 20 → 10 (small states are cheap, big states are expensive)
-- **Effect**: Traveling to a state is a gate, not a passive bonus. It is the eligibility requirement for the character's canvassing actions in that state; there is no automatic per-turn favorability gain from travel alone
+- **Effect**: Traveling to a state is the eligibility requirement for the character's canvassing actions in that state. It also grants a travel presence bonus of +1.0 favorability each turn while a travel state is set (presidential, non-NPP candidates only). A running mate who is travelling adds a surrogate presence bonus on top (`src/lib/turn/campaignTurn.ts`)
 - **Visibility**: Travel state shown on the electoral map as a badge
 - **Strategy**: Lets candidates focus campaign presence (canvassing) in swing states
 - **Restrictions**: Only active presidential candidates can travel; one state at a time
@@ -433,11 +433,11 @@ Travel is a presidential-only mechanic. State-level races use standard campaign/
 ### Attack Strategy
 
 - **Attack** (influence action): Reduces target Favorability by 1, costs 2 Infamy to attacker
-- **Action-point cost**: `BASE_INFLUENCE_COST = 6` action points per support/attack action (`src/lib/influence/simpleInfluence.ts`), raised from a legacy 2 AP specifically so a favorability strike competes with campaigning, fundraising and political operations for a player's turn instead of being nearly free.
+- **Action-point cost**: priced dynamically per target in `src/lib/influence/simpleInfluence.ts` and `src/lib/influence/rules.ts`. A boost to another player costs the equivalent self-action quote plus a 1.25x premium (attack uses 1.5x), scaled by a distance multiplier for out-of-state targets, so the price is not a flat number. Favorability strikes compete with campaigning, fundraising and political operations for a player's turn.
 - **Per-turn cap**: `MAX_NET_FAVORABILITY_SWING_PER_TURN = 12`, the net favorability change any one target can absorb from player support/attack actions in a single turn, in either direction. This is a backstop against extreme coordinated pile-ons, not the primary limiter (the AP cost is); it sits well above normal single-turn swings.
 - **Failure chance**: Attacks can fail based on attacker's Infamy (`failureChance = infamy × 10`). Failed attacks still cost 2 Infamy.
 - **Infamy drain**: Infamy > 20% causes passive Favorability drain each turn (`(infamy − 20) × 0.05%`)
-- **Cross-state cost**: Attacking out-of-state targets costs more action points (base 2, scaled by state adjacency)
+- **Cross-state cost**: Attacking out-of-state targets costs more action points, scaled by a distance multiplier
 
 ### Geographic Strategy
 
@@ -463,7 +463,7 @@ The election vote calculation pipeline is implemented across two modules:
 | File                     | Purpose                                                                                                                                            |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `voteDistribution.ts`    | Group-level competitive allocation: distributes votes by demographic blocs using appeal × reach × approval × partyOrg; applies FPTP spoiler effect. Used for primaries and polls; fallback/legacy path for generals |
-| `voteDistributionSwingFlow.ts` | Two-phase pairwise swing-flow allocation; default vote model for general elections. Layers coattails, median-voter, persuasion, party-tenure fatigue, and incumbency drivers on top of the base appeal calculation |
+| `voteDistributionSwingFlow.ts` | Two-phase pairwise swing-flow allocation; default vote model for general elections. Layers coattails, median-voter, persuasion, and incumbency drivers on top of the base appeal calculation |
 | `tallyManagement.ts`     | Accumulates vote turns, initializes tallies, computes seat estimates for multi-seat races                                                          |
 | `voteCalculations.ts`    | Turn vote weight formula (three-tier closing surge: 50% early / 20% ramp / 30% final 4 turns), state turnout calculation                            |
 | `resolvedTurnout.ts`     | Combines static `StateDemographics.turnout` with dynamic `StateDemographicTurnout.modifiers` from GOTV/canvassing/suppression                      |

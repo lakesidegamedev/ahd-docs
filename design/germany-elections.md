@@ -8,9 +8,9 @@ modern chamber. The `1953-default` preset uses 487 seats. Federal
 Sainte-Laguë allocation applies the 5% or three-direct-mandate threshold;
 each Land's list allocation is its quota minus direct seats, floored at zero.
 Constituency and top-up computation lives in
-`src/lib/turn/election/germanyAMS.ts`; this document covers the
+`src/lib/countries/de/elections/germanyAMS.ts`; this document covers the
 **Landesliste** management layer. Source:
-`src/lib/elections/germanyLandesliste.ts`.
+`src/lib/countries/de/elections/germanyLandesliste.ts`.
 
 ## Landesliste
 
@@ -65,5 +65,5 @@ residents.
 
 ## Related
 
-- Constituency + compensatory seat math: `src/lib/turn/election/germanyAMS.ts` (not covered here).
+- Constituency + compensatory seat math: `src/lib/countries/de/elections/germanyAMS.ts` (not covered here).
 - Country config: `COUNTRY_CONFIGS.DE` in `src/lib/constants/countries.ts` defines the Bundestag's election type key (`bundestag`), which also drives its inclusion in `WESTMINSTER_STYLE_TYPES` and `NATIONAL_AGGREGATION_TYPES` for the live-results national board, see `live-election-results.md`.

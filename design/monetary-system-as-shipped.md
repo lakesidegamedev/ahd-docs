@@ -49,7 +49,7 @@ Chairs can move money between the two pools, with limits in `src/lib/centralBank
 
 ## Forex
 
-Eighteen currencies trade: `FOREX_ACTIVE_CURRENCIES` covers USD, GBP, JPY, EUR, IEP, CNY, BRL, NGN, SUR, DDM, FRF, ITL, ESP, SEK, TRL, GRD, ATS and FIM. Nigeria trades even while the country is still coming soon, because its sovereign bonds already settle in NGN and holders would otherwise be trapped; the same logic keeps the 1979 only countries exchangeable in every era. The NPP run planned economies (HU, PL and the rest of the bloc) are not forex active until they decommunise.
+Twenty-eight currencies trade: `FOREX_ACTIVE_CURRENCIES` (`src/lib/constants/currencyCodes.ts`) covers USD, GBP, JPY, EUR, IEP, CNY, BRL, NGN, SUR, RUB, DDM, FRF, ITL, ESP, SEK, TRL, GRD, ATS, FIM, PLZ, HUF, ROL, BGL, CSK, YUD, PLN, RON and BGN. Nigeria trades even while the country is still coming soon, because its sovereign bonds already settle in NGN and holders would otherwise be trapped; the same logic keeps the 1979 only countries exchangeable in every era. The bloc currencies (PLZ, HUF, ROL, BGL, CSK, YUD and their successors PLN, RON, BGN) are now in the active list.
 
 Rates are quoted as local currency per one internal unit (₳). Higher rate means a weaker currency, which is why `computeStrengthVsReferencePercent` in `src/lib/forex/rateSemantics.ts` returns `(referenceRate / currentRate - 1) * 100` for strength while `computeRawRateVsReferencePercent` returns the plain rate change. Mixing the two is the classic way to read a devaluation as a rally.
 

@@ -73,7 +73,7 @@ Mayor. English UK regions outside London have no devolved executive office.
 ## Geographic Strategy
 
 - **Home state advantage** - You can only enter elections in your home state
-- **State adjacency** - Actions cost more in non-neighboring states (1.25x) and distant states (1.5x)
+- **State adjacency** - Interpersonal actions (Support, Attack, Barnstorm) cost 1.25x in neighboring states and 1.5x in non-neighboring states, against 1.0x in your home state; Campaign and Advertise are not affected (`src/lib/states/adjacency.ts`)
 - **Pick your state wisely** - Some states are more competitive; swing states offer the most opportunity
 
 ## Path to Power

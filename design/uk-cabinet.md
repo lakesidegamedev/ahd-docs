@@ -4,18 +4,18 @@
 
 The UK Cabinet System manages cabinet appointments for the United Kingdom government. The Prime Minister appoints and dismisses eligible player-controlled MPs. Cabinet eligibility is not restricted to the governing party or coalition.
 
-**Location:** `src/lib/uk/`
+**Location:** `src/lib/countries/uk/` (`src/lib/uk/` holds forwarders to it)
 
 **Key files:**
 
-- `cabinetApi.ts` - API route handlers for appointments
-- `cabinetEligibility.ts` - Eligibility rules and queries
-- `src/lib/constants/ukCabinet.ts` - Cabinet position definitions
+- `src/lib/countries/uk/cabinetApi.ts` - API route handlers for appointments
+- `src/lib/countries/uk/cabinetEligibility.ts` - Eligibility rules and queries
+- `src/lib/countries/uk/cabinet/positions.ts` - Cabinet position definitions (`src/lib/constants/ukCabinet.ts` forwards to it)
 - `src/lib/turn/parliamentaryGovernment.ts` - shared government formation and PM appointment
 
 ## Cabinet Positions
 
-Cabinet positions are defined in `UK_CABINET_POSITIONS` (`src/lib/constants/ukCabinet.ts`), 18 entries in file order (agriculture_secretary and environment_secretary share `order: 12` because their eras are disjoint: agriculture retires in 2001 and hands off to environment via `succeededBy`):
+Cabinet positions are defined in `UK_CABINET_POSITIONS` (`src/lib/countries/uk/cabinet/positions.ts`), 20 entries in file order (agriculture_secretary and environment_secretary share `order: 12` because their eras are disjoint: agriculture retires in 2001 and hands off to environment via `succeededBy`):
 
 | Order | Position ID                | Name (base)                                                                                      | Year Enabled |
 | ----- | -------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
@@ -37,6 +37,8 @@ Cabinet positions are defined in `UK_CABINET_POSITIONS` (`src/lib/constants/ukCa
 | 14    | `northern_ireland`         | Secretary of State for Northern Ireland                                                          | 1972         |
 | 15    | `scotland`                 | Secretary of State for Scotland                                                                  | 1775         |
 | 16    | `wales`                    | Secretary of State for Wales                                                                     | 1964         |
+| 17    | `director_of_intelligence` | Chief of the Secret Intelligence Service                                                         | 1909         |
+| 18    | `chief_whip`               | Parliamentary Secretary to the Treasury (Chief Whip; "Government Chief Whip" before 1830)        | 1775         |
 
 Each seat's display name can also change over time within its era (`namesByYear`, resolved against the live game year, e.g. `defence_secretary` reads "Secretary of State for War" before 1964). The base names above are the seat's identity, not necessarily the label shown at every year.
 
@@ -44,7 +46,7 @@ Each seat's display name can also change over time within its era (`namesByYear`
 
 ### Prime Minister Authorization
 
-Only the current Prime Minister can appoint or dismiss cabinet ministers. This check is enforced by `requireCurrentPrimeMinister` in `src/lib/uk/cabinetEligibility.ts`. Despite its location, the guard is country-agnostic and is used by other parliamentary cabinets as well.
+Only the current Prime Minister can appoint or dismiss cabinet ministers. This check is enforced by `requireCurrentPrimeMinister` in `src/lib/countries/uk/cabinetEligibility.ts`. Despite its location, the guard is country-agnostic and is used by other parliamentary cabinets as well.
 
 ### Minister Eligibility
 
@@ -108,6 +110,10 @@ Effects:
 1. Delete record from `cabinetMembers` (shared collection)
 2. The appointment-time seat lock remains in `ukCabinetCooldowns`
 ```
+
+### Other cabinet routes
+
+Under `/api/country/[code]/executive/cabinet/` (`src/app/api/country/[code]/executive/cabinet/`), parliamentary countries also expose `reshuffle` and `resign` (POST, handled in `cabinetApi.ts`), `acting` (POST, a President installs an acting member without confirmation), and `whip`, `whip/withdraw` and `whip/restore` (PM-only party whip withdrawal and restoration, `cabinetWhipApi.ts`). Per-seat office actions live under `[positionId]/...`.
 
 ## Cooldown System
 

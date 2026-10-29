@@ -29,7 +29,7 @@ The ordinary crisis resolver remains the command boundary for submitting a respo
 
 ## Persistent state
 
-Each `livingConflicts` row carries the phase state and an optional `campaign`. `normalizeCampaignState` is the compatibility seam for worlds created before campaign depth existed. The release migration also writes normalized state onto legacy rows so live data does not depend on a later read to heal.
+Each `livingConflicts` row carries the phase state and an optional `campaign`. `normalizeCampaignState` is the compatibility seam for worlds created before campaign depth existed. The release seeding also writes normalized state onto legacy rows so live data does not depend on a later read to heal.
 
 The campaign state contains:
 
@@ -79,9 +79,12 @@ Discrete events apply immediate deltas and enter a 24-item ledger. Between event
 + min(30, Vietnam escalation level * 4)
 + min(12, active international response crisis count * 3)
 + min(18, sqrt(total world warheads) * 1.2)
++ wars
 ```
 
-The relaxation fraction is 0.08 per turn. Motion toward a higher floor is doubled. `src/lib/coldwar/dials.ts` derives the displayed DEFCON, strategic procurement multiplier, and detente goodwill penalty.
+The wars term is zero with no active wars. Conventional wars add 0.12 times their summed intensity, capped at 45. If any war has nuclear-armed countries on opposing sides, the term starts at a minimum of 48 (so the floor reaches CRISIS before anything else is counted) and adds 0.15 times the nuclear war intensity plus 0.12 times the other war intensity, capped at 70. Long wars that stay below hot intensity can ease only to a residual danger floor (`src/lib/coldwar/tension.ts`).
+
+The relaxation fraction is 0.08 per turn. If the value is at or below the floor, it moves straight to the floor. `src/lib/coldwar/dials.ts` derives the displayed DEFCON, strategic procurement multiplier, and detente goodwill penalty.
 
 Global response outcomes call `applyTensionEvent`, so campaign decisions can raise or reduce the shared reading. The page shows the current reading, band, floor, direction, each floor component, derived dials, and recent event ledger.
 
@@ -99,7 +102,7 @@ Warhead counts are game-scaled balance units, not literal historical inventories
 
 ## Seeding and release migration
 
-Fresh worlds call `seedColdWarFoundations` after `initializeGameState`. Release 1.3 also registers `2026-08-23-seed-global-response-foundations` in the deploy migration runner. The operation is idempotent and does the following:
+Fresh worlds call `seedColdWarFoundations` after `initializeGameState`. Release 1.3 also runs the same seeding for existing worlds. The operation is idempotent and does the following:
 
 - Enables `conflictsEnabled`, `coldWarEnabled`, and `livingConflictsEnabled`.
 - Inserts one closed baseline row for every authored living-conflict definition that is missing.
@@ -110,22 +113,10 @@ Fresh worlds call `seedColdWarFoundations` after `initializeGameState`. Release 
 
 `DEFAULT_GAME_STATE_FLAGS.livingConflictsEnabled` is true, so later fresh worlds use the same release posture.
 
-The player wiki source is `src/lib/seeds/wiki/content/globalResponseCrises.ts`. Production rollout uses `npm run seed:wiki:force` after the code deploy so the database copy matches the shipped source.
+The player wiki source is `src/lib/seeds/wiki/content/globalResponseCrises.ts`.
 
 ## Vietnam compatibility
 
 Vietnam remains the first full authored family. Its existing ladder is imported into the generic campaign state. The United States and Soviet Union receive independent country-scoped response windows. At the air campaign rung the engine can open a real North Vietnam versus South Vietnam conflict while the superpowers remain patrons. Dropping below that rung winds the front down, and reaching zero ends the family without allowing a restart.
 
 Missed response windows resolve through the authored cautious default. An inactive office holder cannot freeze the campaign.
-
-## Operational checks
-
-After migration and wiki reseed, verify:
-
-- All three feature flags are true on `gameState/current`.
-- `coldWarTension/current` exists.
-- Every registry definition has one `livingConflicts` row with a normalized campaign.
-- The expected nuclear programs exist and any pre-existing rows retain their prior warheads, nodes, and production rate.
-- The `global-response-crises` wiki page exists at the current seed version.
-- `/world/conflicts` renders without a map-sized empty panel when no shooting war exists.
-- `/world/conflicts` shows active country-scoped global-response crises in the International Response Desk and excludes ordinary domestic crises.

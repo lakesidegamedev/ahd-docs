@@ -6,7 +6,7 @@ Supply is not an abstract number: under the live market mode (`marketSystemMode:
 
 ## Overview
 
-28 commodity types trade across the economy:
+27 commodity types trade across the economy:
 
 | Category       | Commodities                                                                                                                                                          |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -15,7 +15,7 @@ Supply is not an abstract number: under the live market mode (`marketSystemMode:
 | Energy & Fuels | Electricity (Energy), Fertilizers, Pharmaceuticals, Vehicles                                                                                                         |
 | Food           | Food Products                                                                                                                                                        |
 | Construction   | Building Materials, Construction Services                                                                                                                            |
-| Services       | Software, Financial Services, Healthcare Services, Real Estate Services, Advertising, Consulting Services, Freight, Retail, Network Services, Entertainment Services |
+| Services       | Software, Financial Services, Healthcare Services, Real Estate Services, Advertising, Consulting Services, Freight, Retail, Network Services                                                       |
 
 Each sector type supplies and demands specific commodities at rates tied to sector revenue. **Retail** demands many inputs and supplies the Consumer Goods (`retail`) commodity. Only **owned** corporate sectors participate in a state's commodity flow.
 
@@ -77,12 +77,12 @@ cannot go below −15 percentage points.
 Beyond the margin modifiers above, commodity prices scale sector revenue directly (when the market system tier is enabled):
 
 ```
-factor = clamp((price / basePrice) ^ 0.5, 0.7, 1.5)
+factor = clamp((price / basePrice) ^ 0.5, 0.7, 2.0)
 sectorRealization = supply-rate-weighted mean of factors across a sector's outputs
 realizedRevenue = baseRevenue × sectorRealization
 ```
 
-Prices are lagged one turn to break the price-to-revenue-to-supply feedback loop, and the per-turn shock is bounded to [-30%, +50%]. This is on top of, not instead of, the margin modifiers: shortages now reward producers with more top-line revenue, not just a better margin percentage, and gluts bleed revenue even when the margin looks tolerable. See `src/lib/market/priceRealization.ts`.
+Prices are lagged one turn to break the price-to-revenue-to-supply feedback loop, and the per-turn shock is bounded to [-30%, +100%]. This is on top of, not instead of, the margin modifiers: shortages now reward producers with more top-line revenue, not just a better margin percentage, and gluts bleed revenue even when the margin looks tolerable. See `src/lib/market/priceRealization.ts`.
 
 ## Commodity Page
 

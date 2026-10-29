@@ -57,18 +57,18 @@ The PM or any Cabinet member can propose bills through Cabinet review before the
 
 ## Regions
 
-8 game regions (each containing multiple prefectures):
+8 game regions (each containing multiple prefectures). Every region contests both Sangiin classes; Class 1 gets `ceil` and Class 2 `floor` of the regional total:
 
-| ID  | Name             | Population | Shugiin | Sangiin | Class |
-| --- | ---------------- | ---------- | ------- | ------- | ----- |
-| HOK | Hokkaido         | 5.2M       | 12      | 7       | 1     |
-| TOH | Tohoku           | 8.6M       | 37      | 20      | 2     |
-| KAN | Kanto            | 43.5M      | 150     | 80      | 1     |
-| CHU | Chubu            | 21.1M      | 81      | 44      | 2     |
-| KNS | Kansai           | 22.5M      | 82      | 44      | 1     |
-| CGK | Chugoku          | 7.1M       | 28      | 14      | 2     |
-| SHI | Shikoku          | 3.7M       | 14      | 8       | 1     |
-| KYU | Kyushu & Okinawa | 14.3M      | 61      | 31      | 2     |
+| ID  | Name             | Population | Shugiin | Sangiin | Class 1 | Class 2 |
+| --- | ---------------- | ---------- | ------- | ------- | ------- | ------- |
+| HOK | Hokkaido         | 5.2M       | 12      | 7       | 4       | 3       |
+| TOH | Tohoku           | 8.6M       | 37      | 20      | 10      | 10      |
+| KAN | Kanto            | 43.5M      | 150     | 80      | 40      | 40      |
+| CHU | Chubu            | 21.1M      | 81      | 44      | 22      | 22      |
+| KNS | Kansai           | 22.5M      | 82      | 44      | 22      | 22      |
+| CGK | Chugoku          | 7.1M       | 28      | 14      | 7       | 7       |
+| SHI | Shikoku          | 3.7M       | 14      | 8       | 4       | 4       |
+| KYU | Kyushu & Okinawa | 14.3M      | 61      | 31      | 16      | 15      |
 
 ## Political Parties
 

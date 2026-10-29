@@ -33,7 +33,7 @@ A House Divided is ultimately a multiplayer game. While NPPs fill most offices, 
 
 ### Building a Third Party
 
-- Custom parties start at 25% org cap in all states
+- Custom parties build organization from scratch; it is tracked in units against a fixed unaffiliated baseline (`src/lib/constants/partyOrg.ts`)
 - Requires dedicated members to build org from scratch
 - Advantage: No internal competition; you shape the party platform
 - Disadvantage: Low org means fewer votes until you build up
@@ -77,7 +77,7 @@ A House Divided is ultimately a multiplayer game. While NPPs fill most offices, 
 
 - Choose a VP who complements your weaknesses
 - Any character except the current President can be VP
-- VP office gives +$25k/hr and +actions
+- VP office gives +$25k/hr in fund generation (`src/lib/utils/fundGeneration.ts`)
 
 ## Cabinet Nominations
 

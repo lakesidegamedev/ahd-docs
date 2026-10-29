@@ -2,7 +2,7 @@
 
 ## Overview
 
-Defence procurement lets a country's ministry award contracts to domestic corporations to build materiel (arsenal components) for its military. The subsystem is a set of independent guardrails around what used to be an almost unbounded transfer channel from the national defence appropriation into corporate cash, the [defence price-band drain](#background-the-lockheed-drain) incident. Each guardrail is a small, pure module so the award route, the delivery sweep, and the client-side award form can all agree on the same numbers.
+Defence procurement lets a country's ministry award contracts to domestic corporations to build materiel (arsenal components) for its military. The subsystem is a set of independent guardrails around what used to be an almost unbounded transfer channel from the national defence appropriation into corporate cash, the [defence price-band drain](#background-the-price-band-drain). Each guardrail is a small, pure module so the award route, the delivery sweep, and the client-side award form can all agree on the same numbers.
 
 **Location:** `src/lib/military/`
 
@@ -16,9 +16,9 @@ Defence procurement lets a country's ministry award contracts to domestic corpor
 - `defenceFillEligibility.ts` - Whether a plant can hold/deliver a given contract
 - `procurementGate.ts` - Global pause switch for new procurement
 
-## Background: the Lockheed Drain
+## Background: the Price-Band Drain
 
-A delivery credits the supplier `pricePerLot - productionCost` per lot. On the live world (turn 219) a US air lot was struck at 383,748,809 and cost 1,091 to build under the pre-fix cost model, a margin of 99.9997%. Because the price band's top was the GDP anchor (five orders of magnitude above the true build cost) and the cost model was an unrelated flat commodity-recipe figure, a defence contract was very close to a pure transfer of national appropriation into one corporation's cash balance. A minister with a stake in the supplier directly benefited. This is documented and tracked as the known price-band-drain issue; the guardrails below are the mitigation, not a full clawback (no retroactive clawback by owner decision).
+A delivery credits the supplier `pricePerLot - productionCost` per lot. Under the original cost model, a lot could be priced in the hundreds of millions while costing a few thousand to build, a margin above 99.99%. Because the price band's top was the GDP anchor (five orders of magnitude above the true build cost) and the cost model was an unrelated flat commodity-recipe figure, a defence contract was very close to a pure transfer of national appropriation into one corporation's cash balance. A minister with a stake in the supplier directly benefited. The guardrails below are the mitigation, not a full clawback (contracts already signed keep their terms).
 
 ## Contract Award Limits (`defenceContractLimits.ts`)
 
@@ -26,29 +26,29 @@ Contracts are budgeted in quarter-year tranches, not against an unlimited future
 
 - **Contract window:** `DEFENCE_CONTRACT_WINDOW_TURNS = TURNS_PER_YEAR / 4` (one quarter).
 - **Country cap:** `defenceContractLotCaps(defenseLine, pricePerLot)` computes `procurementNotional = defenseLine * (1 - SEED_UPKEEP_TARGET_SHARE) * (windowTurns / TURNS_PER_YEAR)`, the appropriation spends 55% of the annual defence line sustaining the seeded force (`SEED_UPKEEP_TARGET_SHARE`), so only the remaining 45% is a procurement budget, prorated to one window.
-- **Supplier cap:** `defenceSupplierCapShare(stateOwned)`, a private supplier may take at most `DEFENCE_CONTRACT_SUPPLIER_SHARE = 1/3` of the country's window, so a minister cannot dump the whole tranche into one corporation. A **state-owned** supplier (National Corporation) gets the full window instead of a third: command economies seed one National Corporation per sector, and applying the private cap there would leave two thirds of the window unspendable across every other plant on that SOE (ticket #1134).
+- **Supplier cap:** `defenceSupplierCapShare(stateOwned)`, a private supplier may take at most `DEFENCE_CONTRACT_SUPPLIER_SHARE = 1/3` of the country's window, so a minister cannot dump the whole tranche into one corporation. A **state-owned** supplier (National Corporation) gets the full window instead of a third: command economies seed one National Corporation per sector, and applying the private cap there would leave two thirds of the window unspendable across every other plant on that SOE.
 
 ## Turn Spend Cap (`defenceTurnSpendCap.ts`)
 
-The award side limits the total a supplier may be *promised* in a window; this limits the rate at which that promise may *settle*, closing the throughput gap that let a single contract (turn 214, Soviet Union) deliver 5 lots for 4.69bn in one turn, an entire quarterly procurement window emptied in one tick.
+The award side limits the total a supplier may be *promised* in a window; this limits the rate at which that promise may *settle*, closing the throughput gap that let a single contract deliver an entire quarterly procurement window in one tick.
 
 - `defenceProcurementAccrualPerTurn(defenceLine) = defenceLine * (1 - SEED_UPKEEP_TARGET_SHARE) / TURNS_PER_YEAR`, the same identity `defenceContractLotCaps` uses for a window, divided by the window length, so award and payout can never drift apart.
 - `DEFENCE_TURN_SPEND_BURST = 3`, a country may pay out up to 3 turns' worth of accrual in a single turn (so a country that has been saving can spend the stockpile faster than it earned it).
 - `defenceCountryTurnSpendCap = accrualPerTurn * 3`; `defenceSupplierTurnSpendCap` applies `defenceSupplierCapShare` on top (a third for private industry, all of it for a National Corporation).
 - Over a full 12-turn window this sums to `3x` the window's total award quota, the cap never reduces what a legitimate buyer can spend across a window, it only stops the whole quota landing in one or two turns.
-- `lotsWithinTurnSpendCap()` computes how many lots a contract may settle *this turn*, with a **one-lot-per-country-per-turn floor** so a small country whose lot price exceeds its whole turn cap still ships something (the exact one-plant wall ticket #1134 addressed). The floor is per country, not per contract, so it cannot be exploited by splitting one order into twenty.
+- `lotsWithinTurnSpendCap()` computes how many lots a contract may settle *this turn*, with a **one-lot-per-country-per-turn floor** so a small country whose lot price exceeds its whole turn cap still ships something. The floor is per country, not per contract, so it cannot be exploited by splitting one order into twenty.
 
 ## Lot Economics and Price Band (`defenceLotEconomics.ts`)
 
-Cost is derived from price, not the other way round, inverting the old model is the core of ticket #1134.
+Cost is derived from price, not the other way round, inverting the old model.
 
 - `TARGET_SUPPLIER_MARGIN = 0.15`, production cost is the GDP-anchored lot price less 15% (real-world large Western primes run 9-11% operating margin; US government contracting fee targets sit near 10-15%; the top of that range is chosen deliberately so procurement stays worth chasing).
 - `MIN_CONTRACT_MARGIN = 0.12`, floor: a contract may never be written below cost + 12%.
 - `MAX_CONTRACT_MARGIN = 1.0`, backstop ceiling on markup over cost, active only if the cost model is ever mis-derived; the GDP anchor is normally the tighter, binding ceiling.
 - `lotCostIndex()` reads live commodity price ratios (see below) against the nominal recipe, clamped to `[LOT_COST_INDEX_MIN=0.7, LOT_COST_INDEX_MAX=1.5]`, a shortage squeezes the **supplier's** margin, never raises the price to the taxpayer.
 - `GRADE_PRICE_SCALE` (grade 0-3): `{0: 0.7, 1: 0.85, 2: 1.0, 3: 1.25}`, cheap-mass vs. premium doctrine both fall out of one price dial.
-- `lotPriceBand({anchorPrice, productionCost, grade})` returns `{productionCost, floor, ceiling, suggested}`, the band a minister may set a lot price inside. Not retroactive: a signed contract keeps the price (and margin) it was struck at even if the anchor moves later (`costBasis: "margin"` vs. legacy contracts, which settle on `legacyLotProductionCost`, the pre-#1134 flat-overhead model, kept only so already-signed contracts keep the terms players agreed to).
-- **Factory slots:** `DEFENCE_FACTORY_SLOTS_PER_PLANT = 4`, a CEO splits a plant's throughput across contracts by assigning slots, not a figure derived from revenue (which would silently invalidate a standing allocation every turn). New private-supplier contracts default to an even split (`defaultFactoryAllocation`); a National Corporation (no player CEO to reallocate) takes every free slot at award (`awardFactoryAllocation`, ticket #1134/#1087).
+- `lotPriceBand({anchorPrice, productionCost, grade})` returns `{productionCost, floor, ceiling, suggested}`, the band a minister may set a lot price inside. Not retroactive: a signed contract keeps the price (and margin) it was struck at even if the anchor moves later (`costBasis: "margin"` vs. legacy contracts, which settle on `legacyLotProductionCost`, the earlier flat-overhead model, kept only so already-signed contracts keep the terms players agreed to).
+- **Factory slots:** `DEFENCE_FACTORY_SLOTS_PER_PLANT = 4`, a CEO splits a plant's throughput across contracts by assigning slots, not a figure derived from revenue (which would silently invalidate a standing allocation every turn). New private-supplier contracts default to an even split (`defaultFactoryAllocation`); a National Corporation (no player CEO to reallocate) takes every free slot at award (`awardFactoryAllocation`).
 
 ## Live Price Ratios (`defencePriceRatios.ts`)
 
@@ -69,14 +69,14 @@ The answer to self-dealing is **disclosure plus a political price**, not another
 
 ## Fill Eligibility (`defenceFillEligibility.ts`)
 
-`resolveFillEligibility()` is the single shared answer to "can this plant fill this order", used by the award picker, the award route, the CEO's accept, and the delivery sweep, previously each carried its own version and disagreed (ticket cluster #1076/#1083/#1087/#1099/#1108/#1127). AWARDABLE MUST MEAN DELIVERABLE.
+`resolveFillEligibility()` is the single shared answer to "can this plant fill this order", used by the award picker, the award route, the CEO's accept, and the delivery sweep, previously each carried its own version and disagreed. AWARDABLE MUST MEAN DELIVERABLE.
 
 Refusal reasons (`FillIneligibilityReason`):
 
 | Reason                  | Meaning                                                                 |
 | ------------------------ | -------------------------------------------------------------------------- |
 | `foreign_supplier`      | Plant is not in the buying country                                       |
-| `currency_mismatch`     | Corp is not paid in the buying country's currency (`canSupply()` infers the currency from the corp's own country, never defaults to USD, a prior USD default hid every non-US domestic plant, ticket #1087) |
+| `currency_mismatch`     | Corp is not paid in the buying country's currency (`canSupply()` infers the currency from the corp's own country, never defaults to USD, a prior USD default hid every non-US domestic plant) |
 | `no_materiel_line`      | Plant's strategy supplies no arsenal component                           |
 | `retooled_off_component`| Plant has re-tooled off the component its contract was frozen on         |
 | `no_output`             | Plant produces nothing this turn, still **eligible** (a plant between production runs is a legitimate contract target; the reason rides along as a UI warning, not a refusal) |

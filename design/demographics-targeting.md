@@ -34,7 +34,7 @@ The game's legacy authoring vocabulary is **12 voter archetypes**, each with dis
 
 Each demographic group has a turnout modifier (-20% to +20%):
 
-- **Decay**, All modifiers decay 2% per turn toward baseline
+- **Decay**, Under campaign rules version 1 (current elections) modifiers decay with a 6 turn half-life, about 10.9% per turn (`src/lib/campaignTargeting/rules.ts`). Legacy elections still decay 2% per turn (`src/lib/utils/turnoutDecay.ts`)
 - **Party GOTV**, Your party passively boosts aligned demographics
 - **Player canvassing**, Campaign action to boost specific demographics
 - **Campaign season**, Canvassing effectiveness doubles 4 turns before election

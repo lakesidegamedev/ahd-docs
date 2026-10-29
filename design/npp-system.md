@@ -84,12 +84,24 @@ NPP filing runs in a deliberate order:
 | ----------------------------- |
 | `stateSenate`                 |
 | `regionalCouncil`             |
+| `peoplesCongress`             |
+| `republicSupremeSoviet`       |
+| `landAssembly`                |
 | `sangiin`                     |
 | `house`                       |
+| `milletMeclisi`               |
 | `commons`                     |
+| `special_commons`             |
 | `senate`                      |
+| `senato`                      |
 | `shugiin`                     |
+| `npcDelegate`                 |
+| `supremeSovietDeputy`         |
+| `nationalitiesDeputy`         |
+| `unionCongressDeputy`         |
 | `governor`                    |
+
+Source: `RACE_PRIORITY` in `src/lib/turn/rules/nppElectionPriority.ts`. Snap variants share their regular race's priority.
 
 ### Cooldowns and Dropout
 

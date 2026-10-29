@@ -21,7 +21,7 @@ This creates a "fog of war" mechanic: players cannot see the full details of opp
 Each campaign has two independent resource pools:
 
 - **Campaign Funds**, Earned from fundraising income per turn, player donations, and party donations. Spent on upgrades.
-- **Campaign Actions**, Generated per turn from endorsements (`1 + floor(sqrt(endorsements) × 3)`, minimum 1). Spent on upgrades.
+- **Campaign Actions**, Generated per turn from endorsements (`baseline + floor(sqrt(endorsements) × 3)`, where the baseline is the player's own base action gain per turn and is at least 1; `src/lib/campaigns/actions.ts`). Spent on upgrades.
 
 These are entirely separate from the candidate's personal funds and character actions.
 
@@ -44,7 +44,7 @@ Upgrade costs are **1.5× higher** once the election enters the general phase (`
 
 Purchasing opposition research requires selecting a target. The target's favorability drains passively each turn based on your level.
 
-- **Retargeting**, Change your target at any time via the campaign page. A **6-hour cooldown** (`oppositionResearchCooldownUntil`) applies between retargets.
+- **Retargeting**, Change your target at any time via the campaign page. A **6-turn cooldown** (`oppositionResearchCooldownUntilTurn`) applies between retargets.
 - `POST /api/campaigns/[id]/retarget`, Owner or manager only; requires `oppositionResearchLevel > 0`.
 
 ## Campaign Season Multiplier
@@ -117,8 +117,17 @@ Active NPP endorsements now matter in two ways:
 | `/api/campaigns/mine`                      | GET    | Authenticated | Current user's active campaign                   |
 | `/api/campaigns/[id]/upgrade`              | POST   | Owner/Manager | Purchase an upgrade (1.5× cost in general phase) |
 | `/api/campaigns/[id]/donate`               | POST   | Authenticated | Donate funds (personal or party treasury)        |
-| `/api/campaigns/[id]/retarget`             | POST   | Owner/Manager | Change opposition research target (6h cooldown)  |
+| `/api/campaigns/[id]/retarget`             | POST   | Owner/Manager | Change opposition research target (6-turn cooldown) |
 | `/api/admin/campaigns/[id]/assign-manager` | POST   | Admin         | Assign a manager character to a campaign         |
+| `/api/campaigns/[id]/campaign-strength` | POST | Authenticated | Contribute campaign strength (presidential) |
+| `/api/campaigns/[id]/rally` | POST | Manager/Nominee | Fire a one-shot rally |
+| `/api/campaigns/[id]/rally-tour` | POST | Manager/Nominee | Toggle the ongoing rally tour |
+| `/api/campaigns/[id]/field-offices` | GET/POST | Public / Manager | List field offices; open a new office |
+| `/api/campaigns/[id]/targeted-ads` | GET/POST | Manager/Nominee | Quote and buy a regional ad bonus |
+| `/api/campaigns/[id]/suspend-endorse` | POST | Nominee | Suspend a presidential campaign and endorse another ticket |
+| `/api/campaigns/[id]/color` | POST | Manager/Owner | Set the campaign display color |
+| `/api/campaigns/[id]/manager` | POST | Nominee/Admin | Appoint or clear the campaign manager |
+| `/api/campaigns/[id]/opposition-research/reset` | POST | Manager/Owner | Reset opposition research and the retarget cooldown |
 
 ## Related Documentation
 

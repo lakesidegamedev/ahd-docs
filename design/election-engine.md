@@ -20,7 +20,7 @@ The Election Engine is the core vote calculation and tally management system for
 
 ### Philosophy
 
-**Two distribution paths exist.** Primaries always use the **group-level competitive allocation** model in `voteDistribution.ts` (each demographic group votes as a bloc, splitting its vote pool among candidates by relative appeal). General elections default to the **swing-flow model** in `voteDistributionSwingFlow.ts` (`tallyManagement.ts` sets `useSwingFlowModel = true` unconditionally for general elections); `distributeVotesByGroupLevelAllocation` remains available as a fallback/legacy path but is not the general-election default. The sections below describe the group-level model, which still governs primaries and is the basis the swing-flow model was built on top of.
+**Two distribution paths exist.** Primaries always use the **group-level competitive allocation** model in `voteDistribution.ts` (each demographic group votes as a bloc, splitting its vote pool among candidates by relative appeal). General elections default to the **swing-flow model** in `voteDistributionSwingFlow.ts` (`tallyManagement.ts` selects it whenever `isGeneralElection` is true); `distributeVotesByGroupLevelAllocation` remains available as a fallback/legacy path but is not the general-election default. The sections below describe the group-level model, which still governs primaries and is the basis the swing-flow model was built on top of.
 
 **Key principles:**
 
@@ -205,7 +205,7 @@ Each turn, `accumulateVoteTurn()` is called:
 
 ### Seat Estimation (Multi-Seat Races)
 
-For multi-seat races, the system (`getMultiSeatMinShare()` in `src/lib/turn/election/seatAllocation.ts`) projects seat allocations using the Hamilton method (largest remainder), grouping votes by party (independents grouped individually):
+For multi-seat races, the system (`getMultiSeatMinShare()` in `src/lib/turn/election/rules/seatEligibility.ts`, re-exported from `seatAllocation.ts`) projects seat allocations using the Hamilton method (largest remainder), grouping votes by party (independents grouped individually):
 
 ```typescript
 1. Filter candidate/party groups meeting minimum vote share threshold (see below)
@@ -217,11 +217,11 @@ For multi-seat races, the system (`getMultiSeatMinShare()` in `src/lib/turn/elec
 4. Distribute remaining seats by largest remainder
 ```
 
-**Minimum share thresholds** (flat gates, not `1/totalSeats`):
+**Minimum share thresholds** (`src/lib/turn/election/rules/seatEligibility.ts`):
 
-- Default (US House, most legislatures): 20%
-- Lower-threshold chambers (State Senate, UK Regional Council, DE Landtag, CN People's Congress, IE Dáil/Seanad/Local Council, large-magnitude PR chambers FR/IT/ES/SE/TR/AT/FI/GR, DD Volkskammer): 10%
-- UK Commons/snap-Commons with the historical majoritarian bonus active: 10% (down from the default 20%, so third parties survive the duopoly squeeze)
+- US House: `clamp(1/(seats+1), 10%, 20%)` from the state delegation size. With no seat count it stays at 20%.
+- Other House elections (for example the Nigerian House of Representatives) and any election type not listed below: a flat 20%.
+- Flat 10%: State Senate, UK Regional Council, DE Landtag, UK Commons and snap Commons, JP Shugiin and snap Shugiin, CN People's Congress, IE Dáil, Seanad and Local Council, FR Assemblée Nationale, IT Camera, ES Congreso, SE Riksdag, TR Millet Meclisi, AT Nationalrat, FI Eduskunta, GR Vouli, DD Volkskammer and the Land Assembly.
 
 ## Candidate Enrichment
 
@@ -358,16 +358,9 @@ Replaces the policy-distance driver's old hard-coded `(0, 0)` centrism reference
 
 Budgets sum to 0.75, deliberately under the `[-1, +1]` aggregate clamp so the clamp only activates on driver pile-on, not by structural design. The "representative candidate" for a party in multi-seat races is whichever candidate has the highest Support.
 
-### Party-Tenure Fatigue (`partyTenureFatigue.ts`)
+### Term Fatigue
 
-A thermostatic "time for a change" drag applied to a party that has held the executive office for multiple consecutive terms, subtracted **after** the approval shield/drag is computed and capped (so it bites even a popular incumbent sitting at the shield cap):
-
-```typescript
-TENURE_FATIGUE_PER_TERM = 0.035  // 3.5 budget-pts per term beyond the first
-partyTenureFatiguePenalty(consecutiveTerms) = max(0, floor(consecutiveTerms) - 1) × TENURE_FATIGUE_PER_TERM
-```
-
-A party seeking its 2nd term (1 term held) pays 0; 3rd term (2 held) pays −3.5pp; 4th term pays −7.0pp; and so on, +3.5pp per additional term. Folded into the incumbency driver's net value before the shield/drag is applied to challengers.
+Historical: the separate party-tenure fatigue module (`partyTenureFatigue.ts`) was removed. Term fatigue now lives in the economic referendum channel for executive own-races (`src/lib/electionEngine/economicReferendum.ts`), as a penalty-side multiplier rather than a subtraction from the incumbency budget.
 
 ### Midterm Opposition Boost (`midtermOppositionBoost.ts`)
 
@@ -384,7 +377,7 @@ The incumbency driver branches on race type, in priority order:
        ? min(INCUMBENCY_SHIELD_MAX, (approval - pivot) × INCUMBENCY_APPROVAL_SLOPE)
        : -min(INCUMBENCY_DRAG_MAX, (pivot - approval) × INCUMBENCY_APPROVAL_SLOPE)
    ```
-   `INCUMBENCY_APPROVAL_PIVOT = 46`, `INCUMBENCY_SHIELD_MAX = INCUMBENCY_DRAG_MAX = 0.1` (±10pp), `INCUMBENCY_APPROVAL_SLOPE = 0.01`. The pivot sits below the live national mean, so most incumbents get a smaller shield and only the weakest (~44-46 approval) tip into a mild drag. The party-tenure fatigue penalty is subtracted from this budget before the net is applied.
+   `INCUMBENCY_APPROVAL_PIVOT = 46`, `INCUMBENCY_SHIELD_MAX = INCUMBENCY_DRAG_MAX = 0.1` (±10pp), `INCUMBENCY_APPROVAL_SLOPE = 0.01`. The pivot sits below the live national mean, so most incumbents get a smaller shield and only the weakest (~44-46 approval) tip into a mild drag.
 2. **Single-seat legislative own-race** (`legislativeIncumbentPartyId` set, US Senate): a flat, officeholder-based shield that ignores approval/favorability (already priced in elsewhere) and never becomes a drag: `LEGISLATIVE_INCUMBENCY_SHIELD = 0.06` (+6pp), decaying `LEGISLATIVE_TENURE_FATIGUE_PER_TERM = 0.01` per term beyond the first, floored at `LEGISLATIVE_INCUMBENCY_MIN = 0.01` (+1pp permanent floor).
 3. **Multi-seat / legislature fallback** (`incumbentSeatShareByParty` map, from `incumbentSeatShare.ts`): the prior cycle's per-party seat-share (computed by `computeSeatShareFromTally()` from the last resolved tally on the same seat key) scales the shield linearly: `(shareJ − shareI) × INCUMBENCY_BUDGET`. Used for proportional/multi-seat races (US House, UK Regional Council, JP Shugiin/Sangiin, DE Bundestag). Single-seat races deliberately do NOT use this fallback, a two-candidate vote split isn't a meaningful "incumbent share" signal, and returns an empty map (⇒ 0 driver contribution) when there's no prior resolved election on the same seat key.
 

@@ -38,11 +38,18 @@ Standard patterns for API routes in A House Divided.
 
 | Code | Use case                                     |
 | ---- | -------------------------------------------- |
+| 400  | Bad request (`badRequest`)                   |
 | 401  | Not authenticated (no valid token)           |
 | 403  | Authenticated but forbidden (e.g. not admin) |
 | 404  | Resource not found                           |
+| 409  | Conflict (`conflict`)                        |
 | 429  | Rate limited                                 |
+| 500  | Internal error (`internalError`)             |
 
 ## Cron vs Admin
 
 Some routes (e.g. `/api/elections/snapshot`) allow both cron and admin auth. Check cron first with `requireCron(request)`; if false, fall back to `requireAdmin()`.
+
+## Admin or API Key
+
+Scripts can call some admin routes with an `X-Api-Key` header instead of a session. Use `requireAdminOrApiKey(request)` from `@/lib/api/requireAdminOrApiKey`. A wrong key returns 401, a missing session returns 403, and a server without `INTERNAL_API_KEY` configured returns 500.

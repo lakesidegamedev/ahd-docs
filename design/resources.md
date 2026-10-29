@@ -15,7 +15,7 @@ Six resources can be extracted, defined by `EXTRACTABLE_RESOURCES` in `src/lib/c
 | Timber      | m³    | Construction / paper input                                                                          |
 | Rare Earth  | tons  | Tech sector strategic input; merged commodity (copper + rare earth minerals, demand-weighted blend) |
 
-These are a subset of the 28 commodity types tracked in the commodity pricing engine (`docs/design/commodities.md`, `COMMODITY_TYPES` in `src/lib/constants/commodities.ts`). Standard commodities (steel, electronics, etc.) have no extraction capacity model. Copper is not a separate extractable resource; it was folded into `rare_earth`.
+These are a subset of the 27 commodity types tracked in the commodity pricing engine (`docs/design/commodities.md`, `COMMODITY_TYPES` in `src/lib/constants/commodities.ts`). Standard commodities (steel, electronics, etc.) have no extraction capacity model. Copper is not a separate extractable resource; it was folded into `rare_earth`.
 
 ## Capacity Model
 
@@ -74,10 +74,13 @@ Each turn in `commodityPriceTurn.ts`:
 ## Contract Lifecycle
 
 ```
-Legislature grants → extractionContracts insert (grantedTurn = currentTurn)
+Issuer offers → counterparty accepts → extractionContracts insert (grantedTurn = currentTurn)
   └─ effective on next turn's commodity price run
+  (offers + active share capped at 75% of capacity; src/lib/extraction/commands/)
 
-Legislature revokes → soft-delete (revokedTurn = currentTurn)
+Admin direct grant → extractionContracts insert (may over-allocate)
+
+Revoked → soft-delete (revokedTurn = currentTurn)
   └─ excluded from multiplier computation on next turn
 ```
 

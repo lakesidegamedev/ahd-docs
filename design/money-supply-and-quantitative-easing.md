@@ -4,7 +4,7 @@ This page covers the money-supply aggregates (M1/M2), open market operations (QE
 
 ## M1 and M2
 
-`calculateMoneyAggregates` in `src/lib/moneySupply/calculate.ts` sums per-currency components into two aggregates. Every component is normalized to zero first if it is negative or non-finite (`money()`).
+`calculateMoneyAggregates` in `src/lib/moneySupply/rules/calculate.ts` sums per-currency components into two aggregates. Every component is normalized to zero first if it is negative or non-finite (`money()`).
 
 - **M1** = householdLiquid + campaignLiquid + nppLiquid + corporateLiquid + partyLiquid + governmentLiquid + fundLiquid + organizationLiquid.
 - **M2** = M1 + householdSavings + externalBroadMoney + bankDeposits.
@@ -21,7 +21,7 @@ This page covers the money-supply aggregates (M1/M2), open market operations (QE
 | `nppLiquid` | `npps.funds`, `npps.currencyBalances.personal`, and `npps.nppInvestmentCashAnchor` (booked in USD) |
 | `corporateLiquid` | `corporations.liquidCapital`, keyed by the corp's `liquidCurrencyCode` |
 | `partyLiquid` | `politicalParties.treasury` |
-| `governmentLiquid` | `federalBudget.treasuryBalance`, clamped to `max(0, treasuryBalance)` (see below) |
+| `governmentLiquid` | Funded Treasury cash (`federalBudget.treasuryCashLocal`) when the treasury cash ledger is enabled, otherwise `max(0, federalBudget.treasuryBalance)` (see below) |
 | `fundLiquid` | `indexFunds.cashAnchor`, converted from the internal anchor through the live exchange-rate table |
 | `organizationLiquid` | `organizationFunds.balanceLocal` (already native) |
 | `bankDeposits` / part of `creditOutstanding` | chartered private banks: `corporations.bankCharter.totalDeposits` / `.totalLoans` |
@@ -30,33 +30,31 @@ This page covers the money-supply aggregates (M1/M2), open market operations (QE
 | `bankReserves` | `centralBanks.reserveBalance` (diagnostic only) |
 | `sovereignBondsOutstanding` / `centralBankBondHoldings` | `bonds.totalIssued` / `bonds.centralBankHoldings × BOND_UNIT_FACE_VALUE` |
 
-**Government liquid is deliberately one-sided.** `governmentLiquidFromTreasury` in `src/lib/moneySupply/assemble.ts` takes `max(0, treasuryBalance)` because `federalBudget.treasuryBalance` is signed: positive is surplus cash, negative is `-debt.principal`. Taking the absolute value would count national debt as government deposits; an indebted treasury contributes 0 to M1 instead.
+**Government liquid is deliberately one-sided.** `governmentLiquidFromSpendableCash` (funded Treasury cash) and `governmentLiquidFromTreasury` in `src/lib/moneySupply/rules/assemble.ts` take `max(0, value)`. For the signed balance this is because `federalBudget.treasuryBalance` is signed: positive is surplus cash, negative is `-debt.principal`. Taking the absolute value would count national debt as government deposits; an indebted treasury contributes 0 to M1 instead.
 
 ### Household money for the unplayed population
 
-`addHouseholdMoneyFromDemography` derives a household money stock from population and median income, because the `characters` collection only ever holds players and an NPP-run world has none. Constants in `src/lib/moneySupply/assemble.ts`:
+`addHouseholdMoneyFromDemography` derives a household money stock from population and median income, because the `characters` collection only ever holds players and an NPP-run world has none. Constants in `src/lib/moneySupply/rules/assemble.ts`:
 
 - `PERSONS_PER_HOUSEHOLD = 3.2`
 - `HOUSEHOLD_LIQUID_RATIO = 0.15` (roughly two months of gross annual household income held as transaction balances)
 - `HOUSEHOLD_SAVINGS_RATIO = 0.6` (a bit over half a year's income as time/savings deposits)
 
-For each state with population, `households = population / 3.2`, `annualIncome = households × medianIncome`, and the two ratios split that into liquid and savings. Income is read per state where available (`macroMetrics`), falling back to the country's national-scope doc. The code comments state this is order-of-magnitude, not a precisely calibrated national-accounts series: a 1953 US check (Census median household income ≈ $3,900, population ≈ 158M) recovers about 60% of the seeded M2 stock from households alone, with corporates and the unmodeled residual covering the rest.
+For each state with population, `households = population / 3.2`, `annualIncome = households × medianIncome`, and the two ratios split that into liquid and savings. Income is read per state where available (`macroMetrics`), falling back to the country's national-scope doc. The code comments state this is order-of-magnitude, not a precisely calibrated national-accounts series: a 1953 US check (Census median household income ≈ $3,900, population ≈ 158M) recovers about 60% of the seeded M2 stock from households alone, with corporates and the stored external deposits covering the rest.
 
-### The unmodeled external residual
+### External broad money
 
-`externalBroadMoney` on each central bank is the seed-time stand-in for the entire broad-money stock, calibrated as `gdp × broadMoneyToGdpRatio(preset, countryId)` (`seedMoneySupplyBaselines` in `src/lib/moneySupply/seed.ts`). Once household/corporate/government components above are measured, counting the full seed on top would double-count. `effectiveExternalBroadMoney` in `src/lib/moneySupply/assemble.ts` handles this:
+`externalBroadMoney` on each central bank is the seed-time stand-in for the entire broad-money stock, calibrated as `gdp × broadMoneyToGdpRatio(preset, countryId)` (`seedMoneySupplyBaselines` in `src/lib/moneySupply/seed.ts`). `effectiveExternalBroadMoney` in `src/lib/moneySupply/rules/assemble.ts` now counts the stored external deposits at face value:
 
 ```
-baseline = externalBroadMoney - netMoneyCreatedLifetime
-residual = max(0, baseline) * UNMODELED_EXTERNAL_SHARE   // UNMODELED_EXTERNAL_SHARE = 0.25
-effective = max(0, residual + netMoneyCreatedLifetime)
+effective = max(0, externalBroadMoney)
 ```
 
-`UNMODELED_EXTERNAL_SHARE = 0.25` approximates the mid-century US currency-in-circulation share of M2 (cited to Friedman & Schwartz as a stylized composition reference, not a precision calibration). `netMoneyCreatedLifetime`, the running total of every QE, QT, treasury advance and liquidity injection this bank has done, passes through at full face value on top of the scaled-down baseline, so central-bank operations move M2 one-for-one regardless of how much of the legacy seed has been scaled away.
+The earlier scaling of the seed by an unmodeled external share, with `netMoneyCreatedLifetime` added on top, no longer exists.
 
 ### Growth rate
 
-`annualizedMoneyGrowthPct` in `src/lib/moneySupply/calculate.ts` annualizes geometrically: `(closing / opening) ** (TURNS_PER_YEAR / turnsElapsed) - 1`. It returns `null`, not `0`, whenever `opening <= 0`, `closing <= 0`, or `turnsElapsed < MIN_MONEY_GROWTH_BASE_TURNS = 12` (a game quarter). Annualizing a two-turn bootstrap rebase raises the ratio to the 24th power and produces a meaningless number; `null` lets downstream consumers fall back to GDP growth instead of reading a false "money supply is frozen."
+`annualizedMoneyGrowthPct` in `src/lib/moneySupply/rules/calculate.ts` annualizes geometrically: `(closing / opening) ** (TURNS_PER_YEAR / turnsElapsed) - 1`. It returns `null`, not `0`, whenever `opening <= 0`, `closing <= 0`, or `turnsElapsed < MIN_MONEY_GROWTH_BASE_TURNS = 12` (a game quarter). Annualizing a two-turn bootstrap rebase raises the ratio to the 24th power and produces a meaningless number; `null` lets downstream consumers fall back to GDP growth instead of reading a false "money supply is frozen."
 
 ## Snapshots: when and how they are written
 
@@ -133,15 +131,17 @@ Money-supply growth is one of thirteen additive pressure terms in `calculateInfl
 Inside `calculateInflationWithBreakdown`:
 
 ```
-moneySupply = clamp(-1.5, 2.5, (moneySupplyGrowthPct - gdpGrowth) * 0.08)
+moneySupply = clamp(-1.5, 2.5, (moneySupplyGrowthPct - gdpGrowth) * moneyGrowthCoeff)
 ```
+
+The coefficient is era dependent: 0.08 while pegged (`PEGGED_MONEY_GROWTH_COEFF` in `src/lib/budget/inflation.ts`) and 0.15 after the Bretton Woods exit (`BW_POST_EXIT_MONEY_COEFF` in `src/lib/monetary/brettonWoods.ts`).
 
 Excess M2 growth over real GDP growth contributes up to +2.5pp of inflation; a money supply contracting faster than GDP contributes down to -1.5pp. This term is one addend among unemployment (Phillips curve), the prime-rate gap (`monetary`, a *separate* term from expected-inflation channel, not to be confused with this money-supply term), fiscal deficit, tariffs, wages, commodities, forex, savings flow, housing, and discretionary policy stance, all summed into `rawInflation`, then smoothed with inertia and pulled toward target by mean reversion. Money supply is a real but bounded driver, not the dominant one: its ±pp cap (-1.5 to +2.5) is comparable in size to several of the other cost-push terms, not larger.
 
 ## Key Files
 
-- `src/lib/moneySupply/calculate.ts`, `calculateMoneyAggregates`, `annualizedMoneyGrowthPct`, `MIN_MONEY_GROWTH_BASE_TURNS`
-- `src/lib/moneySupply/assemble.ts`, component helpers, household demography derivation, `effectiveExternalBroadMoney`, `UNMODELED_EXTERNAL_SHARE`
+- `src/lib/moneySupply/rules/calculate.ts`, `calculateMoneyAggregates`, `annualizedMoneyGrowthPct`, `MIN_MONEY_GROWTH_BASE_TURNS`
+- `src/lib/moneySupply/rules/assemble.ts`, component helpers, household demography derivation, `effectiveExternalBroadMoney`
 - `src/lib/moneySupply/snapshot.ts`, `snapshotMoneySupply`, `MONEY_SUPPLY_SNAPSHOTS_COLLECTION`
 - `src/lib/moneySupply/seed.ts`, `seedMoneySupplyBaselines`, seeds `externalBroadMoney` from `broadMoneyToGdpRatio`
 - `src/lib/moneySupply/quantitativeEasing.ts`, `planOpenMarketOperation`, `applyQePriceSupport`

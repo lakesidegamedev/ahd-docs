@@ -48,11 +48,11 @@ Players shift their policy position one step at a time via `POST /api/settings/p
 
 The new value is clamped to −5..+5; requests that would go out of bounds are rejected with a 400 error.
 
-A `policy_shift` achievement is awarded on the first successful shift.
+A shift can instead be paid with one position update voucher, which costs 0 actions and 0 infamy (`src/lib/positionUpdateVouchers/rules.ts`). A `policy_shift` achievement is awarded on the first successful shift.
 
 ### Changing Positions - Bill Votes
 
-Voting on bills does not currently shift character policy positions in the codebase. The economic/social scores on a bill's provisions indicate the ideological direction of the bill, but no automatic position adjustment is applied to the voting character.
+Voting on a bill shifts the voter's own policy positions (`src/lib/policyShift.ts`). The bill's position on each axis is the average of its provisions that take a stance there (omitted and 0 values are ignored). An aye vote moves the voter toward the bill by `VOTE_SHIFT_STEP` = 0.25 per axis, never past the bill's position; a nay vote moves them away by 0.25; an abstention, an axis with no stance, or a voter already on the bill's position does not move. Results are clamped to -5..+5 and snapped to the 0.05 grid.
 
 ---
 
@@ -129,9 +129,11 @@ Active `statePolicies` records also drive **per-turn metric effects** through `p
 const newValue = applyPolicyDecay(currentValue, target);
 
 // @shared/constants/formulas.ts
-export function applyPolicyDecay(current: number, target: number): number {
-  const DECAY_RATE = 0.02; // 2% per turn
-  return current + (target - current) * DECAY_RATE;
+export const POLICY_TAU = 139; // turns
+
+export function applyPolicyDecay(current: number, target: number, tau = POLICY_TAU): number {
+  const decayFactor = 1 - Math.exp(-1 / tau); // about 0.7% of the remaining gap per turn
+  return current + (target - current) * decayFactor;
 }
 ```
 
@@ -178,10 +180,9 @@ Federal policies apply at reduced strength per state/region:
 
 ```typescript
 // @shared/constants/formulas.ts
-export function getFederalMultiplier(countryId: CountryId): number {
-  if (countryId === "US") return 1 / 50; // 50 states
-  if (countryId === "UK") return 1 / 12; // 12 UK regions
-  return 1;
+export function getFederalMultiplier(countryId: string): number {
+  // UK 1/12 (regions), JP 1/8 (regions), DE 1/16 (Länder)
+  return FEDERAL_MULTIPLIER_BY_COUNTRY[countryId] ?? 1 / 50; // default 1/50 (US states)
 }
 ```
 
@@ -201,7 +202,7 @@ const decayFactor = applyHalfLifeDecay(1, turnsElapsed, adjustmentHalfLife);
 | ----------------- | ----------------------------------- |
 | 24                | 25% of original                     |
 | 48                | 50% of original                     |
-| 96                | 75% of original                     |
+| 96                | 71% of original                     |
 
 ### Direct Tick Rates
 
@@ -265,7 +266,7 @@ shifts[effect.groupId] = (shifts[effect.groupId] ?? 0) + shiftAmount;
 Federal demographic effects also use the country-aware multiplier:
 
 ```typescript
-// US: 1/50 per state, UK: 1/12 per region
+// US: 1/50 per state, UK: 1/12 per region, JP: 1/8 per region, DE: 1/16 per Land; any other country defaults to 1/50
 const federalPolicies = statePolicies.get("federal").map((p) => ({
   ...p,
   scopeMultiplier: getFederalMultiplier("US"), // 0.02

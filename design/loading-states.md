@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-**As of 2026-08-11, this plan has been fully implemented.** The app now has 16 `loading.tsx` files, all using layout-matching skeleton components. The five spinner-only routes, the raw-div legislature loading state, and the inline text-based loading states described below have all been converted to skeletons. This document is kept as a historical record of the original audit and the design principles that guided the fix; the sections below describe the state of the code as it was in May 2026, before the rewrite.
+**As of 2026-08-11, this plan has been fully implemented.** The app now has 29 `loading.tsx` files, all using layout-matching skeleton components. The five spinner-only routes, the raw-div legislature loading state, and the inline text-based loading states described below have all been converted to skeletons. This document is kept as a historical record of the original audit and the design principles that guided the fix; the sections below describe the state of the code as it was in May 2026, before the rewrite.
 
 **Goal (achieved):** Every data-dependent route shows a layout-matching skeleton during loading. No spinner-only pages. No layout shifts between loading and loaded states.
 
@@ -54,9 +54,9 @@ Every route and inline state flagged below has been converted. Confirmed in the 
 - `src/app/admin/page.tsx` uses `<Suspense fallback={<AdminTabsSkeleton />}>` - no inline `animate-spin` div.
 - `src/app/country/[code]/legislature/LegislatureClient.tsx` defines `LegislatureFallback` as `<LegislatureSkeleton />`, not `"Loading Congress…"` text.
 
-The shared primitives file exists at `src/components/ui/loading-skeletons.tsx`. `LoadingSpinner` (`src/components/ui/LoadingSpinner.tsx`) is no longer used by any page-level loading path; its one remaining usage in the app is `src/app/country/[code]/political-metrics/components/CompareView.tsx`, an inline comparison-loading indicator, consistent with the original plan's intent to keep it for small inline regions.
+The shared primitives file exists at `src/components/ui/loading-skeletons.tsx`. `LoadingSpinner` (`src/components/ui/LoadingSpinner.tsx`) is no longer used by any page-level loading path; it remains in use only for small inline indicators: `src/app/country/[code]/political-metrics/components/CompareView.tsx`, `src/components/corporation/ProductStudio.tsx` and `src/components/corporation/IndustrialRelationsSection.tsx`, consistent with the original plan's intent to keep it for small inline regions.
 
-The repo now has 16 `loading.tsx` files (not 11) and 207 `page.tsx` files (not 140).
+The repo now has 29 `loading.tsx` files (not 11) and 223 `page.tsx` files (not 140).
 
 ### 2.2 Spinner-Only Routes (historical - fixed, see 2.1a)
 
@@ -84,7 +84,7 @@ These client components manage their own loading state and return plain text/spi
 
 ### 2.4 Pages Without Any Loading State (historical counts)
 
-At the time of the original audit, 119 of 140 pages lacked a `loading.tsx`. The repo has since grown to 207 `page.tsx` files against 16 `loading.tsx` files, so most pages still inherit the root `src/app/loading.tsx` rather than having a route-specific one. Most are static inform pages (guides, legal, about) or simple routes that inherit the root `loading.tsx`. This is acceptable. Priority pages that were considered for future phases if they became data-heavy:
+At the time of the original audit, 119 of 140 pages lacked a `loading.tsx`. The repo has since grown to 223 `page.tsx` files against 29 `loading.tsx` files, so most pages still inherit the root `src/app/loading.tsx` rather than having a route-specific one. Most are static inform pages (guides, legal, about) or simple routes that inherit the root `loading.tsx`. This is acceptable. Priority pages that were considered for future phases if they became data-heavy:
 
 - `country/[code]/page.tsx` - country overview (currently covered by region loading)
 - `elections/page.tsx` - election listing

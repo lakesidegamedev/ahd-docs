@@ -47,7 +47,7 @@ Your party takes a tax on your income (0-33%):
 ### How Ads Work
 
 - **Advertise ("Run Advertisements")**, Spend funds to boost favorability. There is **no audience-targeting**: the action is untargeted and moves the candidate's overall favorability, not a specific demographic group's approval.
-- **Effect**: base +3 favorability (`advertiseFavorabilityGain()` in `src/lib/actions.ts`), with diminishing returns above 70% favorability (−0.1 per point over 70, floored at 1), then scaled by the candidate's charisma multiplier (±20%)
+- **Effect**: base +3 favorability (`advertiseFavorabilityGain()` in `src/lib/actions/rules.ts`), with diminishing returns above 70% favorability (−0.1 per point over 70, floored at 1), then scaled by the candidate's charisma multiplier (±20%)
 - **Cost**: scales with current favorability (tier 0-4, base cost 5-9 action points) and state GDP per capita
 
 ### Media Spending (separate upgrade track)

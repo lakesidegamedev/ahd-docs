@@ -59,7 +59,7 @@ anti-corruption). The score drives leader confidence drift.
 
 ## Regional Budget
 
-File: `src/lib/turn/cnRegionalBudget.ts`
+File: `src/lib/countries/cn/cnRegionalBudget.ts`
 
 **Revenue sources per region:**
 
@@ -72,7 +72,7 @@ File: `src/lib/turn/cnRegionalBudget.ts`
    (`CN_minister_of_finance` cabinet setting) sets allocation percentages.
    Defaults to an equal 1/7th split of a national pool sized by
    `centralTransferPerCapita: 35` (`COUNTRY_CONFIGS.CN.onePartyRegionalBudget`,
-   `src/lib/constants/countries.ts`) × national population, a flat per-capita
+   `src/lib/countries/cn/institutionsFacts.ts`) × national population, a flat per-capita
    figure, not the generic 4,000 default used elsewhere. Era overrides (e.g.
    the 1953 seed) rescale it further (`centralTransferPerCapita: 2.77`).
 

@@ -38,27 +38,23 @@ An active presidential candidacy "captures" the canvass target - even at home, a
 
 ### Effectiveness Formula
 
+Elections created under the current campaign rules (`src/lib/campaignTargeting/rules.ts`) use this formula. A legacy path (`calculateCanvassingBoost`) is still computed and stored alongside it for older races.
+
 ```
-baseBoost         = 0.05 (percentage points)
-distance          = |charEcon − demoEcon| + |charSocial − demoSocial|
-alignmentMult     = max(0.1, 1.0 − distance × 0.15)
-seasonMult        = isActiveCampaignSeason ? 2.0 : 1.0
-rawBoost          = baseBoost × alignmentMult × seasonMult
-adjustedBoost     = rawBoost × (1 − |currentModifier| / 20)   // diminishing returns
-newModifier       = clamp(currentModifier + adjustedBoost, −20, 20)
+CANVASS_BASE_BOOST = 2 (turnout points)
+distance²          = ((charEcon − demoEcon)² + (charSocial − demoSocial)²) / 2
+campaignFit        = 0.2 + 0.8 × exp(−distance² / 18)
+closingMult        = isActiveCampaignSeason ? 2 : 1
+boost              = CANVASS_BASE_BOOST × campaignFit² × closingMult
 ```
 
-**Alignment** is based on Manhattan distance between the character's `policies.economic` / `policies.social` positions and the demographic's lean values (−5 to +5 on each axis):
+`addTurnoutBoost` then applies the boost to the current modifier, clamped to ±20 (`TURNOUT_CAP`).
 
-| Distance | Alignment multiplier |
-| -------- | -------------------- |
-| 0        | 1.0×                 |
-| 3        | 0.55×                |
-| 6+       | 0.1× (floor)         |
+**Fit** is based on the distance between the character's `policies.economic` / `policies.social` positions and the target audience's average lean. Fit runs from 1.0 at the same position down toward a floor of 0.2, and the boost scales with its square, so a distant audience gets as little as 0.04 of the base.
 
-**Campaign season multiplier**: When an election in the state has status `active` and its `endTime` falls within the next 4 turns (4 real hours), the multiplier doubles to **2.0×**. Outside campaign season the multiplier is 1.0×.
+**Campaign season multiplier**: When an election in the state has status `active` and its `endTime` falls within the next 4 turns (4 real hours), the boost doubles. Outside campaign season the multiplier is 1.
 
-**Diminishing returns**: As the existing modifier approaches its ±20 cap, each additional boost delivers less. At a current modifier of +10, a 1 pp raw boost lands as 0.5 pp effective. At ±20 the boost reaches zero.
+**Diminishing returns**: Resistance applies only in the direction of the boost. A positive boost on a modifier at +10 lands at half strength, and reaches zero at +20. A positive boost on a suppressed (negative) modifier is not reduced, so canvassing can recover a bucket that has been pushed down.
 
 ### Timing
 
@@ -68,7 +64,7 @@ Canvassing takes effect **immediately** upon the API call - the modifier is writ
 
 ### Modifier Decay
 
-All turnout modifiers, including those set by canvassing, decay **2% per turn** toward zero. This means a single canvass action does not persist indefinitely; sustained canvassing is required to maintain a boost into election day.
+All turnout modifiers, including those set by canvassing, decay toward zero with a half-life of 6 turns (about 11% lost per turn, `TURNOUT_HALF_LIFE` in `src/lib/campaignTargeting/rules.ts`). Legacy turnout modifiers still decay 2% per turn. This means a single canvass action does not persist indefinitely; sustained canvassing is required to maintain a boost into election day.
 
 ### How Modifiers Affect Election Turnout
 
@@ -82,7 +78,7 @@ Canvassing modifies `stateDemographicTurnout.modifiers[category][group]` for the
 
 ### Interaction with Party GOTV
 
-Party GOTV spending and player canvassing both write to the same `modifiers` fields in `stateDemographicTurnout`. They stack additively (both are subject to the ±20 cap and diminishing returns independently). Turn processing order:
+Party GOTV spending and player canvassing both write to the same `modifiers` fields in `stateDemographicTurnout`. They stack additively (both are subject to the ±20 cap independently). Turn processing order:
 
 1. **Decay** applied to all modifiers.
 2. **Party GOTV** boosts applied (passive, budget-driven).
@@ -125,11 +121,11 @@ Read-only at request time. Eligibility resolution looks up the authenticated cha
 
 ## Strategy Notes
 
-- **Canvass demographics you're aligned with.** At maximum misalignment the effective boost is only 0.1× of base, making it nearly wasted spend. At perfect alignment you get the full 0.05 pp (or 0.10 pp in campaign season).
-- **Time it for campaign season.** The 2× season multiplier makes the 4 turns before an election the highest-value window. A well-timed burst of canvassing outperforms the same actions spread over earlier turns.
+- **Canvass demographics you're aligned with.** A distant audience gets as little as 0.04 of the base boost (fit squared, floor 0.2), making it nearly wasted spend. At perfect alignment you get the full 2 points (or 4 in campaign season).
+- **Time it for campaign season.** The 2× closing multiplier makes the 4 turns before an election the highest-value window. A well-timed burst of canvassing outperforms the same actions spread over earlier turns.
 - **Canvassing vs. ads.** Canvassing raises turnout for a demographic; ads raise your favorability with that demographic. Turnout boosts help you only if the boosted group leans toward you. On demographics that lean away from you, ads to improve favorability may be more efficient than canvassing.
 - **Stack with party GOTV.** If your party is already running GOTV budget on aligned demographics, the state modifier may already be elevated. Diminishing returns apply - check the current modifier before canvassing to gauge how much headroom remains before hitting the cap.
-- **Decay planning.** A +5 modifier decays to roughly +3.6 after three turns (2% per turn of the current value). For an election 4 turns out, start canvassing 2-3 turns ahead rather than immediately.
+- **Decay planning.** A +5 modifier halves to +2.5 after six turns and is about +3.5 after three. For an election 4 turns out, start canvassing 2-3 turns ahead rather than immediately.
 
 ## Related Documentation
 

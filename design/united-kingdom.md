@@ -60,7 +60,7 @@ party ids and their supporting seats are included when applicable. A successful
 appointment writes the PM to `governmentFormations`, marks the government
 formed, and clears the previous cabinet.
 
-Votes of no confidence use a whole-chamber simple majority. Any eligible
+Votes of no confidence need a majority of all Commons seats (`floor(totalSeats / 2) + 1`), not a majority of votes cast. Any eligible
 lower-chamber member may propose and vote; the mechanism is not restricted to
 the governing block. See [Parliamentary Government](./parliamentary-government.md)
 and [PM and No Confidence](./uk-pm-no-confidence.md).
@@ -78,7 +78,7 @@ lock remains if the minister is fired. See [UK Cabinet](./uk-cabinet.md).
 ## Legislation
 
 UK national bills use `UK_NATIONAL_CONFIG` in
-`src/lib/turn/billLifecycle/configs/uk.ts`:
+`src/lib/countries/uk/elections/billLifecycle.ts`:
 
 1. The Commons votes by simple majority.
 2. About 28% of passed bills enter a 1 to 2 turn Lords-revision hold.

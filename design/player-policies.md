@@ -20,6 +20,8 @@ Use the **policy shift** action from settings (API: `POST /api/settings/policy`)
 | National influence  | −5% (floored at 0) |
 | Infamy              | +5                 |
 
+Instead of paying those costs you can spend one **position update voucher**: a voucher shift costs no actions, no influence and no infamy (`src/lib/positionUpdateVouchers/rules.ts`).
+
 Each request moves **one axis** by one step (`direction` ±1). Values clamp to **−5…+5**; out-of-range requests are rejected.
 
 ## Bills and voting
