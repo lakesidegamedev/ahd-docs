@@ -1,24 +1,28 @@
 # Player Progression
 
+How a character grows from a new independent to holding the top office: the career phases, what each office pays in actions and campaign funds, and how the main stats move turn to turn. This page covers the US and UK ladders in detail; other countries use the same stat and action rules with their own offices (see each country's wiki pages).
+
+Player guide: [Player Progression](https://www.ahousedividedgame.com/wiki/player-progression)
+
 ## Character Creation
 
 When a player first joins the game:
 
-1. **Choose Country**: US or UK
+1. **Choose Country**: any country enabled for players (US and UK are detailed below)
 2. **Create Character**: Choose name and avatar
 3. **Select Starting State / Region**:
    - US: Pick any of the 50 states (affects PI, fund generation base, election eligibility)
    - UK: Pick ENG, SCO, WAL, or NIR (determines Commons election eligibility)
 4. **Set Policy Positions**: Choose economic and social positions (−5 to +5 scale)
 5. **Initial Resources**:
-   - **Actions**: 25 initial bonus actions
-   - **Campaign Funds**: $250,000 starting funds
+   - **Actions**: 25 initial bonus actions (`startingActions` in `src/lib/seeds/reference/gameConfig.ts`), plus 10 if the account was referred (`src/app/api/auth/character/route.ts`)
+   - **Campaign Funds**: $250,000 (`startingFunds`, same file), scaled by the world's era price level and converted to the home currency
    - **Cash on Hand**: $0
    - **Political Influence**: 0
    - **National Influence**: 0
    - **Favorability**: 50 (neutral)
    - **Infamy**: 0
-   - **Donor Base Level**: 0
+   - **Donor Base Level**: 1 (`MIN_STARTING_DONOR_BASE_LEVEL`, `src/app/api/auth/character/route.ts`)
    - **Party Influence**: 0
 6. **Starting Status**: Independent (not in a party), not in office
 7. **Account Limit**: One character per account
@@ -92,7 +96,7 @@ During a presidential **general election**, active candidates can **Travel** to 
 - Run for re-election in same office
 - Or seek higher office (House → Senate → Governor → President)
 - Only one office at a time
-- **Note**: Moving toward a presidential run shifts the key influence stat from PI to NPI. NPI accrues passively every turn (+state PI ÷ 100), so maintaining high state influence early accelerates NPI growth
+- **Note**: Moving toward a presidential run shifts the key influence stat from PI to NPI. NPI gains each turn from state PI plus a bonus for the highest position held, and decays 1% per turn, so it settles where gain equals decay. Maintaining high state influence early accelerates NPI growth (`src/lib/turn/actionRefresh.ts`)
 
 ---
 
@@ -138,7 +142,7 @@ During a presidential **general election**, active candidates can **Travel** to 
 | Governor       | +2    | 6              |
 | President      | +4    | 8              |
 
-The base is at least 4 per turn (`MIN_BASE_ACTIONS_PER_TURN` in `src/lib/turn/actionRefresh.ts`); office bonuses come from `src/lib/countries/us/institutionsFacts.ts`.
+The base is at least 4 per turn (`MIN_BASE_ACTIONS_PER_TURN` in `src/lib/turn/actionRefresh.ts`; `baseActionsPerTurn: 4` in `src/lib/seeds/reference/gameConfig.ts`); office bonuses come from `src/lib/countries/us/institutionsFacts.ts`. Central bank chair (+3), justice seats and chamber leadership roles stack on top of an elected office.
 
 ### Fund Generation Bonus (per turn)
 
@@ -151,7 +155,7 @@ The base is at least 4 per turn (`MIN_BASE_ACTIONS_PER_TURN` in `src/lib/turn/ac
 | Governor       | +$15,000 |
 | President      | +$50,000 |
 
-Base rate + donor bonus also apply. See `src/lib/utils/fundGeneration.ts`.
+Values are `OFFICE_FUND_BONUS` in `src/lib/utils/fundGeneration.ts`, paid per turn (a turn is 60 minutes, `turnLengthMinutes` in `gameConfig.ts`). The flat office bonus is not scaled by state wealth or era price level; the base rate and donor bonus are. UK equivalents: MP $5,000, Prime Minister $50,000.
 
 ### Vice President
 
@@ -208,15 +212,44 @@ When not holding office, players can:
 
 | Stat                | Starting   | How to Increase                               | Notes                                            |
 | ------------------- | ---------- | --------------------------------------------- | ------------------------------------------------ |
-| Political Influence | 0          | Campaign (+1%)                                | 0-100, decays each turn                          |
-| National Influence  | 0          | +state PI/100 per turn                        | Uncapped; logarithmic scaling in president races |
+| Political Influence | 0          | Campaign (+1%)                                | 0-100, decays 0.75% per turn (faster for the ruling party) |
+| National Influence  | 0          | State PI term + position bonus per turn       | Decays 1% per turn; logarithmic scaling in president races |
 | Favorability        | 50         | Ads, Campaign, Travel (+1%/turn while active) | 0-100, drained by Infamy >20%, attacks           |
 | Infamy              | 0          | Attack or NPP lower actions                   | 0-100, decays 5%/turn                            |
 | Campaign Funds      | $250k      | Fundraise, fund gen, donor base               | Spent on campaign actions                        |
 | Cash on Hand        | $0         | Personal campaign donations (50%)             | Wire transfers only                              |
-| Donor Base Level    | 0          | Build Donor Network                           | $50k + $25k×level per level                      |
-| Actions             | 25 initial | +3 base + office bonus + party bonus per turn | Cap 200; hoarding penalty above 100              |
+| Donor Base Level    | 1          | Build Donor Network                           | $50k + $25k×level per level                      |
+| Actions             | 25 initial | +4 base + office bonus + party bonus per turn | Cap 200 (up to 250 with Energy 10); lose 4 per turn above 100 (up to 125) |
 | Party Influence     | 0          | Passive accrual while party member            | 0-100; drives bonus action share per turn        |
+
+---
+
+## Timing
+
+Progression is applied by the hourly turn processor. `processActionRefresh` in `src/lib/turn/actionRefresh.ts` runs once per turn for every character and does, in one pass: action refresh (base + office + chair/justice/leadership bonuses, then the Energy cap), influence decay, national influence gain and decay, infamy decay (x0.95) and the infamy favorability drain (computed from pre-decay infamy), and fund generation inputs. Office and election results change a character's office between turns, so a new officeholder's bonuses first apply on the next refresh. Election phases are described in [Election Mechanics](./elections.md).
+
+## Edge cases and limits
+
+- **Action cap.** The cap is Energy based: 200 at Energy 1, up to 250 at Energy 10 (`ENERGY_BASE_ACTION_CAP`, `ENERGY_MAX_ACTION_CAP` in `src/lib/stats/statsConstants.ts`). Characters with no Energy stat use the baseline.
+- **Hoarding.** Above the threshold (100 at Energy 1, up to 125 at Energy 10, `ENERGY_BASE_HOARD_THRESHOLD`, `ENERGY_MAX_HOARD_THRESHOLD`) a character loses 4 actions per turn (`ACTION_HOARD_PENALTY`). It stops banked actions being spent in one burst before an election.
+- **Base floor.** A config value below 4 is raised to 4.
+- **Home state change.** Costs all Political Influence in every state.
+- **Party switch.** Leaving and rejoining resets Party Influence to 0.
+- **Infamy.** Floors at 0; favorability drain applies only above 20 infamy.
+- **Travel.** Presidential general-election candidates only. Cost by electoral votes (`getTravelActionCost`, `src/lib/constants/states.ts`): 3 or fewer to 5 EV costs 3, 6 to 10 costs 5, 11 to 20 costs 7, above 20 costs 10 actions.
+- **Stacking.** Offices do not stack with each other (one office at a time); chair, justice and leadership bonuses do stack with an office.
+
+## Connections
+
+**Driven by**
+- [Election Mechanics](./elections.md): office won or lost sets the action and fund bonuses (`currentOffice` read in `src/lib/turn/actionRefresh.ts`).
+- [Political Parties](./parties.md): Party Influence sets the bonus-action share from the party pool.
+- [Stats & Actions](./stats-actions.md): Energy sets the action cap and hoard threshold (`energyActionLimits`, `src/lib/stats/statDrift.ts`).
+
+**Affects**
+- [NPP System](./npp-system.md): NPP stat decay mirrors player decay in the same refresh pass.
+- Fund generation: office bonus feeds `src/lib/utils/fundGeneration.ts`.
+- [Election Mechanics](./elections.md): PI and NPI drive primary scores and general election reach.
 
 ---
 
@@ -227,3 +260,5 @@ When not holding office, players can:
 - [Political Parties](./parties.md) - Party influence, leadership, action pool
 - [NPP System](./npp-system.md) - NPP influence and boost
 - [United Kingdom](./united-kingdom.md) - UK-specific rules: Commons, PM formation, confidence votes
+
+Last checked: 2026-10-29, version 1.18.0

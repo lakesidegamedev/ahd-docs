@@ -1,82 +1,139 @@
 # Fundraising & Ads
 
-Campaign funds are the fuel for advertising and party operations. This guide covers how to generate funds, spend them effectively, and manage your campaign budget.
+Campaign funds pay for advertising, campaigning, donor building and party operations. This page is the exact rules for earning funds (per-turn generation, the Fundraise action, the campaign page income) and spending them on ads and related actions.
 
-## Fund Generation
+Player guide: [Fundraising & Ads](https://www.ahousedividedgame.com/wiki/fundraising-ads)
 
-There are two related but distinct fund-generation mechanics: **personal character funds** (`src/lib/utils/fundGeneration.ts`) and **campaign funds** (`src/lib/campaigns/`). Neither has a per-demographic-group ad-targeting feature.
+There are two related but separate income systems: **personal character campaign funds** (`src/lib/utils/fundGeneration.ts`, run by `src/lib/turn/fundGeneration.ts`) and **candidate campaign funds** (`src/lib/campaigns/`). Money constants below are in anchor currency (₳) and converted to the player's local campaign currency at the write boundary. Starting campaign funds are 250,000 (`DEFAULT_STARTING_FUNDS`, `src/lib/onboarding/reward.ts`).
 
-### Passive Income (personal funds)
+## Rules
 
-Every turn, a character earns passive income based on:
+### Per-turn fund generation (personal funds)
 
-- **State GDP scalar**, wealthier states raise more
-- **Donor bonus**, scales with donor base level
-- **Office bonus**, flat, per-hour, tied to the office actually held (`OFFICE_FUND_BONUS` in `fundGeneration.ts`):
-  - House / Commons / Bundestag: +$5k/hr
-  - State Senate / Landtag: +$3k/hr
-  - Senate: +$15k/hr
-  - Governor: +$15k/hr (same as Senate, not $20k)
-  - Minister-President: +$15k/hr
-  - Vice President: +$25k/hr
-  - President / Prime Minister / Chancellor: +$50k/hr
+Gross generation per turn, before party tax (`getTotalFundGeneration`, `src/lib/utils/fundGeneration.ts`):
 
-### Campaign income (fundraisingLevel)
+```
+gross = round((baseRate + donorBonus) x gdpScalar x priceLevel) + round(officeBonus x priceLevel)
+donorBonus = DONOR_BASE_BONUS_PER_LEVEL[tier] x donorBaseLevel x influenceMultiplier
+influenceMultiplier = 1 + clamp(stateInfluence, 0, 100) / 100      // 1.0 at 0%, 2.0 at 100%
+gdpScalar = clamp(statGdpPerCapita / countryBaseline, 0.9, 1.5)
+```
 
-Separately, each campaign has a `fundraisingLevel` (0-10, legacy linear scale) or an unlocked Strategic Operations fundraising tree that determines **per-turn passive campaign income**, scaled by race type (president 1.0x baseline down to State Senate 0.2x). `FUNDRAISING_INCOME[0] = $20k/turn` (no upgrade) up to higher levels at higher investment; this is separate from, and stacks with, the personal office-bonus income above.
+| Tier | State population | Base rate per turn | Donor bonus per level per turn |
+| --- | --- | --- | --- |
+| Small | under 2,000,000 | 5,000 | 100 |
+| Medium | 2,000,000 to under 8,000,000 | 10,000 | 200 |
+| Large | 8,000,000 to under 20,000,000 | 20,000 | 400 |
+| Mega | 20,000,000 and over | 40,000 | 800 |
 
-### Fundraise Action
+`priceLevel` is the era deflator (1 in the modern era), from `resolveCampaignPriceLevel` (`src/lib/campaigns/rules/priceLevel.ts`). The office bonus is flat and ignores state wealth.
 
-The Fundraise action generates immediate funds:
+| Office | Bonus per turn | Constant key |
+| --- | --- | --- |
+| US House, UK Commons, Bundestag | 5,000 | `house`, `commons`, `bundestag` |
+| US State Senate, Landtag | 3,000 | `stateSenate`, `landtag` |
+| US Senate, Governor, Minister-President | 15,000 | `senate`, `governor`, `ministerPresident` |
+| Vice President | 25,000 | `vicePresident` |
+| President, Prime Minister, Chancellor | 50,000 | `president`, `primeMinister`, `chancellor` |
+| Parliamentary cabinet, UK cabinet minister | 5,000 | `parliamentaryCabinet`, `ukCabinet` |
 
-- Base amount: `$50k + $2k × donorBaseLevel`, scaled by state PI/GDP
-- Building the donor base (`Build Donor Network` action, one-time unlock per level, L0-L75) increases the yield of future Fundraise actions
-- Consider opportunity cost vs. campaigning
+All in `OFFICE_FUND_BONUS`, `src/lib/utils/fundGeneration.ts`.
 
-## Party Tax System
+### Party tax
 
-Your party takes a tax on your income (0-33%):
+Both the state party tax and the national party tax are taken from gross generation: `floor(gross x rate / 100)` each, and the character receives `gross - stateTax - nationalTax` (`src/lib/turn/fundGeneration.ts`). `MAX_TAX_RATE = 33`; a rate above 33 yields no tax (`calculateTaxAmount`). Independents pay no tax. Each tax credits the matching party treasury. The Fundraise action credits its full yield and is not routed through this tax.
 
-- Tax rate set by party leadership
-- Funds go to party treasury (national or state)
-- Plan your budget around the tax cut
-- Higher-level offices make tax less painful due to larger base income
+### Fundraise action
 
-## Advertising
+- Cost: `FUNDRAISE_ACTION_COST = 3` action points, no funds (`src/lib/actions/rules.ts`).
+- Yield: `round(round((50,000 + 2,000 x donorBaseLevel) x influenceMultiplier x priceLevel) x statMultiplier(fundraising))`.
+- Eligibility: donor base level must be at least 1 (`isFundraiseEligible`).
+- `statMultiplier(stat) = 1 + (clamp(stat, 1, 10) - 5.5) x 0.04` (`EFFICACY_PIVOT = 5.5`, `EFFICACY_SLOPE = 0.04`, `src/lib/stats/statsConstants.ts`), so 0.82 at stat 1, 1.0 at 5.5, 1.18 at 10.
 
-### How Ads Work
+### Build Donor Network (`BuildDonorBase`)
 
-- **Advertise ("Run Advertisements")**, Spend funds to boost favorability. There is **no audience-targeting**: the action is untargeted and moves the candidate's overall favorability, not a specific demographic group's approval.
-- **Effect**: base +3 favorability (`advertiseFavorabilityGain()` in `src/lib/actions/rules.ts`), with diminishing returns above 70% favorability (−0.1 per point over 70, floored at 1), then scaled by the candidate's charisma multiplier (±20%)
-- **Cost**: scales with current favorability (tier 0-4, base cost 5-9 action points) and state GDP per capita
+- Action points: `min(20, round(4 + (level / 75)^1.4 x 16))`. L0 4, L10 5, L25 8, L50 13, L65 17, L75 20.
+- Funds: `round(round((3,000 + 1,500 x level) x gdpScalar / 1,000) x 1,000 x priceLevel)`, with `gdpScalar = clamp(gdpPerCapita / baseline, 0.85, 2.0)`. Constants `BUILD_DONOR_BASE_FUND = 3,000`, `BUILD_DONOR_BASE_FUND_PER_LEVEL = 1,500`; the fundraising stat applies a cost-curve discount in the quote.
+- Gain: `BUILD_DONOR_BASE_LEVEL_GAIN = 1` level per action. The design range is 0 to 75; total 0 to 75 is about 4.4M at national-average GDP.
 
-### Media Spending (separate upgrade track)
+### Advertise (Run Advertisements)
 
-Independent of the Advertise action, campaigns have a `mediaSpendingLevel` (or Strategic Operations media-spending tree) that is an **upgrade**, not a per-turn action: it pays a recurring passive favorability gain each turn (`getMediaFavPerTurn()`, `mediaSpendingLevel × 0.5` on the legacy linear scale, or the tree's Broadcast + Television magnitudes once unlocked). This is diminishing-returns-capped in aggregate by `PASSIVE_FAV_DIMINISH_THRESHOLD`/`RATE` so a maxed media stack cannot permanently pin favorability at 100.
+- Action points by current favorability (`getAdvertiseActionCost`): under 30 costs 5, 30 to 49 costs 6, 50 to 69 costs 7, 70 to 84 costs 8, 85 and over costs 9.
+- Funds: `round(round(100,000 x (1 + tier x 0.2) x gdpScalar / 1,000) x 1,000 x priceLevel)` where `tier = AP cost - 5` (0 to 4) and `gdpScalar` is clamped 0.85 to 2.0 (`ADVERTISE_BASE_FUND_COST = 100,000`, `getFundMultiplier`).
+- Favorability gain: `max(1, floor((3 - penalty) x statMultiplier(charisma)))`, `penalty = 0.1 x (favorability - 70)` above 70, else 0 (`advertiseFavorabilityGain`).
+- Advertise is untargeted. It raises the buyer's own overall favorability; there is no demographic selector in the quote or execution (`quoteAdvertiseAction`, `src/lib/actions/commands/executeAction.ts`). Demographic reach comes from policy alignment and canvassing, see [demographics targeting](./demographics-targeting.md) and [canvassing](./canvassing.md).
+- Newsroom slant discount (only when `mediaEditorialEnabled` is true, and only if the state has media sectors): `priceFactor = 1 - 0.15 x closeness` and `favorabilityFactor = 1 + 0.15 x closeness`, with `closeness = max(0, 1 - distance / 0.5) x slantStrength` (`SLANT_MAX_PRICE_DISCOUNT`, `SLANT_MAX_FAVORABILITY_BONUS`, `src/lib/mediaEditorial/slant.ts`). Cost falls to as low as 85%, gain rises up to 115%.
+- Boosting another player: Campaign and Advertise priced as the equivalent self-action times `EXTERNAL_BOOST_PREMIUM = 1.25`; attacks use `EXTERNAL_ATTACK_PREMIUM = 1.5` (`src/lib/influence/rules.ts`). That file applies no home-state or adjacency tier.
 
-### Ad Strategy
+### Campaign action
 
-- **Advertise is a blunt instrument**, it raises overall favorability, not a specific group's approval. Targeting specific demographics happens through policy alignment and canvassing (see [Demographics & Targeting](./demographics-targeting.md)), not through ads.
-- **Diminishing returns above 70% favorability** make late-game ad spending less efficient than early spending.
-- **Match your positions**, policy alignment, not ad targeting, is what makes a candidate resonate with a given demographic group.
+- Action points by state political influence (PI): under 20 costs 1, 20 to 39 costs 2, 40 to 59 costs 3, 60 to 79 costs 4, 80 and over costs 5 (`getCampaignActionCost`).
+- Funds: `round(round(20,000 x tier x (1 + (tier - 1) x 0.2) x gdpScalar / 1,000) x 1,000 x priceLevel)` (`CAMPAIGN_BASE_FUND_COST = 20,000`).
+- PI gain: `max(0.1, (1 - penalty) x effectiveness)` with `penalty = (PI - 50) / 75` above 50 (`campaignInfluenceGain`). Not allowed at PI 100 (`CAMPAIGN_MAX_INFLUENCE`).
+- PI decay: 0.75% of current PI per turn (`POLITICAL_INFLUENCE_DECAY_RATE = 0.0075`, `shared/constants/formulas.ts`), multiplied by `2 - approval / 100` for members of the party holding the national executive (2.0 at 0% approval, 1.5 at 50%, 1.0 at 100%).
 
-## Budget Management
+### Personal Campaign Donation (`ConvertCash`)
 
-The campaign page budget tab shows:
+- Cost: `CONVERT_CASH_ACTION_COST = 2` action points plus the chosen amount of personal cash.
+- Campaign funds credited: `floor(amount x 0.5)` (`CONVERT_CASH_RATE`). The other half is lost to the transfer; it does not stay as cash.
+- Infamy: `min(100, round(15 x (amount / 1,000,000)^0.564))`, about 4 at 100,000, 15 at 1,000,000, 55 at 10,000,000.
 
-- **Income vs. spending** over time
-- **Category breakdown**, Where your money is going
-- **Per-turn rate**, Your net income after expenses and taxes
+### Campaign page income
 
-## Tips
+Candidate campaigns have their own per-turn passive income (`src/lib/campaigns/income.ts`, `src/lib/campaigns/upgradeCosts.ts`):
 
-1. **Fundraise early**, Build a war chest before election season
-2. **Don't hoard**, Unspent funds don't compound; spend on ads when it matters
-3. **Office income is king**, Winning even a House seat dramatically increases your income
-4. **Watch party tax**, If your party has a high tax rate, factor it into your planning
+| Fundraising level | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Base income per turn | 20,000 | 35,000 | 60,000 | 100,000 | 150,000 | 200,000 | 350,000 | 600,000 | 1,000,000 | 2,500,000 | 5,000,000 |
 
-## Related Pages
+(`FUNDRAISING_INCOME`.) Income is multiplied by a race-family scalar (`CAMPAIGN_FAMILY_SCALAR_BY_ELECTION_TYPE`): president 1.0; senate, governor, commons, shugiin, sangiin, bundestag and NPC delegate 0.5; ministerPresident and landtag 0.4; house, regional council and people's congress 0.3; special commons 0.3; state senate 0.2; unknown types 1.0. A started Strategic Operations fundraising tree replaces the legacy level table. Upgrade costs and maintenance are in [campaign strategy](./campaign-strategy.md).
 
-- [Campaign Strategy](./campaign-strategy.md), Overall campaign planning
-- [Stats & Actions](./stats-actions.md), Action costs
-- [Campaign Manager](./campaign-manager.md), Using the campaign page budget tab
+## Worked example
+
+A medium-tier state (population 5,000,000), donor level 5, state influence 50%, US House seat, gdpScalar 1.0, modern era.
+
+- Donor bonus `= 200 x 5 x 1.5 = 1,500`. Gross `= (10,000 + 1,500) x 1.0 + 5,000 = 16,500` per turn.
+- With state tax 10% and national tax 20%: taxes `1,650 + 3,300`; the player receives `11,550`.
+- Fundraise at neutral stats: `(50,000 + 10,000) x 1.5 = 90,000` for 3 AP, untaxed.
+- Ad at favorability 75, neutral charisma, gdpScalar 1.0: AP 8, tier 3, funds `100,000 x 1.6 = 160,000`, gain `floor(3 - 0.5) = 2`. At favorability 90: AP 9, funds 180,000, gain `floor(3 - 2) = 1`.
+
+## Timing
+
+- Per-turn generation runs in `processFundGeneration` (`src/lib/turn/fundGeneration.ts`), called from `src/simulation/phases/turnPhaseRegistry.ts`.
+- Fundraise, Build Donor Network, Advertise, Campaign and ConvertCash run immediately when the player acts (`executeAction`), not in a turn phase.
+- PI decay runs in the action refresh each turn (`src/lib/turn/actionRefresh.ts`).
+- Campaign page income is added per turn by the campaign turn, see [campaign manager](./campaign-manager.md).
+
+## Edge cases and limits
+
+- Donor level 0 produces no donor bonus and cannot Fundraise.
+- Ad favorability gain is floored at 1 after the charisma multiplier, so an ad is never wasted completely, but cost keeps rising with the favorability tier.
+- Party tax above 33 is ignored; independents skip tax.
+- Missing home-state GDP or population, or an unallocated charisma stat, rejects an Advertise quote rather than falling back to neutral values.
+- `gdpScalar` for income is clamped 0.9 to 1.5; for action costs 0.85 to 2.0. Missing GDP defaults the income scalar to 1.0.
+- ConvertCash has no cap on amount, only the infamy cap of 100.
+- Unspent funds do not compound; there is no interest on campaign funds.
+- Ads currently apply their favorability immediately; the political media order path in `executeAction.ts` is switched off in the shipped code.
+
+## Connections
+
+**Driven by:**
+
+- State population, GDP and influence (`src/lib/utils/fundGeneration.ts`), see [demographics](./demographics.md).
+- Office held and party tax rates, see [parties](./parties.md) and [party influence](./party-influence.md).
+- Character stats (fundraising, charisma), see [stats and actions](./stats-actions.md).
+- Era price level and media newsroom slant.
+
+**Affects:**
+
+- Party treasuries (state and national tax credits).
+- Candidate favorability and elections, see [election engine](./election-engine.md) and [campaign strategy](./campaign-strategy.md).
+- Infamy (via ConvertCash) and political influence (via Campaign).
+
+## Order of operations
+
+1. Player acts: Fundraise, Build Donor Network, Advertise, Campaign or ConvertCash (spends action points and funds, applies effect).
+2. Each turn: `processFundGeneration` computes gross, splits state and national tax, credits the player and party treasuries.
+3. Each turn: action refresh applies PI decay; campaign turn adds candidate campaign income.
+
+Last checked: 2026-10-29, version 1.18.0

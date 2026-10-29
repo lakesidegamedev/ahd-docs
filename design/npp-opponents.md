@@ -22,14 +22,14 @@ A small **v3 ambitious-challenger pass** can add a second same-party NPP to an a
 
 ### NPP Advantages
 
-- They maintain a **minimum 10% Political Influence** (floor that doesn't decay)
+- They keep a **political influence floor of 10** (`NPP_POLITICAL_INFLUENCE_FLOOR` in `shared/constants/formulas.ts`): decay never takes them below it. Players have a decay floor of 0, but new characters also start at 10
 - They start with realistic policy positions based on party
 - They have real politician avatars and names
 
 ### NPP Disadvantages
 
-- **50% score penalty** when competing against player characters in primaries (`NPP_PRIMARY_SCORE_MULTIPLIER = 0.5`)
-- **20% vote-weight penalty** in general elections when a player is in the race (`NPP_GENERAL_WEIGHT_MULTIPLIER = 0.8`)
+- **50% score penalty** when competing against player characters in primaries (`NPP_PRIMARY_SCORE_MULTIPLIER = 0.5` in `src/lib/electionEngine/constants.ts`)
+- **20% vote-weight penalty** in general elections when a player is in the race (`NPP_GENERAL_WEIGHT_MULTIPLIER = 0.8`, same file)
 - They receive an `electionCooldowns` entry when they drop out of a race, and fallback fill respects it (defending incumbents can still re-file for their own seat regardless)
 - They can't strategically time their campaigns
 - They can't run ads or fundraise strategically
@@ -39,7 +39,7 @@ A small **v3 ambitious-challenger pass** can add a second same-party NPP to an a
 ### In Primaries
 
 1. **Enter early**, your presence still matters because of the NPP primary score penalty once you're in the race
-2. **Build influence**, NPPs have a floor of 10%; exceed it significantly
+2. **Build influence**, NPPs have a floor of 10; exceed it significantly
 3. **Stay ideologically aligned**, NPPs sit close to their party median; match or exceed their alignment
 4. **One race at a time**, NPPs can only be in one primary at once; if they're in yours, they can't be elsewhere
 
@@ -55,21 +55,23 @@ The NPP profile page (`/politicians/npp/[id]`) exposes a deterministic direct-in
 
 | Action                | AP  | Campaign Funds | Gate                | Effect                                       |
 | ---------------------- | --- | -------------- | -------------------- | --------------------------------------------- |
-| `request_endorsement`  | 6   | $0             | hidden relationship 40-50 | Creates or refreshes an arranged endorsement |
+| `request_endorsement`  | 6   | $0             | hidden evaluation (relationship and policy fit) | Creates or refreshes an arranged endorsement |
 | `private_meeting`      | 3   | $0             | relationship -50      | +5 relationship                               |
 | `boost_favorability`   | 5   | $10,000        | none                  | +3 favorability, +2 relationship              |
-| `reduce_favorability`  | 5   | $10,000        | none                  | -3 favorability, -2 relationship              |
+| `reduce_favorability`  | 5   | $10,000        | relationship -100     | -3 favorability, -2 relationship              |
 | `boost_influence`      | 6   | $20,000        | none                  | +2 influence, +2 relationship                 |
-| `reduce_influence`     | 6   | $20,000        | none                  | -2 influence, -2 relationship                 |
+| `reduce_influence`     | 6   | $20,000        | relationship -100     | -2 influence, -2 relationship                 |
 
-Party chairs and vice chairs get a separate party-side surface for NPP management (recruitment, `boost_loyalty`, `reduce_stubbornness`), see `party-influence.md`.
+Party chairs and vice chairs get a separate party-side surface for NPP management (recruitment, `boost_loyalty`, `reduce_stubbornness`), see [party-influence.md](./party-influence.md).
 
 ## NPP Bill Voting
 
-NPPs vote on legislation through a **deterministic cross-pressure verdict**, not a pure ideology roll (`src/lib/turn/npp/billVoting.ts`, `crossPressure.ts`). Each vote sums four signed forces, ideology, whip, district/home-region sentiment, donors, and resolves to `for` above +15, `against` below -15, otherwise `abstain`. NPPs holding multiple seats contribute their `seatsHeld` weight to the tally.
+NPPs vote on legislation through a **deterministic cross-pressure verdict**, not a pure ideology roll (`src/lib/turn/npp/billVoting.ts`, `crossPressure.ts`). Each vote sums four signed forces, ideology, whip, district/home-region sentiment, donors, and resolves to `for` above +5, `against` below -5, otherwise `abstain` (`VERDICT_THRESHOLD = 5` in `crossPressure.ts`). NPPs holding multiple seats contribute their `seatsHeld` weight to the tally.
 
 ## Related Pages
 
 - [npp-system.md](./npp-system.md), Full NPP mechanics documentation
 - [election-engine.md](./election-engine.md), How elections work
 - [campaign-strategy.md](./campaign-strategy.md), Overall strategy guide
+
+Last checked: 2026-10-29, version 1.18.0

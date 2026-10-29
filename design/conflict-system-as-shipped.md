@@ -2,6 +2,8 @@
 
 The persistent release 1.3 campaign layer is documented separately in [Global response crises (as shipped)](./global-response-crises-as-shipped.md).
 
+Player guide: [Conflicts & the Military System](https://www.ahousedividedgame.com/wiki/conflicts-overview). Per subsystem player pages: [Declaring War](https://www.ahousedividedgame.com/wiki/declaring-war), [Fighting a Battle](https://www.ahousedividedgame.com/wiki/fighting-a-battle), [Occupation, Territory & Victory](https://www.ahousedividedgame.com/wiki/occupation-and-victory), [Peace, Indemnities & Truces](https://www.ahousedividedgame.com/wiki/peace-and-truces), [A War, Start to Finish](https://www.ahousedividedgame.com/wiki/a-war-start-to-finish), [Manpower & Conscription](https://www.ahousedividedgame.com/wiki/manpower-conscription), [Generals & the Officer Corps](https://www.ahousedividedgame.com/wiki/generals), [National Doctrine](https://www.ahousedividedgame.com/wiki/national-doctrine), [Commands & Command Structure](https://www.ahousedividedgame.com/wiki/military-commands), [Units, Recruitment & Procurement](https://www.ahousedividedgame.com/wiki/military-units), [Defence Procurement](https://www.ahousedividedgame.com/wiki/defence-procurement), [Cold War Tension](https://www.ahousedividedgame.com/wiki/cold-war-tension) and [International Organizations](https://www.ahousedividedgame.com/wiki/international-organizations).
+
 A House Divided models the Cold War as four connected layers: alignment (which way a nation leans, and who is buying that lean), international organizations (the channels blocs push through), the military (forces, generals, doctrine, budgets), and conflicts (live wars with a moving front, battle reports, and negotiated peace). Everything below is read out of the shipped code. Every constant quoted is the value in the repository today.
 
 ## What a player sees
@@ -147,3 +149,68 @@ Territory (`src/lib/military/occupation.ts` with `OCCUPATION` in `config.ts`). `
 Negotiated exits use `PeaceOfferDoc` (`src/lib/db/types/peaceOffer.ts`). An offer is struck between two countries, not two sides: the leaver drops off its roster and the war continues for everyone else. That follows the consent rule already shipped for coalition offensives (no player commits another player's army) and avoids whole side peace freezing a war forever because one inactive country can never consent. An offer stands `PEACE_OFFER_DURATION_TURNS = 72` turns and then lapses. The indemnity names an explicit payer, because either party may pay (a loser buying out, or a winner paying to disengage), and is always quoted in the payer's local currency. `amount: 0` is a clean white peace through the same mechanism.
 
 Any war ending, negotiated or won outright, starts a truce of `TRUCE_TURNS = 240` for every cross side pair (`src/lib/military/truce.ts`). Truce documents key on the sorted country pair and extend with `$max`, so overlapping writes can never shorten a truce already in force. Without this, a country conquered on turn 100 could be re declared on the moment the attacker's 120 turn cooldown lapsed, at the point it is least able to resist.
+
+## Worked example: one war
+
+Country A proposes a war declaration against country B on turn 1000. A cannot propose another until turn 1120 (`WAR_DECLARATION_COOLDOWN_TURNS = 120`, counted from the proposal even if the chambers reject it). The chambers pass it; no war between the pair is already live, so the conflict opens with `control` at B's pole if B is the host and a belligerent, or 50 if the host is neutral.
+
+Turn 1010 A's offensive resolves (it resolved the turn after it was declared). The report shows a win by margin 20: 20 is above 15 and not above 45, so the verdict is **Victory**. The front shifts by `min(1, 20 / 45) × 5 = 2.22` points. If the war is 25 turns old the mobilisation factor is `0.4 + 0.6 × (25 / 50) = 0.7`, so the actual move is 1.56 points. If B's forces had withdrawn in good order, multiply by `retreatYield = 0.7` again for 1.09.
+
+A margin of 60 at full mobilisation (turn 50 of the war or later) is a Decisive Victory and moves the full 5 points, so a front starting at 50 needs ten such wins to reach the pole and end the war. When the war ends, a truce of `TRUCE_TURNS = 240` starts for every cross-side pair, so A and B cannot be re-declared against each other before 240 turns pass, which also outlasts A's 120 turn cooldown.
+
+Spending example for influence: a target with annual GDP of 2,000,000 (in the play's currency) costs `0.001 × 2,000,000 = 2,000` per share point, so a 10 point play (`PLAY_MAX_POINTS`) costs 20,000, and a nation moves at most 5 points per turn (7.5 in an open crisis), so a single turn's push beyond 10,000 is wasted against the cap.
+
+## Timing
+
+The systems on this page run at different points of the turn pipeline (`src/simulation/phases/turnPhaseNames.ts`):
+
+| Order | Phase | What runs |
+| --- | --- | --- |
+| 1 | `internationalOrganizations` | the organization batch; it writes the memberships that alignment drift reads, so alignment must not join it |
+| 2 | `alignment` | per country: cross the era first, then gather membership channels, queued influence plays and the counter-plays they provoke into one vector, drift once (so plays share the per-nation cap with drift), open and close alignment crises, snapshot pre-drift shares (`src/lib/turn/alignmentPhase.ts`) |
+| 3 | `settlement`, `mutualDefence` | settlement, then treaty defence reconciliation (`reconcileMutualDefence`) so a defender's alliance joins a war |
+| 4 | `crisisTurn` | national crisis decision-tree events |
+| 5 | `intelligenceTurn` | intelligence upkeep, so later sabotage lands on this turn's dispositions |
+| 6 | `navairOperations` | sea control, air superiority and supply are made current |
+| 7 | `ministerialOrders` | resolves battle declarations that were declared on an earlier turn |
+
+Battle resolution reads dispositions after steps 5 and 6, and runs the turn after a declaration (`declaredTurn + 1`), giving the defender one turn to reinforce or withdraw. Defence contract deliveries and upkeep settlement run in their own turn modules (`src/lib/turn/defenceDeliveryTurn.ts`, `src/lib/turn/defenseAppropriationTurn.ts`). Peace offers lapse after `PEACE_OFFER_DURATION_TURNS = 72` turns, and a truce is written when a war ends (`src/lib/military/truce.ts`). One turn is one game hour, 48 turns per game year in the shared calendar.
+
+## Edge cases and limits
+
+- **Alignment caps**: 5 share points per turn per nation, 7.5 in an open crisis, at most 3 open crises.
+- **Locked nations**: past 85 share a nation is immovable by drift; below 20 it is non-aligned and absorbs movement at half strength.
+- **Zero**: `amount: 0` in a peace offer is a clean white peace; an influence play with no spend moves nothing.
+- **Cooldown**: counted from the last proposal, so a rejected declaration still costs the 120 turns.
+- **One war per pair**: checked at enactment as well as proposal. If a live conflict is already hosted in the defender, the declarer enrols on the opposing side instead.
+- **Conquest**: the `conquest` war goal exists in the type but is not selectable, because nothing transfers territory yet; the API enforces this too.
+- **Control track**: 0 to 100, ends the war on reaching a pole. Supply never falls below 10.
+- **Domestic contracts only**: defence contracts require the same country and a matching currency, so a cross-border order cannot be placed.
+- **No procurement overdraft**: upkeep may overdraw up to one year of the defence line, procurement may not, so a country that cannot pay gets fewer lots.
+- **Fog**: a belligerent is decided by explicit roster membership, never bloc affinity, so an ally's bloc does not grant command sight.
+- **Feature flag**: with `conflictsEnabled` off every conflicts route redirects to `/world`.
+
+## Connections
+
+**Driven by:**
+
+- [National Budget](./national-budget.md): the defence line funds upkeep and procurement (`src/lib/military/appropriation.ts`).
+- [Defence Procurement](./defence-procurement.md): contracts and deliveries feed arsenal lots.
+- [Currency Exchange](./currency-exchange.md): contract prices are struck in local currency.
+- [Bills & Legislation](./bills-legislation.md): war declarations, org membership and funding run as legislation (`validateDeclareWar.ts`, `membershipBills.ts`).
+- [Global Response Crises](./global-response-crises-as-shipped.md): crisis pressure on alignment and leaders.
+- [Economic Systems](./economic-systems.md): a country's GDP sets influence prices (`POINT_COST_GDP_SHARE`) and procurement costs.
+
+**Affects:**
+
+- [Bloc Alignment and Spheres](./bloc-alignment-and-spheres.md): alignment shares and bloc stress.
+- [Crisis System](./crisis-system.md): alignment crises raise a nation's per-turn cap.
+- [Economic Systems](./economic-systems.md): diversion of civilian output to materiel (`militaryDivertedShare`) and GDP loss from crisis effects.
+- [Government Approval](./government-approval.md): joint statements move approval by +2 or -3.
+- Elections and parties: war outcomes reach national mood through approval and crisis effects.
+
+## Diagram
+
+See the visuals list: declaration to truce flow.
+
+Last checked: 2026-10-29, version 1.18.0

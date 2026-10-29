@@ -2,7 +2,32 @@
 
 The IMF sovereign facility is the "bailout" resolution path for a sovereign debt crisis. When a country enters a crisis (failed bond auctions, unsustainable debt/GDP) and the executive chooses **bailout** instead of restructure or repudiate, the country's rollover need and deficit are consolidated into a single amortizing loan from the IMF Corp. The facility is repaid over time out of the country's own revenue, capped at a fraction of per-turn income, exactly like the corporate IMF bailout caps payments at a fraction of income, but the sovereign version uses federal revenue instead of corporate operating income, and the borrower is a country's `federalBudget` row rather than a `Corporation` document.
 
+Player guide: [IMF Sovereign Facility](https://www.ahousedividedgame.com/wiki/imf-sovereign-facility)
+
 This is a separate system from the [corporate IMF bailout](imf-corporate-bailout.md). Both borrow the same IMF Corp entity and the same annuity-with-income-cap math (`imfFacilityMath.ts`), but they apply to different debtors and are triggered by different subsystems (sovereign default vs. corporate bond default).
+
+## Constants
+
+All values live in `src/lib/sovereignDefault/constants.ts` unless noted.
+
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `IMF_SOVEREIGN_DEFAULT_RATE` | 0.06 | Fixed annual facility rate (6%) |
+| `IMF_SOVEREIGN_AMORTIZATION_TURNS` | 240 | Amortization horizon |
+| `IMF_SOVEREIGN_INCOME_CAPTURE_MIN` / `DEFAULT` / `CAP` | 0.1 / 0.2 / 0.3 | Share of per-turn revenue captured |
+| `IMF_BOARD_OVERRIDE_WINDOW_TURNS` / `_HOURS` | 12 / 12 | Board window (turns first, wall-clock fallback) |
+| `IMF_BOARD_RATE_DELTA_BOUND` | 0.02 | Max board rate change, 2 percentage points |
+| `IMF_BOARD_CAPTURE_DELTA_BOUND` | 0.1 | Max board capture change, 10 points |
+| `IMF_BOARD_PUBLIC_TRUST_DELTA` | 0.02 | Trust shift from endorse or criticize |
+| `FAILED_AUCTION_COUNT_FOR_CRISIS` | 3 | Failed annual auctions that trigger the crisis |
+| `DEMAND_UNDERSUBSCRIBED_THRESHOLD` | 0.7 | Demand below 70% of offering is a failed auction |
+| `EXECUTIVE_DECISION_TURNS` | 12 | Executive window before auto-repudiate |
+| `LEGISLATIVE_VOTE_TURNS_PER_CHAMBER` | 24 | Legislative vote window per chamber |
+| `MONETIZE_GATE_INFLATION` | 0.08 | Monetize blocked at or above 8% inflation |
+| `DEFAULT_MARGIN_PENALTY_BAILOUT` | -0.045 | Sector margin penalty on the bailout path |
+| `RECOVERY_FLOOR_TURNS` | 48 | Minimum turns in recovery |
+| `RECOVERY_DISCIPLINE_REQUIRED_STREAK` | 5 | Fiscal-discipline streak needed to exit |
+| `TURNS_PER_YEAR` | 48 | Annual to per-turn conversion (`src/lib/constants/calendar.ts`) |
 
 ## Trigger: sovereign default crisis
 
@@ -63,7 +88,7 @@ These four values (principal, rate, amortization turns, capture fraction) are wr
 4. If the cap binds and doesn't cover full interest, the interest shortfall is **capitalized onto principal** and the amortization clock does not advance that turn (the country gets more time, but the loan grows).
 5. When principal clears (`newPrincipal <= 1e-6`), `imfSovereignBailoutActive` is set back to `false`.
 
-Budget-side revenue netting (i.e. deducting the payment from the country's own budget metrics) is explicitly out of scope for this phase per the code comment, "Phase 5 only models the IMF Corp credit side; budget-revenue netting lands in Phase 8 / 10 calibration." The processor only credits the IMF Corp and decrements the facility principal.
+The payment itself is not deducted from the country's budget metrics: the processor only credits the IMF Corp and decrements the facility principal (the code comment says budget-revenue netting was deferred to later calibration). The facility does reach the budget through two other paths, listed under Connections.
 
 ### FX conversion
 
@@ -87,6 +112,59 @@ The country's revenue is in its local currency; the IMF Corp's `liquidCapital` i
 ## Recovery after bailout
 
 Entering the facility puts the country into `sovereignCrisisState: "recovering"`. The bailout path applies no direct flat GDP penalty in the resolution code (`src/lib/sovereignDefault/resolution/bailout.ts`); its cost is the ongoing income capture plus a temporary sector-margin penalty (`DEFAULT_MARGIN_PENALTY_BAILOUT = -0.045` in `src/lib/sovereignDefault/constants.ts`). The other two resolution paths do apply a direct GDP penalty: `REPUDIATE_GDP_PENALTY = 0.12` (12%, over `REPUDIATE_GDP_PENALTY_TURNS = 3` turns) and `RESTRUCTURE_GDP_PENALTY = 0.06` (6%, over `RESTRUCTURE_GDP_PENALTY_TURNS = 2` turns). Recovery requires `RECOVERY_FLOOR_TURNS = 48` turns minimum plus a `RECOVERY_DISCIPLINE_REQUIRED_STREAK = 5`-turn streak of fiscal discipline, rechecked every `RECOVERY_DISCIPLINE_RECHECK_TURNS = 5` turns.
+
+## Worked example
+
+A country has 480,000 annual revenue, so per-turn revenue is `480,000 / 48 = 10,000`. Bonds maturing in 12 turns are 900,000 and the projected annual deficit is 300,000, so principal is 1,200,000. Rate 6% gives `r = 0.00125`; `(1+r)^240 = 1.3497`.
+
+- Scheduled payment `= 1,200,000 * 0.00125 * 1.3497 / 0.3497 = about 5,790`. First-turn interest `= 1,500`.
+- Capture 20% gives a cap of 2,000. Payment 2,000: 1,500 interest, 500 principal. Principal 1,199,500, clock 239.
+- If revenue falls to 240,000 (5,000 per turn), the cap is 1,000. Interest shortfall 500 is capitalized: principal 1,200,500, clock stays 240.
+- With the board maximum of +10 points, capture is 30% and the cap is 3,000.
+
+## Timing
+
+- Facility setup runs when the bailout resolution is ratified, from the sovereign legislative turn (`src/lib/sovereignDefault/legislative/legislativeTurn.ts`) or on executive submission, via `applyBailoutResolution`.
+- Payments run inside the bond turn (`src/lib/turn/bondTurn.ts`): after bond market pool processing, before `processSovereignRecoveryTurn`, then the crisis auto-actions (auto-repudiate on a lapsed executive window) and the sovereign legislative turn.
+- Austerity scaling runs at fiscal-year rollover (`src/lib/budget/fiscalYear.ts`); the rate cap applies wherever debt service or the marginal rate is computed (`src/lib/budget/debt.ts`, `src/lib/budget/rules/sovereignDebtService.ts`).
+- The board window is turn-first, so it freezes while the game is paused.
+
+## Edge cases and limits
+
+- Principal inputs are floored at 0 each, so a surplus country is sized on rollover alone, and a country with nothing maturing and a surplus gets a zero-principal facility.
+- Capture is clamped to 10-30% at setup, and a board nudge is clamped to the same band and to the delta bounds. Rate nudges are clamped to 2 points.
+- Interest shortfall is capitalized and the clock does not advance, so a low-revenue country can see principal grow. There is no payment holiday and no cap on growth.
+- A bailout is refused if the country is not in `crisisPending` or `crisisResolving`, or if no IMF Corp exists.
+- One board action per grant, enforced atomically (`imfBoardOverrideAt: null` filter); the loser of a race gets HTTP 409, as does anyone acting after the window or a second time.
+- Zero or missing revenue means a zero cap, so no payment and full capitalization.
+- Facility cleared at principal `<= 1e-6`: active flag goes false. The country stays in `recovering` until the recovery gates pass.
+- No flat GDP penalty exists on this path. Repudiate (12% over 3 turns) and restructure (6% over 2 turns) carry one; the bailout trades it for the margin penalty and the ongoing capture.
+
+## Connections
+
+**Driven by:**
+
+- Sovereign crisis detection (`crisisDetection.ts`) and the executive's choice, see [sovereign bonds](./sovereign-bonds.md) and [crisis system](./crisis-system.md).
+- Annual revenue and deficit from the [national budget](./national-budget.md) (`budget.revenue.total`, `budget.surplus`).
+- Rollover size from `calculateSovereignRolloverAmount` (`src/lib/bonds/sovereign.ts`).
+
+**Affects:**
+
+- IMF Corp cash: credited each turn in its own currency (`bondTurn.ts` to `imfSovereignFacilityTurn.ts`), and so IMF shareholders' wealth.
+- Debt service: while `imfSovereignBailoutActive`, the effective rate on the stock is capped at 6% (`sovereignStockServiceRate`) and the annual interest-rate calculation takes `min(tier rate, 6%)` (`calculateInterestRate`).
+- Spending: at fiscal-year rollover, spending above projected revenue is scaled down proportionally (`applyAusterityCap`, `src/lib/sovereignDefault/austerity.ts`).
+- Sector margins: -4.5% penalty path (`DEFAULT_MARGIN_PENALTY_BAILOUT`): full for `DEFAULT_MARGIN_FULL_PENALTY_TURNS = 48` turns, then decaying over `DEFAULT_MARGIN_DECAY_TURNS = 24` (both in `constants.ts`).
+- Politics: executive favorability and infamy hit, one civil-unrest event, cross-country trust from board statements.
+- Compare the [corporate bailout](./imf-corporate-bailout.md), which shares the payment kernel.
+
+## Order of operations
+
+1. Crisis pending: executive chooses bailout (or the legislative flow ratifies it).
+2. `applyBailoutResolution` writes the facility and opens the board window.
+3. Each bond turn: facility payment credited to the IMF Corp, then recovery check, then crisis auto-actions and legislative turn.
+4. Board member may act once inside 12 turns.
+5. Fiscal-year rollover: austerity scaling and the 6% rate cap apply.
+6. Principal clears: facility closes; recovery continues until 48 turns and a 5-turn discipline streak.
 
 ## Contrast with the corporate IMF bailout
 
@@ -116,3 +194,5 @@ Entering the facility puts the country into `sovereignCrisisState: "recovering"`
 - `src/app/api/country/[code]/sovereign-status/route.ts`, `GET /api/country/[code]/sovereign-status`
 - `src/components/country/SovereignRecoveryProgressPanel.tsx`, recovery-progress UI panel
 - `src/lib/db/types/budget.ts`, `FederalBudget` type, `imfSovereign*` and `imfBoardOverride*` fields
+
+Last checked: 2026-10-29, version 1.18.0

@@ -133,7 +133,7 @@ if (!requireCron(request)) {
 
 ### `checkRateLimit()`
 
-**Purpose:** In-memory rate limiting per identifier (usually IP).
+**Purpose:** In-memory rate limiting per identifier (usually IP). Counters live in one server process and reset on restart; for buckets that must survive restarts or be shared across instances use `durableRateLimit` in `rateLimit.mongo.ts`.
 
 **Parameters:**
 
@@ -206,6 +206,8 @@ BOT_FINANCIAL_LIMITS = { maxRequests: 30, windowMs: 60_000 };
 BOT_CASINO_LIMITS = { maxRequests: 30, globalMaxRequests: 600, windowMs: 60_000 };
 ```
 
+`rateLimit.ts` defines more presets than are listed here (for example `CAMPAIGN_ACTION_LIMITS`, `NPP_MANAGEMENT_LIMITS`, `SAVINGS_WALLET_LIMITS`, `WIKI_REPORT_LIMITS`, `SUGGESTION_SUBMIT_LIMITS`); read the file for the full set.
+
 ### `rateLimitResponse()`
 
 **Purpose:** Build standard 429 response.
@@ -219,10 +221,10 @@ if (!rateLimit.ok) return rateLimitResponse(rateLimit.retryAfter);
 **Response format:**
 
 ```json
-{ "error": "Too many requests. Try again later." }
+{ "error": "You’re sending requests too quickly. Please wait a moment and try again.", "code": "rate_limited", "retryAfterSeconds": 60 }
 ```
 
-Headers: `Retry-After: <seconds>`
+Status 429. Headers: `Retry-After: <seconds>` (60 when no value is passed). The message and rate-limit headers can be overridden by the caller.
 
 ## Request Validation
 
@@ -447,4 +449,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 - **Auth:** `src/lib/auth.ts` - Core auth with JWT via `jose`
 - **MongoDB:** `src/lib/mongodb.ts` - `getDb()` connection
-- **Sentry:** Error tracking integration
+- **Sentry and ops alerts:** `handleRouteError()` in `errors.ts` captures non-`ApiError` failures to Sentry and calls `alertOps` (`src/lib/observability/alertOps.ts`)
+- **Related design docs:** [Congress Leadership](./congress-leadership.md), [Bills and Legislation](./bills-legislation.md) (routes that use these gates)

@@ -2,6 +2,32 @@
 
 Current behavior for parliamentary-country government formation, head-of-government appointment votes, Votes of No Confidence (VONC), Confidence Motions, and the legislation freeze. It applies wherever `isParliamentarySystem(config)` is true: parliamentary monarchies, parliamentary republics, and one-party states. This includes the UK, Japan, Germany, Ireland, and one-party countries that seat a head of government through the shared path.
 
+Player guide: [Government Formation](https://www.ahousedividedgame.com/wiki/government-formation)
+
+## Rules and constants
+
+| Constant or rule | Value | Source |
+| --- | --- | --- |
+| PM appointment vote and confidence motion duration | 24 hours (`PM_VOTE_DURATION_HOURS`) | `src/lib/constants/governmentFormation.ts` |
+| PM vacancy deadline (orphaned-PM safety net, re-armed on unform) | 96 turns (`PM_VACANCY_DEADLINE_TURNS`) | `src/lib/constants/turnTime.ts` |
+| Cooldown between no-confidence votes | 48 turns (`NO_CONFIDENCE_COOLDOWN_TURNS`) | `src/lib/constants/governmentFormation.ts` |
+| Appointment vote passes when | `votesFor > votesAgainst`, or `votesFor >= majorityThreshold` when a threshold is set (default `floor(seats / 2) + 1`) | `src/lib/turn/parliamentaryGovernment.ts` |
+| Confidence motion passes when | `votesFor >= votesAgainst` (a tie keeps the PM) | `src/lib/turn/parliamentaryGovernment.ts` |
+| Freeze applies when | `isParliamentarySystem(config)` and status is `pending` | `src/lib/government/legislationFreeze.ts` |
+
+## Timing
+
+Government formation runs in the turn processor after election resolution.
+In `src/simulation/phases/turnPhaseNames.ts` the order is
+`electionResolution`, `leadershipVacate`, `parliamentaryGovernmentFormation`,
+`parliamentaryGovernmentPhases`, `parliamentaryGovernmentConfidence`,
+`parliamentaryVacancyWatcher`. Post-election work (seat counts, confidence
+motion) runs through `runPostElectionGovernmentPhases` in
+`src/lib/turn/countryPhases.ts`. Appointment votes close on their
+`closesOnTurn` or `closesAt`, whichever is set. The legislation freeze is read
+live, so bill phases (`billLifecycle`, which runs earlier in the turn than
+formation) see the status left by the previous turn.
+
 ## Core collections
 
 - `governmentFormations` (`_id: CountryId`), current government state. Key fields: `status` (`"pending" | "formed" | "collapsed"`), `pmCharacterId`, `pmName`, `governingPartyId`, `coalitionId`, `coalitionPartyIds`, `formationType`, `cycle`, `seatsByParty`, `pmVacancyDeadlineTurn`, `collapsedAt`, `formedAt`, `formedTurn`.
@@ -55,8 +81,44 @@ Implementation: the gate in `src/app/api/country/[code]/pm/appoint/route.ts` che
 - **VONC passes** → incumbent removed, gov transitions to `pending` via `unformGovernmentAndVacatePM`. Parallel appointment votes keep running on their existing timers and resolve normally in the new pending window.
 - **VONC fails** → the sitting PM survives. All active PM appointment votes for the country are cancelled (`status → "cancelled"`, `closedAt = now`) and each nominee receives a notification explaining why.
 
+## Edge cases and limits
+
+- An empty or tied confidence motion keeps the PM: it needs nays strictly
+  above ayes to fail. An appointment vote needs ayes strictly above nays (or a
+  seat majority), so a tie seats nobody. The asymmetry is deliberate: a tie
+  must never unseat a sitting government.
+- If the PM lost their seat, no motion is filed and the government stays
+  `formed` until the next PM action.
+- NPP PMs have a null `pmCharacterId`, so no confidence motion fires.
+- A failed VONC cancels every open PM appointment vote and notifies nominees.
+- A passed VONC does not cancel parallel appointment votes; they resolve in the
+  new pending window.
+- The freeze covers bill proposal, cabinet bills, cabinet bill votes and
+  propose-leave routes, plus skipped lifecycle phases. Bills in flight keep
+  their status. Reason: no mandate means no new law.
+- A country with no `governmentFormations` row, or a non-parliamentary system
+  such as the US, is never frozen.
+- One-party states count as parliamentary here because `isParliamentarySystem`
+  includes `onePartyState`; see
+  [one-party-states-as-shipped.md](./one-party-states-as-shipped.md).
+
+## Connections
+
+**Driven by:**
+
+- [Snap elections](./snap-elections.md): a snap dissolution reopens formation (`runPostElectionGovernmentPhases`).
+- [UK PM no-confidence](./uk-pm-no-confidence.md): a passed VONC calls `unformGovernmentAndVacatePM`.
+- [NPPs](./npp-system.md): NPP deputies vote in appointment votes.
+
+**Affects:**
+
+- [Bills and legislation](./bills-legislation.md): `skipWhenGovPending` in `src/lib/turn/billLifecycle/engine.ts` and `isLegislationFrozen` in `src/lib/turn/npp/billSponsorship.ts` pause bills.
+- [Parties](./parties.md): the governing party and coalition come from `seatsByParty`.
+
 ## Related systems
 
 - [`snap-elections.md`](snap-elections.md), PM snap trigger, auto-snap deadline, dissolution slate-clearing.
 - [`uk-pm-no-confidence.md`](uk-pm-no-confidence.md), VONC mechanics.
 - [`bills-legislation.md`](bills-legislation.md), bill lifecycle + chamber transitions.
+
+Last checked: 2026-10-29, version 1.18.0

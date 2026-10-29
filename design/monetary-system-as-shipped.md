@@ -1,5 +1,7 @@
 # Monetary System (as shipped)
 
+Player guides: [Central Banks](https://www.ahousedividedgame.com/wiki/central-banks), [The FOMC](https://www.ahousedividedgame.com/wiki/fomc), [Currency Exchange](https://www.ahousedividedgame.com/wiki/currency-exchange), [Savings Interest](https://www.ahousedividedgame.com/wiki/savings-interest) and [Line of Credit](https://www.ahousedividedgame.com/wiki/line-of-credit).
+
 Money in A House Divided runs on four connected systems: a central bank per currency that sets a prime rate through a voting committee, a forex market where every active currency floats against an internal anchor, savings that pay a real (inflation adjusted) rate, and a line of credit whose price is that same prime rate plus a credit spread. This page describes what is actually in the code today, with the real constants and the files they live in. One turn is one real hour (`MS_PER_TURN = 60 * 60 * 1000`) and a game year is 48 turns (`TURNS_PER_YEAR = 48`), both in `src/lib/constants/turnTime.ts`. Every rate and accrual below is expressed against that clock.
 
 ## Central banking: who holds the rate
@@ -16,6 +18,8 @@ Who may move the rate depends on the bank's independence. `src/lib/centralBank/g
 - `MAX_RATE_CUT_DELTA = 1.75`: cuts are capped at -1.75pp per adjustment.
 - `AGGRESSIVE_CUT_SCRUTINY = 10`: a cut deeper than 0.75pp adds 10 to `chairInfamy`, capped at 100. If the government set the rate, the chair's infamy is untouched, since they had no hand in it.
 - `RATE_CHANGE_COOLDOWN_TURNS = 6`: one change every 6 turns.
+- `PRIME_RATE_STEP = 0.25` (rates snap to a quarter-point grid) and `PRIME_RATE_CEILING = 25`; the floor is 0. All in `src/lib/db/types/centralBank.ts`.
+- Widened hike cap: `maxHikeDeltaFor(inflation - target)` returns `NPP_CHAIR_HIGH_INFLATION_HIKE_DELTA = 3` pp instead of 0.75 once inflation is at least `NPP_CHAIR_HIGH_INFLATION_GAP = 5` pp over target, for chairs, government setters and the committee alike (`src/lib/db/types/centralBank.ts`, shown to players by `src/lib/centralBank/rateLimits.ts`).
 
 Every change appends to `rateHistory` with the previous rate, the new rate, who changed it and the stated reason, trimmed to the last 50 entries.
 
@@ -96,7 +100,7 @@ Three caps bound borrowing, all in `src/lib/lineOfCredit/locMath.ts`. System wid
 
 ## Money supply aggregates
 
-`src/lib/moneySupply/calculate.ts` assembles M1 from every liquid pot: household, campaign, NPP, corporate, party, government, fund and organization balances. M2 adds household savings, `externalBroadMoney`, and bank deposits. Bank reserves are tracked as a capacity measure and reported separately. Negative and non finite components are normalized to zero before summing.
+`src/lib/moneySupply/rules/calculate.ts` assembles M1 from every liquid pot: household, campaign, NPP, corporate, party, government, fund and organization balances. M2 adds household savings, `externalBroadMoney`, and bank deposits. Bank reserves are tracked as a capacity measure and reported separately. Negative and non finite components are normalized to zero before summing.
 
 Growth is annualized geometrically: `(closing / opening) ** (TURNS_PER_YEAR / turnsElapsed) - 1`. It returns null, not zero, when the base is missing or the window is shorter than `MIN_MONEY_GROWTH_BASE_TURNS = 12`. Annualizing a bootstrap rebase over two turns raises the ratio to the 24th power and produces meaningless percentages, and returning null (rather than 0) makes downstream consumers fall back to GDP growth instead of reading a false "money supply is frozen".
 
@@ -104,6 +108,53 @@ Open market operations live in `src/lib/moneySupply/quantitativeEasing.ts`. `pla
 
 Autonomous banks act through `chooseNppMonetaryOperation` in `src/lib/moneySupply/nppPolicy.ts`, which compares inflation to `getInflationTarget`, compares annualized M2 growth to GDP growth (only when the growth reading is reliable), and picks QE, QT, a treasury advance, a liquidity injection or a hold. The emergency paths are bounded: `MONETARY_OPERATION_COOLDOWN_TURNS = 6`, `DIRECT_ADVANCE_GDP_CAP = 0.01` and `LIQUIDITY_INJECTION_GDP_CAP = 0.03` in `src/lib/moneySupply/operations.ts`. A treasury advance requires a genuine slump: inflation at least 3pp under target, GDP growth at or below -3%, and a treasury balance worse than half of GDP in deficit.
 
+## Worked examples
+
+- Rate move: prime 4.00%, inflation 3.0%. Savings APY is `max(0.5, 4.00 - 3.0) / 2 = 0.5%`, a quarterly credit of `balance * 0.005 / 4` per game quarter. Hike 0.75pp to 4.75% with inflation unchanged: APY becomes `(4.75 - 3.0) / 2 = 0.875%`, and a LOC borrower with composite 50 (spread `5 - 0.5 * 6 = +2pp`) goes from 6.00% to 6.75% a year.
+- Forex trade: selling 10,000 local units at market costs 1% (`MARKET_MAKER_SPREAD`), so 100 units go to the bank's spread-fee reserves; the same trade as a limit order costs 0.64% and a direct trade 0.36%.
+- Why a cut can be 1.75 but a hike only 0.75: cutting fast is a political risk (chair infamy rises 10 for any cut deeper than 0.75), while a slow hike is the safer default. The cap only widens when inflation is already well over target.
+
+## Timing
+
+One turn, in order (`src/simulation/phases/turnPhaseRegistry.ts`, `src/simulation/phases/stateEffectsPhase.ts`):
+
+1. `savingsInterestTurn` accrues savings interest at the prime and inflation left by the previous turn. Quarterly credit lands when `turn % 12 == 0`.
+2. `lineOfCreditTurn` charges LOC interest at prime plus spread and takes the automatic payment. It needs the same turn's `corporationTurn` currency income when forex is enabled.
+3. Inside `stateEffectsAndNationalAggregation`: `inflationRecalc`, then `forexTurn` (rates, limit orders, spread revenue; skipped when forex is off), then `centralBankChairTurn`, `fomcMeetings` (opens and resolves meetings every 8 turns), `nppMonetaryOperations`, `centralBankChairExecutiveRemoval`, `centralBankChairSelection`.
+4. `moneySupplySnapshot` closes the turn.
+
+A prime rate set on turn T therefore first affects forex drift on turn T+1 and savings and LOC interest on turn T+1. Player chair rate changes are written immediately by `updatePrimeRate` and are subject to the 6-turn cooldown; committee decisions land when `fomcMeetings` resolves a meeting.
+
+## Edge cases and limits
+
+- Rates snap to 0.25pp; the floor is 0 and the ceiling 25.
+- A government controlled bank (pre-1997 Bank of England by default) has no committee and only the head of government or finance seat can move the rate.
+- A shared bank (ECB, sterlingized Scotland and Wales) cannot legislate independence.
+- Tied or partial committee votes hold: a motion needs 4 of 7 votes, and absent seats count against it.
+- Savings real rate floor of 0.5 gives a 0.25% APY floor even in deflation or negative real rates.
+- A single actor earns interest only on up to 25% of the national savings pool in a currency.
+- LOC: no verified income means a limit of zero; scheduled payments cannot exceed 70% of per-turn income.
+- Forex off (`gameState.forexEnabled` false): `forexTurn` is skipped with a recorded reason, so exchange rates do not move.
+- Forex rate is clamped between 0.5x and 1.5x of the base (seeded era) rate.
+- Money-supply growth readings are `null` until 12 turns of history exist (see [Money Supply and QE](./money-supply-and-quantitative-easing.md)).
+
+## Connections
+
+Driven by:
+
+- [National Budget](./national-budget.md): the inflation rate and GDP growth feed the Taylor rule (`src/lib/nppAutonomy/nppChairAutoRate.ts`), the savings real rate and the forex macro target (`src/lib/currency/rateCalculation.ts`).
+- [Elections](./elections.md) and [Cabinet](./cabinet.md): who sits as head of government, finance seat and Senate confirmer decides who may set the rate or fill an FOMC seat (`src/lib/fomcNominationLifecycle.ts`).
+- [Tariffs](./tariffs.md) and trade: trade growth enters the forex target.
+
+Affects:
+
+- [National Budget](./national-budget.md): the prime rate sets the `monetary` inflation term and the interest cost on debt.
+- [Sovereign Bonds](./sovereign-bonds.md): bond prices derive from the prime rate; QE and QT are covered in [Money Supply and QE](./money-supply-and-quantitative-easing.md).
+- [Currency Exchange](./currency-exchange.md): the prime rate sets drift, and spread fees fill the reserve stack that ranks reserve currencies.
+- Player wealth: savings APY and LOC cost change personal cash flow every turn.
+
 ## How it fits together
 
 The prime rate a chair or committee sets is not a dial in isolation. It feeds the macro target that moves the currency's exchange rate, it sets the savings APY through the real rate formula, and it sets the base cost of every line of credit in that currency. Savings deposits in turn become the lending pool that limits how much credit exists, and the fees on forex trades become the reserve stack that decides which currency is the leading exchange currency and therefore trades calmest. A hike tightens credit, strengthens the currency, pays savers more in real terms and shrinks the borrowing pool through the DTI cap. Nothing in that chain is a special case: it is the same numbers read by different systems.
+
+Last checked: 2026-10-29, version 1.18.0

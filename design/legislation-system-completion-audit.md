@@ -2,7 +2,9 @@
 
 This document audits what was implemented vs the original plan (Congress Legislation System Audit and Design).
 
-Historical: this audit was written during the original build and is not kept current. Items listed under Not Implemented may have shipped since; see the legislation pages for current behaviour.
+Historical record: this page describes work as of the original legislation build, before later legislation changes shipped. For current behaviour see [Bills & Legislation](./bills-legislation.md).
+
+Items listed under Not Implemented may have shipped since.
 
 ## Implemented
 

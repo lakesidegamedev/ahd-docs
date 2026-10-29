@@ -2,6 +2,8 @@
 
 Sovereign bonds are **government-issued** debt instruments that finance national deficits. They reuse the corporate bond trading infrastructure but integrate with the federal budget system.
 
+Player guide: [Sovereign Bonds](https://www.ahousedividedgame.com/wiki/sovereign-bonds)
+
 ## Overview
 
 - **Issuers**: Every national government in `COUNTRY_ORDER`, using its configured treasury and currency labels
@@ -62,7 +64,7 @@ const couponRate = primeRate + termPremium + credibilitySpread;
 | Field           | Value                                                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `issuerType`    | `"sovereign"`                                                                                                            |
-| `countryId`     | Any configured country code (for example `"US"`, `"UK"`)                                                                                  |
+| `countryId`     | Any configured country code (for example `"US"`, `"UK"`)                                                                 |
 | `faceValue`     | $1,000 per unit (`BOND_UNIT_FACE_VALUE`)                                                                                 |
 | `maturityTurns` | 48 turns (1yr) for scheduled quarterly issuance; admin/reconcile issuance can also use 96 turns (2yr) or 240 turns (5yr) |
 | `marketPrice`   | Starts at 1.0 (par)                                                                                                      |
@@ -134,7 +136,7 @@ Sovereign default is a full crisis subsystem (`src/lib/sovereignDefault/`), alwa
 
 ### Trigger: failed auctions
 
-Auction demand is evaluated once per fiscal year (turn 40) as a demand ratio: >=1.0 is subscribed (healthy), 0.7-1.0 is undersubscribed (warning), below 0.7 is a failed auction. A default crisis triggers after **3 consecutive failed auctions**.
+Auction demand is evaluated once per country at fiscal-year close (`src/lib/budget/fiscalYear.ts` calling `evaluateSovereignAuctionForCountry` in `src/lib/sovereignDefault/crisisDetection.ts`) as a demand ratio, capped by the real fill ratio of the latest quarterly auction when that fill is below 1: >=1.0 is subscribed (healthy), 0.7-1.0 is undersubscribed (warning), below 0.7 is a failed auction. A default crisis triggers after **3 consecutive failed auctions** (`FAILED_AUCTION_COUNT_FOR_CRISIS`).
 
 Demand ratio starts from `BASE_DEMAND (1.2)` and sums several components, floored at 0 overall (not 0.6):
 
@@ -172,7 +174,7 @@ Bond-holder insolvency also **cascades up to 3 levels deep**: if a major bondhol
 
 ### Recovery floor
 
-After resolution, the country's bond market is closed for **48 turns** before new sovereign auctions can resume, forcing primary surpluses or IMF reliance during that window.
+After resolution the country enters recovery, which lasts at least `RECOVERY_FLOOR_TURNS` (48) turns. Market access lockouts differ by path: Repudiate `REPUDIATE_LOCKOUT_TURNS` (48) and Restructure `RESTRUCTURE_LOCKOUT_TURNS` (16), forcing primary surpluses or IMF reliance during that window (`src/lib/sovereignDefault/constants.ts`).
 
 ## Trading
 
@@ -217,20 +219,7 @@ As `turnsRemaining` shrinks toward 0, `yearsRemaining` shrinks with it, so the d
 **Payment obligation:**
 Coupon payments are paid from the federal budget each turn. A country that cannot sustain demand for its debt runs into the sovereign-default crisis subsystem below. "Monetize" (print money to cover the debt) is one of the four executive-selected resolution paths in that subsystem, not an automatic fallback that fires on every missed payment, see Resolution paths below.
 
-## Admin Testing
-
-### Test Issuance
-
-Admins can manually issue sovereign bonds for testing:
-
-```bash
-POST /api/admin/sovereign-debt/
-{
-  "countryId": "US" | "UK",
-  "faceValue": number, // optional; defaults to quarterly deficit amount
-  "maturityTurns": 48 | 96 | 240
-}
-```
+## Data
 
 ### Collections
 
@@ -240,6 +229,69 @@ POST /api/admin/sovereign-debt/
 | `bondHistory`   | Per-turn price and interest snapshots         |
 | `federalBudget` | US federal debt principal and interest        |
 | `centralBanks`  | Prime rate for pricing                        |
+
+## Rules and constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `SOVEREIGN_ISSUANCE_INTERVAL_TURNS` | 12 | `src/lib/bonds/sovereign.ts` |
+| `SOVEREIGN_BOND_MATURITY_TURNS` | 48 | `src/lib/bonds/sovereign.ts` |
+| `SOVEREIGN_BOND_TERM_PREMIUMS` | 48t: 0, 96t: 0.25pp, 240t: 0.75pp | `src/lib/bonds/sovereign.ts` |
+| `BOND_UNIT_FACE_VALUE` | 1,000 | `src/lib/constants/bonds.ts` |
+| `SOVEREIGN_CREDIBILITY_SPREAD_MAX_PP` | 1.5 | `src/lib/centralBank/marketEffects.ts` |
+| Market price clamp | 0.05 to 2.0; defaulted bond 0.1 | `calculateBondMarketPrice`, `src/lib/constants/bonds.ts` |
+| `BASE_DEMAND` | 1.2 | `src/lib/sovereignDefault/constants.ts` |
+| `DGDP_PENALTY_FLOOR` / `RATE` | 0.6 / 0.3 | same |
+| `DGDP_CLIFF_FLOOR` / `RATE` | 2.0 / 0.4 | same |
+| `INFLATION_PENALTY_FLOOR` / `RATE` | 0.05 / 2.0 | same |
+| `FX_DEPREC_PENALTY_RATE`, `FX_DEPRECIATION_LOOKBACK_TURNS` | 1.5, 10 | same |
+| `DEFAULT_SCAR_DURATION`, `DEFAULT_SCAR_PER_TURN` | 100 turns, 0.01 | same |
+| `TRUST_MODIFIER_RATE` | 0.4 | same |
+| `COUPON_PREMIUM_RATE`, `GLOBAL_BENCHMARK_RATE` | 5.0, 0.04 | same |
+| `ENTITY_DEMAND_CAP` | 0.4 | same |
+| `DEMAND_FULL_THRESHOLD` / `DEMAND_UNDERSUBSCRIBED_THRESHOLD` | 1.0 / 0.7 | same |
+| `FAILED_AUCTION_COUNT_FOR_CRISIS` | 3 | same |
+| `EXECUTIVE_DECISION_TURNS`, `LEGISLATIVE_VOTE_TURNS_PER_CHAMBER` | 12, 24 | same |
+| `MONETIZE_GATE_INFLATION` | 0.08 | same |
+| `REPUDIATE_GDP_PENALTY` / `RESTRUCTURE_GDP_PENALTY` | 0.12 / 0.06 | same |
+| `RESTRUCTURE_HAIRCUT`, `RESTRUCTURE_MATURITY_EXTENSION_TURNS` | 0.4, 60 | same |
+| `DEFAULT_MARGIN_PENALTY_*` | Repudiate -0.18, Restructure -0.09, Bailout -0.045, Monetize 0 | same |
+| `DEFAULT_MARGIN_FULL_PENALTY_TURNS`, `DEFAULT_MARGIN_DECAY_TURNS` | 48, 24 | same |
+| `GLOBAL_CONTAGION_MULTIPLIER`, `CASCADE_MAX_LEVELS` | 0.5, 3 | same |
+| `RECOVERY_FLOOR_TURNS` | 48 | same |
+
+Worked example: a country with annual deficit 2,400,000 and 600,000 of bonds maturing in the next quarter issues `floor(600,000 / 1000) * 1000 + floor(2,400,000 / 4 / 1000) * 1000` = 1,200,000 face value (1,200 units). At prime 4.0% a 48-turn bond carries a 4.0% coupon; a 240-turn bond carries 4.75%.
+
+The IMF bailout GDP penalty of -2% shown in the resolution table was not found as a named constant in code and is not verified here.
+
+## Timing
+
+`bondTurn` runs inside the turn pipeline (`src/simulation/phases/turnPhaseRegistry.ts`) in parallel with `commodityPrices`. Within `processBondTurn`: scheduled issuance (every 12 turns), coupon payments, price update, maturity settlement, history snapshot. Auction demand and the failed-auction counter are evaluated separately at fiscal-year close (`src/lib/budget/fiscalYear.ts`), so a crisis is detected at year end, not in the bond turn. Resolution windows then run on their own turn counters (12 for the executive, 24 per chamber).
+
+## Edge cases and limits
+
+- **Surplus.** The deficit component is 0; the rollover component still issues so the float does not empty.
+- **Rounding.** Issuance is rounded down to whole 1,000 units; amounts under one unit are skipped.
+- **Price bounds.** Market price is clamped to 0.05 to 2.0; defaulted paper prices at 0.1.
+- **No central bank.** The credibility spread is 0.
+- **Debt cannot go negative.** `applySovereignDebtAdjustment` floors principal and debt interest at 0.
+- **No corporate liquidity default.** Sovereign bonds skip the `liquidCapital < 0` check; default comes only through the crisis subsystem.
+- **Monetize gate.** Unavailable when inflation exceeds 8%.
+- **Entity holdings.** Add at most 0.4 to auction demand.
+- **Player-disabled countries.** Do not tip into a default crisis unless extreme autonomous-world fundamentals apply (`crisisDetection.ts`).
+
+## Connections
+
+**Driven by**
+- [National Budget & Treasury](./national-budget.md): the annual deficit sizes issuance (`src/lib/bonds/sovereign.ts`).
+- Central bank: prime rate and chair infamy set the coupon (`src/lib/centralBank/marketEffects.ts`).
+- Investor confidence and inflation: feed auction demand (`src/lib/sovereignDefault/marketDemand.ts`).
+
+**Affects**
+- [National Budget & Treasury](./national-budget.md): debt principal, interest and credit rating (`applySovereignDebtAdjustment`).
+- [Stock Market](./stock-market.md): bonds appear on country exchange pages.
+- [IMF Sovereign Facility](./imf-sovereign-facility.md): one of the four resolution paths.
+- [Corporations](./corporations.md): default margin penalty and contagion on headquartered firms.
 
 ## Key Files
 
@@ -256,3 +308,5 @@ POST /api/admin/sovereign-debt/
 - [Corporations](./corporations.md), Corporate bonds (credit rating, trading, defaults)
 - [National Budget & Treasury](./national-budget.md), Federal budget, debt, deficit mechanics
 - [Stock Market](./stock-market.md), NYSE/FTSE listings where sovereign bonds appear
+
+Last checked: 2026-10-29, version 1.18.0

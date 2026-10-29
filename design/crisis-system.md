@@ -2,6 +2,8 @@
 
 Crises are dynamic events that modify state metrics, government approval, and corporate profit margins across affected regions. They can be one-time shocks (flat effects) or ongoing situations (tick effects).
 
+Player guides: [Crisis Interaction](https://www.ahousedividedgame.com/wiki/crisis-interaction) (templates, decision trees, collective contributions, auto-spawning) and [Global Response Crises](https://www.ahousedividedgame.com/wiki/global-response-crises) (chained multi-country crises). The bloc-alignment flashpoints in the second half of this page are described for players in [Bloc Spheres](https://www.ahousedividedgame.com/wiki/bloc-spheres). For the multi-country campaign engine see [global-response-crises-as-shipped.md](./global-response-crises-as-shipped.md).
+
 ## Overview
 
 - **Purpose**: Create dynamic economic/political events that challenge players and alter the game world
@@ -9,6 +11,26 @@ Crises are dynamic events that modify state metrics, government approval, and co
 - **Duration**: Fixed (N turns) or indefinite (manual resolution)
 - **Effects**: State metrics, government approval, corporate profit margins
 - **Turn Processing**: Runs inside the `stateEffectsAndNationalAggregation` adapter (`src/simulation/phases/stateEffectsPhase.ts`), via `runtime.runPhase("crisisTurn", ...)`
+
+## Rules
+
+Every constant this page relies on, with its source.
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| Tick decay | `1 - elapsed / duration`, clamped to 0..1; indefinite crises stay at 1 | `tickDecayFactor` in `src/lib/turn/crisisTurn.ts` |
+| Flat effect timing | Only when `turn === crisis.startTurn` | `src/lib/turn/crisisTurn.ts` |
+| `gdpLoss` fraction clamp | 0 to 0.95 per effect; several losses multiply | `applyGdpLossEffects` in `src/lib/turn/crisisTurn.ts` |
+| Profit margin clamp | 0 to 100 | `applyProfitMarginEffects` in `src/lib/turn/crisisTurn.ts` |
+| Character stat clamp | 1 to 10 | `applyStatEffects` in `src/lib/turn/crisisTurn.ts` |
+| Collective contribution shortening | `floor(duration x min(1, current / target) x 0.5)` turns | `calculateCollectiveReduction` in `src/lib/crises/interactionEngine.ts` |
+| Minimum effective duration | 1 turn | `src/lib/turn/crisisTurn.ts` |
+| `MAX_AUTO_CRISES_PER_TURN` | 1 | `src/lib/crises/autoCrisisConstants.ts` |
+| `DEFAULT_DISASTER_COOLDOWN_TURNS` | 144 | `src/lib/crises/autoCrisisConstants.ts` |
+| `MAX_OPEN_CRISES` (alignment) | 3 | `src/lib/alignment/crisisTurn.ts` |
+| `CRISIS_WINDOW_TURNS` (alignment) | 12 | `src/lib/alignment/crisis.ts` |
+| `DEFECTION_CRISIS_AT` | `SUSTAIN_TURNS / 2` = 12 turns (`SUSTAIN_TURNS` = 24) | `src/lib/alignment/crisisTurn.ts`, `src/lib/alignment/membershipEligibility.ts` |
+| `PER_NATION_TURN_CAP` / `CRISIS_TURN_CAP` | 5 / 7.5 alignment points per nation per turn | `src/lib/constants/alignmentEras.ts` |
 
 ## Crisis Structure
 
@@ -104,6 +126,10 @@ export function tickDecayFactor(turn: number, startTurn: number, duration: numbe
 
 Indefinite crises (`durationTurns` null or <= 0) never decay, they apply their tick effects at full strength every turn until manually resolved.
 
+**Why decay exists:** a shock fades as the economy adapts, so a long crisis hurts most at the start and eases toward its end rather than ending in a cliff. The scale uses the **effective** duration, so a crisis shortened by player responses (below) also decays faster. Flat and `gdpLoss` effects are not scaled; they fire once at onset.
+
+**Shortening a crisis.** If the crisis carries an `interactionDefinition` and the interaction exists, `effectiveDuration = max(1, durationTurns - reduction)`, where `reduction` is the collective-contribution reduction (up to half the duration when the shared target is fully funded) plus any `durationReductionTurns` from decisive options taken. Expiry is checked against `effectiveDuration`.
+
 ## Target Types
 
 ### Metric Effects
@@ -191,6 +217,15 @@ A crisis itself pays out nothing directly, while open, it raises its target's mo
 
 See [bloc-alignment-and-spheres.md](./bloc-alignment-and-spheres.md) for the surrounding bloc-stress/sphere-projection system this feeds into.
 
+## Timing
+
+- **Phase:** `crisisTurn`, inside the state-effects adapter (`src/simulation/phases/stateEffectsPhase.ts`). It runs first of the pure `$inc` writers: `crisisTurn`, then `ministerialOrders`, then `policyEffects`, an order chosen because the first two commute and policy effects read the result.
+- **Before the early return** (so they run even with no active crisis): crisis aid-bill resolution and penalty reversal, living-conflict materialization, and the Vietnam chain opening and escalation.
+- **Spawning:** the `autoCrisisTurn` and `autoDisasterTurn` phases (turn phase registry, skipped while corporation actions are paused) create automatic crises. `MAX_AUTO_CRISES_PER_TURN = 1` and the master auto-disaster flag gate them. A crisis spawned this way is announced by `crisisTurn` on the turn where `turn === startTurn`.
+- **Admin-created crises** have `startTurn` equal to the already-processed current turn, so the start branch never runs for them. They are announced once at creation (`announceCrisisStart`) and their tick effects begin on the next turn.
+- **Within a crisis, order:** resolve scope, compute effective duration, scale tick effects, apply metric, approval, profit margin, inflation, `gdpLoss`, then stat effects, then announce (start turn only), then expiry check. A crisis whose expiry turn is `startTurn + effectiveDuration` still applies its final tick (at factor 0) on that turn before resolving.
+- **Bloc-alignment crises** open and close in the alignment phase (`openDueCrises`, `closeDueCrises`), before movement caps are computed for that turn.
+
 ## Turn Processing
 
 Handled by `processCrisisTurn()` in `src/lib/turn/crisisTurn.ts`:
@@ -206,6 +241,34 @@ Handled by `processCrisisTurn()` in `src/lib/turn/crisisTurn.ts`:
 | **Apply profit margin effects** | Update `corporateSectors` with clamping                                    |
 | **Wire events**                 | Emit `crisis_start` on activation, `crisis_end` on resolution              |
 | **Auto-resolve**                | Mark expired crises as `resolved` when `turn >= startTurn + durationTurns` |
+
+## Edge cases and limits
+
+- **Stacked crises add up.** Multiple active crises each apply their own effects; approval deltas for one crisis are summed, profit margins and metrics accumulate per effect. There is no cap on the number of simultaneous admin or auto crises (only the alignment catalog caps open flashpoints at 3).
+- **Metric clamping.** Metric effects are applied as one clamped pipeline update, so a crisis can never push a metric outside its definition bounds. Profit margin is clamped to 0..100.
+- **Approval is not clamped by the crisis.** Approval effects use a plain `$inc` on `approvalRating` per affected country, with no clamp in `crisisTurn.ts`.
+- **Approval counts once per country.** A region-scoped crisis derives the affected countries from its regions, so a country with many affected states takes the approval delta once, not once per state.
+- **`gdpLoss` ignores `effectType`.** It applies only at `startTurn`, is capped at 95% per effect, and persists because it multiplies `state.gdp`; unlike a growth-rate effect, the economy regrows from the smaller base.
+- **`decay` effects are skipped.** `effectType: "decay"` is reserved and does nothing today.
+- **Zero or empty scope.** If the resolved state list is empty or no effect applies, nothing is written and the crisis still progresses to expiry.
+- **Indefinite crises** never auto-expire, never decay, and are ended only by an admin.
+- **Stat effects** drop character stats by the absolute value and clamp to 1..10.
+- **Alignment crises** retarget instead of fizzling: if the preferred target is locked (`ALIGNMENT_GATES.locked`) or already claimed this turn, the crisis moves to the most contested movable nation. A crisis nobody acts on changes nothing, since it only raises a target's movement ceiling from `PER_NATION_TURN_CAP` 5 to `CRISIS_TURN_CAP` 7.5.
+- **Authored anchors fire once per world** and only inside their era window.
+
+## Worked example
+
+The Financial Crisis below (`durationTurns` 96) carries a tick effect of -0.25 approval per turn and -0.2 GDP growth per turn.
+
+| Turns since start | Decay factor | Approval per turn | GDP growth per turn |
+| --- | --- | --- | --- |
+| 0 | 1.00 | -0.250 | -0.200 |
+| 24 | 0.75 | -0.1875 | -0.150 |
+| 48 | 0.50 | -0.125 | -0.100 |
+| 72 | 0.25 | -0.0625 | -0.050 |
+| 96 | 0.00 | 0 | 0 |
+
+Total approval lost over the crisis: 0.25 x (96 - (0 + 1 + ... + 95) / 96) = 0.25 x (96 - 47.5) = **12.1 points**, versus 24 points if the effect did not decay. If players fully fund a collective target, `reduction = floor(96 x 1 x 0.5) = 48`, the effective duration becomes 48, the decay runs twice as fast, and the total approval loss falls to 0.25 x (48 - 23.5) = **6.1 points**.
 
 ## Wire Event Integration
 
@@ -349,8 +412,27 @@ Crises are created and managed via admin routes (not yet documented in public AP
 | `src/lib/alignment/crisisTurn.ts` | Bloc-alignment crisis open/close lifecycle           |
 | `src/lib/alignment/crisis.ts`     | Alignment crisis helpers (`mostContested`, `tugOfWarCandidate`) |
 
+## Connections
+
+**Driven by:**
+
+- Admin panel and the template creator (`src/lib/crises/createCrisisFromTemplate.ts`): create crises with effects, scope and duration.
+- Auto-spawners (`src/lib/crises/autoCrisisSpawn.ts`, `autoDisasterSpawn.ts`): condition and random tiers create crises from templates.
+- Player responses ([Crisis Interaction guide](https://www.ahousedividedgame.com/wiki/crisis-interaction)): collective contributions and decisive options shorten a crisis through `effectiveDuration` in `processCrisisTurn`.
+- [Bloc Alignment and Spheres](./bloc-alignment-and-spheres.md): bloc stress and sphere projection decide which defection and tug-of-war flashpoints open.
+
+**Affects:**
+
+- [Policy System](./policy-system.md) and [National Metrics](./national-metrics.md): metric effects change `stateMetrics` and political metric boards (`applyMetricEffects`).
+- [Government Approval](./government-approval.md): approval effects change `approvalRating` per country (`applyApprovalEffects`).
+- [Corporations](./corporations.md): profit margin effects change `corporateSectors.profitMargin` (`applyProfitMarginEffects`); under the plants tier a `physical` effect is a production haircut.
+- [National Budget](./national-budget.md): inflation effects change `federalBudget.economicFactors.inflationRate` (`applyInflationEffects`).
+- [Bloc Alignment and Spheres](./bloc-alignment-and-spheres.md): an open alignment crisis raises its target's per-turn movement cap (`openCrisisTargets` feeding `CRISIS_TURN_CAP`).
+
 ## Related Documentation
 
 - [Policy System](./policy-system.md), State metrics that crises can modify
 - [Corporations](./corporations.md), Profit margin effects on corporate sectors
 - [National Metrics](./national-metrics.md), Government approval affected by crises
+
+Last checked: 2026-10-29, version 1.18.0

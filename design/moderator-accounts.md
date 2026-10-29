@@ -2,7 +2,9 @@
 
 ## Overview
 
-Moderator accounts are an intermediate auth role between admin and player. Admins can assign/remove moderator status from users. Moderators get their own panel at `/moderator` with a subset of admin functionality - currently limited to player management. The system is designed so additional tabs can be added to the mod panel with minimal effort.
+Moderator accounts are an intermediate auth role between admin and player. Admins can assign/remove moderator status from users. Moderators get their own panel at `/moderator` with a subset of admin functionality: player management, financial transaction review, content moderation and site tools. Additional tabs can be added with minimal effort.
+
+This is a staff reference for contributors. It does not describe anything players can do.
 
 Mod notes and audit logs are shared between panels: admins see everything moderators do, and both roles can write mod notes with automatic attribution.
 
@@ -86,16 +88,7 @@ No structural changes. The `role` field is already carried in the JWT payload vi
 
 ### Target Protection
 
-Mod-facing API routes that target a user must check the target is not an admin:
-
-```ts
-const targetUser = await db.collection<User>("users").findOne({ _id: new ObjectId(targetUserId) });
-if (targetUser?.role === "admin") {
-  return NextResponse.json({ error: "Cannot perform actions on admin accounts" }, { status: 403 });
-}
-```
-
-This check lives in each mod API route, not in the auth guard (the guard checks who you are, the route checks who you're targeting).
+Mod-facing routes that target a user refuse admin accounts with a 403. The check lives in each mod route, not in the auth guard (the guard checks who you are, the route checks who you are acting on).
 
 ## Moderator Panel
 
@@ -107,13 +100,13 @@ This check lives in each mod API route, not in the auth guard (the guard checks 
 
 ### Tabs
 
-Five tabs: **Priority**, **Players**, **Transactions**, **Content** and **Site** (`src/components/moderator/tabs/ModeratorTabsConfig.tsx`). Adding more tabs means adding entries to the mod tab config and ensuring API routes accept moderator auth.
+Five tabs: **Priority**, **Players**, **Transactions**, **Content** and **Site** (`src/components/moderator/tabs/ModeratorTabsConfig.tsx`). Mail Reports has its own page under `src/app/moderator/mail-reports/`. Adding more tabs means adding entries to the mod tab config and ensuring API routes accept moderator auth.
 
 ### Players Subtabs
 
 | Subtab          | Component Strategy            | Differences from Admin                                      |
 | --------------- | ----------------------------- | ----------------------------------------------------------- |
-| Users           | Reuse/adapt admin `UsersTab`  | Admin accounts hidden from list, no account deletion button |
+| Users           | Reuse/adapt admin `UsersTab`  | Admin accounts hidden from list, no account deletion button (no mod delete route exists) |
 | Grant Resources | Reuse `ResourceGrantManager`  | No differences                                              |
 | Achievements    | Reuse `AchievementsTab`       | No differences                                              |
 | Characters      | Reuse `CharacterStateManager` | No differences                                              |
@@ -129,38 +122,30 @@ Most admin player components can be reused directly. Where behavior differs (del
 
 ### Moderator Routes (`/api/moderator/`)
 
-| Route                               | Method | Purpose                              | Audit Logged |
-| ----------------------------------- | ------ | ------------------------------------ | ------------ |
-| `/api/moderator/users`              | GET    | List users (excludes admin accounts) | No           |
-| `/api/moderator/users/ban`          | POST   | Ban a user                           | Yes          |
-| `/api/moderator/users/unban`        | POST   | Unban a user                         | Yes          |
-| `/api/moderator/users/mod-notes`    | POST   | Add a mod note                       | Yes          |
-| `/api/moderator/resources/grant`    | POST   | Grant resources to a player          | Yes          |
-| `/api/moderator/achievements`       | GET    | List achievements                    | No           |
-| `/api/moderator/achievements/grant` | POST   | Grant achievement                    | Yes          |
-| `/api/moderator/characters`         | GET    | List/view characters                 | No           |
-| `/api/moderator/characters/update`  | POST   | Update character state               | Yes          |
-| `/api/moderator/patreon`            | GET    | View Patreon info                    | No           |
-| `/api/moderator/patreon/update`     | POST   | Update Patreon tier                  | Yes          |
-| `/api/moderator/activity-log`       | GET    | View activity log                    | No           |
-| `/api/moderator/suspicious`         | GET    | View suspicious activity             | No           |
-| `/api/moderator/audit-log` | GET | List the mod action audit log | No |
-| `/api/moderator/financial-logs` | GET | Paginated financial transaction log | No |
-| `/api/moderator/financial-logs/alerts` | GET | Suspect alert summary by entity | No |
-| `/api/moderator/financial-logs/[id]/review` | POST | Mark a financial log reviewed | Yes |
-| `/api/moderator/mod-view` | POST | Audit unlocking a restricted page view | Yes |
-| `/api/moderator/news/[id]` | DELETE | Delete a player news post | Yes |
-| `/api/moderator/player-ads` | GET | List banner ads for review | No |
-| `/api/moderator/player-ads/[id]` | PATCH/DELETE | Update or remove a banner ad | Yes |
-| `/api/moderator/supporter-requests` | GET | List supporter requests | No |
-| `/api/moderator/supporter-requests/[id]/approve` | POST | Approve a supporter request | Yes |
-| `/api/moderator/supporter-requests/[id]/reject` | POST | Reject a supporter request | Yes |
+| Route group | Methods | Purpose |
+| --- | --- | --- |
+| `users` | GET | List users (admin accounts excluded) |
+| `users/ban` | POST | Ban or unban a user (one route; the body selects) |
+| `users/mod-notes` | POST | Add a mod note |
+| `resources/grant`, `resources/characters` | POST, GET | Grant resources, look up characters |
+| `achievements`, `achievements/grant` | GET, POST | List and grant achievements |
+| `characters/update-state`, `update-country`, `update-positions` | POST | Adjust character state |
+| `patreon/search`, `patreon/set-status` | GET, POST | Supporter status |
+| `activity-log`, `suspicious`, `suspicious/[characterId]/dismiss` | GET, POST | Activity and flagged-account review |
+| `audit-log` | GET | The mod action audit log |
+| `financial-logs`, `financial-logs/alerts`, `financial-logs/[id]/review` | GET, POST | Transaction review |
+| `mod-view` | POST | Audit a restricted page view |
+| `news/[id]` | DELETE | Remove a news post |
+| `player-ads`, `player-ads/[id]` | GET, PATCH, DELETE | Review banner ads |
+| `supporter-requests`, `.../approve`, `.../reject` | GET, POST | Handle supporter requests |
+
+Mutating routes write to `modAuditLog`; read-only routes do not. Mail report review uses `/api/admin/mail-reports` (see [Mail](./mail.md)), which also accepts moderators.
 
 Every mutating mod route follows this pattern:
 
 1. Call `requireModerator()`
 2. Validate request body with Zod
-3. Check target user is not an admin
+3. Refuse admin targets
 4. Perform the action
 5. Write entry to `modAuditLog`
 6. Return response
@@ -198,9 +183,7 @@ These use `requireAdmin()`. Moderators cannot assign/remove other moderators.
 
 ### Navbar
 
-- Moderators see a "Mod Panel" link in the navbar (same position/style as the "Admin Panel" link)
-- Admins do NOT see a "Mod Panel" link - Admin Panel is a superset
-- The link uses the same styling pattern as the admin link but points to `/moderator`
+- Staff reach the panel from the staff menu (`src/components/StaffDropdown.tsx`); moderators see only the entries they can use (Mod Panel and Docs)
 
 ### Profile Badge
 
@@ -218,9 +201,9 @@ These use `requireAdmin()`. Moderators cannot assign/remove other moderators.
 
 ## Migration
 
-### Existing `modNote` Field
+### Legacy `modNote` Field
 
-Users with an existing `modNote` string value need migration to the new `modNotes[]` array format. Migration script should:
+The legacy `modNote` string remains on the `User` type for old data; new notes go to `modNotes[]`. A migration for old values converts as follows:
 
 1. Find all users where `modNote` exists and is non-empty
 2. Convert each to a single-entry `modNotes` array: `{ authorId: adminId, authorName: "System (migrated)", text: modNote, createdAt: user.updatedAt }`
@@ -240,3 +223,5 @@ Adding new tabs to the mod panel in the future:
 2. Create or reuse the component
 3. Add corresponding `/api/moderator/` routes with `requireModerator()` guard
 4. No auth system changes needed
+
+Last checked: 2026-10-29, version 1.18.0

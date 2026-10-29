@@ -2,12 +2,26 @@
 
 The corporation system lets players found and manage businesses that operate across state economies. Corporations generate revenue, employ workers, and interact with state metrics to create economic feedback loops between legislation and business outcomes.
 
+Player guide: [Corporations](https://www.ahousedividedgame.com/wiki/corporations)
+
 ## Founding a Corporation
 
 - **Cost and starter plant:** In plants worlds, founding charges an era-scaled entry fee plus a discounted starter build. The build is queued at zero capital stock and comes online after its shortened greenfield construction time.
 - **CEO shares:** Founder equity is created by the founding flow; IPO structure and dual-class selection can change voting control.
 - **Requirement:** One active CEO seat per character. Founding starts a 96-turn per-user cooldown before that user can re-found after leaving.
 - **Starting marketing strength:** 10 (`marketingStrength`, used for market capture; grows further from marketing spend each turn)
+
+| Constant | Value | Source |
+| -------- | ----- | ------ |
+| `CORPORATION_FOUNDING_COST` | 1,000,000 (era-scaled by world preset) | `src/lib/constants/corporations.ts` |
+| `CORPORATION_STARTING_CAPITAL` | 1,000,000 default treasury | `src/lib/constants/corporations.ts` |
+| `MIN_CORPORATION_STARTING_CAPITAL` / `MAX_CORPORATION_STARTING_CAPITAL` | 1,000,000 / 50,000,000 | `src/lib/constants/corporations.ts` |
+| `CORPORATION_FOUNDING_COOLDOWN_TURNS` | 96, starts when the previous corporation ends | `src/lib/constants/corporations.ts` |
+| `CEO_INITIAL_SHARES` | 10,000,000 | `src/lib/constants/corporations.ts` |
+| `DEFAULT_SHARE_PRICE` | 0.10 | `src/lib/constants/corporations.ts` |
+| `CEO_SALARY_MAX_REVENUE_MULTIPLE` | 1.25 | `src/lib/constants/corporations.ts` |
+| `CORP_OVERHEAD_MAX_REVENUE_MULTIPLE` | 1.5 | `src/lib/constants/corporations.ts` |
+| `TURNS_PER_DAY` | 24 (one turn is one real hour) | `src/lib/constants/corporationsClient.ts` |
 
 Players choose from 17 sector types:
 
@@ -18,14 +32,14 @@ Players choose from 17 sector types:
 | manufacturing       | Manufacturing       |
 | healthcare          | Healthcare          |
 | retail              | Retail              |
-| automobiles         | Automobiles         |
+| manufacturing_vehicles | Automobiles (vehicles line of manufacturing) |
 | technology          | Technology          |
 | energy              | Energy              |
 | agriculture         | Agriculture         |
 | real_estate         | Real Estate         |
 | defense             | Defense             |
 | telecommunications  | Telecommunications  |
-| entertainment       | Entertainment       |
+| media_entertainment | Entertainment (entertainment line of media) |
 | logistics           | Logistics           |
 | extraction          | Extraction & Mining |
 | chemical_industries | Chemical Industries |
@@ -50,7 +64,9 @@ Unowned market share can be captured via "splits":
 - **MS cost:** Escalates with each split, 1 MS, then 2, 4, 8, 16... (formula: `2^splitEscalation`)
 - **Escalation decay:** Each turn, escalation level decreases by 1 (cost halves). After reaching 4 MS cost, next turn it's 2, then 1.
 - **Base capture:** 5% of unowned sector at 0 marketing strength (`SPLIT_BASE_CAPTURE_FRACTION`)
-- **Marketing bonus:** Additional capture scales with `marketingStrength / 100` (`MS_CAPTURE_DIVISOR`)
+- **Marketing bonus:** Capture is multiplied by `1 + marketingStrength / 100` (`MS_CAPTURE_DIVISOR`)
+- **Unowned bonus:** Capture is multiplied by 1.25 (`UNOWNED_CAPTURE_BONUS_MULTIPLIER`), because unowned sectors have no defense. A tariff-based multiplier (`getSplitCaptureMultiplier()`) and a strength multiplier also apply. Capture is rounded and capped at the unowned amount (`src/app/api/country/[code]/region/[id]/economy/attack/route.ts`).
+- **Plants floor:** Under plants the cash cost is the larger of the 5% figure and the cost of commissioning the same physical plant (`attackCostAnchorUnderPlants()`), so a split can never be cheaper than building.
 
 The escalation prevents spam-splitting while the decay ensures the cost resets over time. Players must balance split frequency against MS reserves.
 
@@ -64,11 +80,15 @@ state's `economic.gdpGrowth`. See `src/lib/turn/unownedSectorGrowth.ts`.
 
 Player corporations with **no active CEO** (`ceoId` unset/null or `ceoVacant: true`) lose **10% per turn** of each owned sector’s **revenue** and **workers**; that revenue is **$inc**’d into the matching `(stateId, sectorType)` unowned sector document (same pool splits draw from). **State-owned / nationalized** corporations (`countryOwnerId` set or `isNationalized`) are excluded so public enterprises do not bleed. Runs at the start of `processCorporationTurn` (after lookups, before sector P&L) in `src/lib/turn/corporation/vacantCeoSectorShed.ts`.
 
+**Inactive CEO shed.** A corporation whose character CEO has not been active for `INACTIVE_CEO_TURN_THRESHOLD = 72` turns (72 real hours) sheds at the same 10% rate immediately after the vacant pass (`src/lib/turn/corporation/inactiveCeoSectorShed.ts`). The CEO keeps full authority and the shed stops the turn after they return. Excluded: vacant, autopilot, imperial or NPP-run, nationalized and country-owned corporations.
+
 ## Per-Turn Processing
 
 Every turn (24 turns per game-day), each corporation is processed:
 
-**Entry point:** `src/lib/turn/corporationTurn.ts` → `processCorporationTurn()`
+**Entry point:** `src/lib/turn/corporationTurn.ts` → `processCorporationTurn()` (re-exported from `src/lib/turn/corporation/index.ts`, where the real phases live)
+
+The table is the outline of the phases players feel. The live function has many more steps (producer and clearing passes, labour, supply agreements, NPP decisions, advertising, media settlement, fund dividends); see [The Capacity Economy (as shipped)](./capacity-economy-as-shipped.md) and [Turn processing](./turn-processing.md).
 
 ### Processing Phases
 
@@ -78,6 +98,7 @@ Every turn (24 turns per game-day), each corporation is processed:
 | 1b    | Vacant-headline corps shed 10% sector revenue/workers → unowned  | `shedVacantCeoSectorsToUnowned()` |
 | 2     | Process sectors (revenue, margin, share price, credit)           | `processSectors()`                |
 | 3     | Bulk write sector + corp updates                                 | `bulkWrite()`                     |
+| 3b    | R&D innovation roll (only on turns divisible by 6)               | `processRdInnovations()`          |
 | 4     | Update corporate tax bases in federal + state budgets            | `taxBases.corporateProfits`       |
 | 5     | Refresh national budget revenue (public enterprises)             | `refreshNationalBudgetRevenue()`  |
 | 6     | Pay CEO salaries + dividends to characters                       | `characters.bulkWrite()`          |
@@ -94,7 +115,7 @@ For each sector (legacy growth-slider tiers):
 1. **Revenue growth:** `newRevenue = revenue × (1 + growthRate / TURNS_PER_DAY / 100)`
 2. **Growth cost:** `calculateDailyGrowthCost(newRevenue, perTurnGrowthRate, primeRate)`, scales with prime rate
 3. **Profit margin modifiers:** 15+ additive modifiers (unemployment, grid, corruption, commodities, tariffs, subsidies, etc.)
-4. **Effective margin:** `min(100, baseMargin + totalModifier)`, can go negative (loss-making)
+4. **Effective margin:** `baseMargin + totalModifier`, linear up to `MARGIN_SOFT_CAP_KNEE = 80`, then bent by a tanh soft cap toward `MARGIN_HARD_CEILING = 100` without reaching it (`src/lib/constants/corporations.ts`). It can go negative (loss-making).
 5. **Maintenance:** `hourlyRevenue × (1 - effectiveMargin / 100)`
 6. **Sector NPV:** `yearlyProfit / 0.15` (15% discount rate, `NPV_ANNUAL_DISCOUNT_RATE`), for balance sheet valuation
 
@@ -116,13 +137,13 @@ const stateRate = isDomestic
   : (lookups.foreignStateCorpTaxRateByState.get(sector.stateId) ?? 0);
 ```
 
-- **Tax base:** Per-sector apportioned operating income (see the design archive).
+- **Tax base:** Per-sector apportioned operating income.
 - **Classification:** `isDomestic = corp.countryId === sector.countryId`. A US-HQ corp with a UK sector pays the UK **foreign** rate on that sector's profits; a UK-HQ corp with a UK sector pays the UK **domestic** rate. State tier follows the same rule (country-level match, not state-level).
 - **Foreign is all-or-nothing:** there is no country-targeting lever. Each country sets one foreign rate, applied symmetrically to every non-domestic corp operating there.
 - **Bond coupon income** is taxed at the corp's home-country **domestic** rate (always domestic from the corp's perspective). State tier never taxes bond interest.
 - **Losses:** No tax credits, unprofitable sectors pay $0 regardless of classification. Loss-making corps with all-negative sectors pay 0 in both tiers.
 
-Rates are stored on `federalBudget.taxRates.{domestic,foreign}CorporateTax` and `stateBudgets.taxRates.{domestic,foreign}CorporateTax`, populated by the `*_domestic_corporate_tax_rate` and `*_foreign_corporate_tax_rate` legislation bills per country. See the design archive for the political-economy rationale and stance distribution.
+Rates are stored on `federalBudget.taxRates.{domestic,foreign}CorporateTax` and `stateBudgets.taxRates.{domestic,foreign}CorporateTax`, populated by the `*_domestic_corporate_tax_rate` and `*_foreign_corporate_tax_rate` legislation bills per country.
 
 ### Tariff & Subsidy Modifiers
 
@@ -175,11 +196,12 @@ Marketing Strength (MS) determines how much unowned market share is captured per
 **Growth formula per turn:**
 
 ```
-baseGrowth = 1 MS (if any spend)
-scaledGrowth = 0.65 × ln(1 + budget / 100,000)
+raw = MARKETING_BASE_GAIN_PER_TURN (1.0) + MARKETING_BUDGET_SCALE (0.65) × ln(1 + dailyBudget / 100,000)
+excess = max(0, MS − 100)
+growth = raw × 100 / (100 + MS + excess)        (0 if the budget is 0)
 ```
 
-Both values apply diminishing returns once MS exceeds 100, growth slows significantly above that threshold. The formula prevents unlimited MS accumulation through raw spending.
+The diminishing factor applies to the whole raw gain, and it halves faster once MS exceeds `MARKETING_DIMINISHING_THRESHOLD = 100`. The formula prevents unlimited MS accumulation through raw spending.
 
 - **Starting MS:** 10
 - **Effective range:** 0-200+ (higher MS gives meaningfully more capture per split beyond ~100)
@@ -194,15 +216,15 @@ R&D spending accumulates an **R&D Score** that drives periodic breakthroughs, on
 **Score accumulation per turn:**
 
 ```
-baseGain = 1.0 (if any R&D budget is set)
-scaledGain = 0.65 × ln(1 + budget / 100,000)
-decay = 3% of current score
-newScore = max(0, (1 − decay) × oldScore + (baseGain + scaledGain) × diminishing(oldScore))
+raw = RD_BASE_GAIN_PER_TURN (1.2) + RD_BUDGET_SCALE (0.78) × ln(1 + dailyBudget / 100,000)
+diminishing = 100 / (100 + score + max(0, score − 100))
+growth = raw × diminishing                      (0 if the budget is 0)
+newScore = max(0, (1 − RD_DECAY_RATE) × oldScore + growth)
 ```
 
 - **Starting score:** 0
 - **Decay:** 3%/turn (slower than logistics 5%, accumulated R&D degrades more slowly than physical infrastructure)
-- **Diminishing returns** above score 100 mirror marketing
+- **Diminishing returns** above `RD_DIMINISHING_THRESHOLD = 100` mirror marketing. R&D is deliberately 20% stronger than marketing (1.2 and 0.78 versus 1.0 and 0.65) so tech arrives at a playable pace.
 - **Budget is a daily dollar cost** deducted from liquid capital each turn via the same `costsBeforeCeo` pipeline as marketing and logistics
 - **Budget counts against the 150% overhead cap** (`marketing + logistics + R&D + CEO salary ≤ 1.5 × daily revenue`)
 
@@ -213,7 +235,7 @@ Functions: `calcRdGrowth`, `calcRdScoreAfterTurn` in `src/lib/constants/corporat
 Each corporation rolls once every `RD_INNOVATION_INTERVAL` turns. Innovation probability scales linearly with score:
 
 ```
-probability = min(1, rdScore / 200)
+probability = min(1, rdScore / RD_INNOVATION_SCORE_THRESHOLD)   // threshold = 200
 ```
 
 At score 200 every 6-turn window produces a breakthrough; at 100 one in two windows; at 0 none. rdScore only governs how often a breakthrough fires, the magnitude is a separate uniform random roll, not interpolated from score (an earlier score-interpolated version made high-rdScore corps a guaranteed cap-hit, making R&D strictly dominant over Growth). When a breakthrough fires, one sector owned by the corporation is selected (for extraction corps, the sector closest to its capacity limit; otherwise random):
@@ -331,10 +353,11 @@ Function: `getHomeLocationMarginBonus()` in `src/lib/constants/corporations.ts`
 
 ### Inflation → Profit Margin (implemented)
 
-Country-level inflation modifies all corporate sector margins. The target rate is 2.0%. Deflation and low inflation provide a modest bonus; high inflation significantly hurts margins.
+Country-level inflation modifies all corporate sector margins. The target rate is 2.0% (`INFLATION_TARGET`). Low non-negative inflation gives a modest bonus; deflation and high inflation both hurt margins.
 
 - **At target (2%):** 0% modifier
-- **Below 2%:** Bonus up to +2% at 0% inflation
+- **Between 0% and 2%:** Bonus up to +2% at 0% inflation (`INFLATION_LOW_MAX_BONUS`)
+- **Below 0% (deflation):** -2 points of margin per point of deflation (`DEFLATION_PENALTY_COEFF = 2`), so -4 at -2% inflation
 - **Above 2%:** Linear penalty scaling to **-8% at 10%+ inflation**
 - **Applies to all sectors at country level**
 
@@ -494,8 +517,8 @@ Players can buy and sell shares from the Shares tab on any corporation page:
 
 ### CEO Share Issuance
 
-- **Public issuance:** Issue up to 50% of outstanding shares to the public float (dilution)
-- **Self-issuance:** Issue shares to the CEO at a 15% premium; proceeds go to corporate liquid capital
+- **Public issuance:** Issue up to 50% of outstanding shares (`MAX_PUBLIC_ISSUANCE_PERCENT`) to the public float (dilution)
+- **Self-issuance:** Issue up to 20% of outstanding shares (`MAX_SELF_ISSUANCE_PERCENT`) to the CEO at a 15% premium (`CEO_SELF_ISSUANCE_PREMIUM`); proceeds go to corporate liquid capital
 - **Stock split & reverse split:** The CEO may set a new `targetTotalShares` via `POST /api/corporations/[id]/shares/consolidate`. **All shareholders and `publicFloat` are scaled in proportion** (largest-remainder integer split) so ownership percentages stay the same; `sharePrice`, `lastTradePrice`, and `reportedSharePrice` scale so **market cap is unchanged**. **Reverse split:** new total from **1,000,000** (`SHARE_CONSOLIDATION_MIN_TOTAL_SHARES`) up to current−1. **Forward split:** new total from current+1 up to **100×** current (`MAX_FORWARD_SHARE_SPLIT_MULTIPLIER`). **Cooldown:** `SHARE_STRUCTURE_COOLDOWN_TURNS` (48) between changes; stored on `Corporation.lastShareStructureTurn`. **Open `shareOrders`:** any open orders on the corporation are **auto-cancelled and fully refunded** as part of the restructure (buy-side escrow → placer corp / character wallet; corp sell-side reserved shares → placer shareholder entry) so third-party limit orders cannot block a restructure indefinitely. The response includes `cancelledOpenOrders`. State-owned / nationalized corporations cannot use this.
 
 ### Shareholder Governance Votes
@@ -590,10 +613,10 @@ Corporations can issue bonds to raise capital. Bonds are fixed-income debt instr
 ### Bond Issuance
 
 - **Minimum issuance:** $100,000
-- **Maximum:** Total debt cannot exceed 2× equity
+- **Maximum:** Total debt cannot exceed 2× equity (`MAX_BOND_ISSUANCE_FRACTION = 2.0`)
 - **Maturity options:** 96 turns (2yr), 240 turns (5yr), or 336 turns (7yr). A 48-turn corporate maturity is legacy-only.
 - **Coupon rate:** `primeRate + creditRatingSpread + CORPORATE_BOND_SPREAD_PREMIUM (1.0pp) + termPremium`. Term premium by maturity: 48/96 turns = 0, 240 turns = +1.0pp, 336 turns = +1.75pp.
-- **Cooldown:** `BOND_ISSUANCE_COOLDOWN_TURNS` between issuances
+- **Cooldown:** 24 turns between issuances (`BOND_ISSUANCE_COOLDOWN_TURNS`), 12 turns for private corporations (`BOND_ISSUANCE_COOLDOWN_TURNS_PRIVATE`), both in `src/lib/constants/bonds.ts`
 - **Unit size:** $1,000 face value per unit (`BOND_UNIT_FACE_VALUE`)
 
 ### Credit Rating
@@ -810,3 +833,63 @@ See `scripts/migrations/README.md` for the dry-run checklist.
 - `src/lib/constants/bonds.ts`, Credit rating and coupon rate logic
 - `src/app/api/character/relocate/route.ts`, CEO auto-resign on relocation
 - `src/app/api/corporations/[id]/ceo/accept/route.ts`, CEO residence gate
+
+## Worked examples
+
+Split. A sector's unowned pool is 2,000,000 and the corporation has marketing strength 40, no tariff and escalation 0. Cash cost is `2,000,000 x 0.05 = 100,000` (pre-plants figure) and the MS cost is `2^0 = 1`. Capture is `2,000,000 x 0.05 x (1 + 40/100) x 1.25 = 175,000`. A second split the same turn costs 2 MS (escalation 1), a third 4. After a quiet turn escalation drops by 1, so the next split costs half as much MS again.
+
+Marketing. A daily budget of 100,000 at MS 10: `raw = 1.0 + 0.65 x ln(2) = 1.4505`, `diminishing = 100 / (100 + 10) = 0.909`, so growth is `1.3186` MS per turn. At MS 150 the factor is `100 / (100 + 150 + 50) = 0.333`, so the same budget gains `0.4835` per turn.
+
+R&D. Score 50 with a 1,000,000 daily budget: `raw = 1.2 + 0.78 x ln(11) = 3.0703`, `diminishing = 100 / 150 = 0.6667`, growth `2.047`. Next score is `50 x 0.97 + 2.047 = 50.55`. Every 6th turn the breakthrough chance is `50 / 200 = 25%`; a hit gives a regular corporation a uniform 2% to 10% revenue boost on one sector.
+
+Salary cap. A corporation with 400,000 of daily gross sector revenue can set a CEO salary of at most `400,000 x 1.25 = 500,000` a day, and total marketing, logistics, R&D and salary of at most `400,000 x 1.5 = 600,000`.
+
+Margin. A manufacturing corporation (primary type manufacturing) with a sector in its HQ state, 3% unemployment, grid at 98%, corruption 20, inflation 2%, no debt penalty: `+5` type match, `+5` home state, `0`, `0`, `-0.6` corruption (`20/100 x 3`), `0` inflation, summing to `+9.4` points on top of the base margin.
+
+## Timing
+
+- Corporate processing runs once per turn inside the `resourceAndFinanceStart` phase group of the turn registry (`src/simulation/phases/turnPhaseRegistry.ts`), in parallel with action refresh and fund generation. Corporate bond coupons (`bondTurn`) and commodity prices (`commodityPrices`) run later in the same group, and `recomputeSharePrices` after them.
+- Inside `processCorporationTurn()` (`src/lib/turn/corporation/index.ts`) the order is: lookups, caretaker installs for corps left without a CEO, vacant-CEO shed, inactive-CEO shed, per-sector P&L, NPP corporation decisions, bulk write of sectors and corporations, R&D innovation (only when `turn % 6 === 0`), index-fund and shareholder dividends, share orders, market-cap snapshot, shareholder vote auto-resolve.
+- The R&D `$inc` is applied after the base sector writes so it composes with that turn's revenue.
+- Forex rates are set in the state-effects phase (see [Currency exchange](./currency-exchange.md)). Corporate money is held in the corporation's own currency and converted to the anchor only for aggregation.
+- Dividend rate changes and shareholder addresses use real-time cooldowns, not turn counts: 24 hours (`DIVIDEND_COOLDOWN_MS` in `src/app/api/corporations/[id]/dividends/route.ts`) and 12 hours (`SHAREHOLDER_ADDRESS_COOLDOWN_MS` in `src/app/api/corporations/[id]/shareholder-address/route.ts`). One turn is one real hour, so these equal 24 and 12 turns.
+- Votes last 24 turns; the sweep `processVoteAutoResolve()` closes them inside the corporation turn.
+
+## Edge cases and limits
+
+- Founding: one active CEO seat per character; the 96-turn founding cooldown starts when the previous corporation ends. Private corporations cannot be founded in command economies.
+- Salary: capped at 1.25x daily gross sector revenue; bond proceeds and coupons are excluded so bonds cannot lift the cap. At zero revenue the cap is 0. Combined overhead is capped at 1.5x.
+- Margin: the effective margin bends below 100 above 80 (soft cap), so stacking modifiers has diminishing returns. Debt-to-GDP penalty is capped at -5. Deficit bonus is capped at +5.
+- Losses: unprofitable sectors pay no corporate tax and receive no credit; a loss-making corporation with all-negative sectors pays 0 in both tiers.
+- Split escalation never goes below 0; split capture never exceeds the unowned amount.
+- Vacant and inactive shed: nationalized and country-owned corporations are excluded so public enterprises do not bleed. Shed revenue goes to the unowned pool, not out of the economy.
+- R&D: extraction capacity growth skips states without a `stateResourceCapacity` document and any resource at 0 capacity.
+- Stock split: needs 1,000,000 minimum total shares for a reverse split and a 100x maximum forward split; open orders are cancelled and refunded; state-owned corporations cannot restructure shares.
+- Cross-country relocation costs 14% of market cap (twice the 7% in-country rate) and vacates the CEO seat if the CEO does not live in the new HQ state.
+- Type switching: a 24-turn penalty then a 48-turn cooldown, so the lockout totals 72 turns.
+- Bond issuance below the minimum of 100,000 is clamped by available headroom; defaulted bonds cannot be bought by the issuing corporation's own CEO.
+- Pass-through legal forms skip company tax; see the player guide for the owner-level tax treatment.
+
+## Connections
+
+Driven by:
+
+- [Tariffs](./tariffs.md): foreign tariff penalties, domestic malus and the commodity blend weights (`src/lib/tariffs/tariffEffects.ts`, `sectorCalculations.ts`).
+- [Subsidies](./subsidies.md): +7.5 points per qualifying subsidy (`src/lib/subsidies/subsidyEffects.ts`).
+- [National metrics](./national-metrics.md): unemployment, grid, corruption, inflation, debt and deficit modifiers read from state and national metrics in `computeAllMarginModifiers()`.
+- [Commodities](./commodities.md): log supply and demand margin modifiers via `src/lib/constants/commodities.ts`.
+- [Legislation and bills](./bills-legislation.md): corporate tax rates per country come from the `*_corporate_tax_rate` bills.
+- [Currency exchange](./currency-exchange.md): corporate money fields are stored in `liquidCurrencyCode`.
+- [Relocation](./relocation.md): a character move vacates or moves the CEO seat.
+- [Labour](./labour.md) and [The Capacity Economy (as shipped)](./capacity-economy-as-shipped.md): staffing and physical revenue under plants.
+
+Affects:
+
+- [National budget](./national-budget.md): corporate profits feed `taxBases.corporateProfits` in federal and state budgets.
+- [Stock market](./stock-market.md): share price, market cap and order fills.
+- [Corporate bonds](./corporate-bond-defaults.md) and [Sovereign bonds](./sovereign-bonds.md): credit rating, coupon rates, defaults.
+- [Resources](./resources.md): extraction R&D raises state resource capacity.
+- [Subsidiary corporations](./subsidiary-corporations.md) and [Mergers and acquisitions](./corporate-mergers-and-acquisitions.md): ownership thresholds.
+- State GDP growth: `updateCorporateDrivenGdpGrowth()` in `src/lib/turn/corporateGdpGrowth.ts`.
+
+Last checked: 2026-10-29, version 1.18.0

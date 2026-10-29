@@ -1,5 +1,7 @@
 # Demographic & Election Implementation Audit
 
+Historical record: this page describes the archetype-era implementation as audited in February 2025. For current behaviour see [Granular electorate as shipped](./granular-electorate-as-shipped.md) and [Election engine](./election-engine.md).
+
 **Date:** 2025-02-23  
 **Scope:** 12 archetype system, group-level competitive allocation, poll, elections, admin
 

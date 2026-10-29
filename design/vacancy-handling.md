@@ -1,394 +1,154 @@
 # Vacancy Handling
 
-## Overview
+When elected officials resign, retire, die or are removed from office, their seats are filled in one of three ways: by gubernatorial appointment (US Senate), by an off-calendar by-election (US and Russian Governors, UK Commons), or by waiting for the next regular election (US House, US State Senate and other offices).
 
-When elected officials resign, die, or are removed from office, their seats may be filled temporarily by appointment (Senate only), filled by a by-election (Governor, UK Commons), or remain vacant until the next regular election cycle (other offices).
+Time units: one turn is one real hour and 48 turns make one game year (`MS_PER_TURN`, `TURNS_PER_YEAR` in `src/lib/constants/calendar.ts`). A 24-turn window is half a game year, or 24 real hours.
 
-## Vacancy Types by Office
+No dedicated player guide page covers vacancies yet. The nearest player-facing pages are [Election Mechanics](https://www.ahousedividedgame.com/wiki/election-mechanics) (cycles) and [Reference: Offices](https://www.ahousedividedgame.com/wiki/reference-offices) (what each office does).
 
-| Office              | Vacancy Handling              | Duration                                               |
-| ------------------- | ----------------------------- | ------------------------------------------------------ |
-| **US Senate**       | Governor appoints replacement | Until next regular Class election                      |
-| **US House**        | Seat remains vacant           | Until next regular House election (2 years max)        |
-| **US Governor**     | Special election (`special_governor`) | Filing window then general election (see below)  |
-| **US State Senate** | Seat remains vacant           | Until next regular State Senate election (4 years max) |
-| **UK MP (Commons)** | By-election for the vacated seat | Contested on a scaled-down regional electorate       |
+## Rules
 
-## Senate Vacancies (US Only)
+### Vacancy types by office
 
-### Triggering a Vacancy
+| Office | How it is filled | Duration | Source |
+| --- | --- | --- | --- |
+| **US Senate** | Governor appoints a replacement (player character or NPP) | Until the next election of that Senate class | `src/lib/government/commands/appointments.ts` |
+| **US House** | Seat stays vacant, no by-election | Until the next regular House election (2 game years, 96 turns, at most) | `src/lib/turn/byElections.ts` (House deferred) |
+| **US Governor** and **RU regional First Secretary** | Special election `special_governor` | 24-turn filing and primary window, then a 24-turn general | `src/lib/turn/byElections.ts` |
+| **US State Senate** | Seat stays vacant | Until the next regular State Senate election (4 game years, 192 turns, at most) | `src/lib/turn/byElections.ts` (deferred) |
+| **UK Commons** | Special election `special_commons` over the vacated seat only | 24-turn filing window, then a 24-turn general | `src/lib/turn/commonsByElections.ts` |
 
-A Senate seat becomes vacant when:
+House and State Senate seats are elected as a whole state delegation in one race, so a single-seat by-election needs a per-district design that does not exist yet. German list-seat promotion is also deferred.
 
-- Senator resigns (via `/api/officials/[id]/resign`)
-- Senator is removed by admin
-- Senator dies (future: mortality system)
+### Constants
 
-### Appointment Process
+| Constant | Value | Source |
+| --- | --- | --- |
+| `SPECIAL_GOVERNOR_FILING_TURNS` | 24 | `src/lib/turn/byElections.ts` |
+| `SPECIAL_GOVERNOR_GENERAL_TURNS` | 24 | `src/lib/turn/byElections.ts` |
+| `BY_ELECTION_RETRY_COOLDOWN_TURNS` | 48 | `src/lib/turn/byElections.ts` |
+| `BY_ELECTION_COUNTRIES` | US, RU | `src/lib/turn/byElections.ts` |
+| `COMMONS_BY_ELECTION_FILING_TURNS` | 24 | `src/lib/countries/uk/elections/commonsRecallRules.ts` |
+| `COMMONS_BY_ELECTION_GENERAL_TURNS` | 24 | `src/lib/countries/uk/elections/commonsRecallRules.ts` |
+| `COMMONS_BY_ELECTION_RETRY_COOLDOWN_TURNS` | 48 | `src/lib/countries/uk/elections/commonsRecallRules.ts` |
+| `RECALL_INFAMY_THRESHOLD` | 70 (opens a recall petition at once) | `src/lib/countries/uk/elections/commonsRecallRules.ts` |
+| `RECALL_LOW_APPROVAL_LINE` and `RECALL_SUSTAINED_TURNS` | favorability 25 or lower for 4 consecutive turns | `src/lib/countries/uk/elections/commonsRecallRules.ts` |
+| `RECALL_SIGNATURES_REQUIRED` | 5 player signatures open a petition from a watch | `src/lib/countries/uk/elections/commonsRecallRules.ts` |
+| `RECALL_PETITION_OPEN_TURNS` | 12 turns collecting signatures | `src/lib/countries/uk/elections/commonsRecallRules.ts` |
+| Appointment deadline | none, the seat can be filled at any time while vacant | `src/lib/government/commands/appointments.ts` |
+| Fallback appointment term | 6 years from now, used only when no election of that class is scheduled | `src/lib/government/commands/appointments.ts` |
+| Resign endpoint rate limit | 10 requests per 60 seconds per user | `src/app/api/officials/[id]/resign/route.ts` |
 
-When a Senate seat becomes vacant:
+### Senate vacancies (US only)
 
-1. **Vacancy created:** `ElectedOfficial` document for that senator is deleted
-2. **Notification sent to Governor:** "A Senate seat in your state has become vacant. You may appoint a replacement."
-3. **Governor eligibility window:** Governor has 48 hours (48 turns) to make an appointment
-4. **If no appointment made:** Seat remains vacant until next regular election
+A Senate seat becomes vacant when the senator resigns, is removed by an admin, or retires. `notifyGovernorOfSenateVacancy` (`src/lib/governors/senateVacancy.ts`) sends the sitting governor, if a player character holds the office, the notification "A Senate seat in [State] (Class [N]) has become vacant. You may appoint a replacement."
 
-### Governor Appoints Replacement
+**Appointment** (`POST /api/governors/appoint-senator`, `appointSenator`):
 
-**Eligibility for appointment:**
+1. The caller must hold the governor office in the US and the state must have a Senate seat of that class (`US_SENATE_2020`).
+2. The seat must be empty (no character and no NPP in it).
+3. The appointee is a player character or an NPP. They must have `homeState` equal to the governor's state, must not already hold an elected office or `currentOffice`, an NPP must not be retired, and a character must belong to a player. There is no party requirement.
+4. The seat record is created or refilled with `isAppointment: true`, `appointedBy: <governor character>`, `senateClass`, and `termEnds` set to the end time of the next election for that state and class, or six years out if none is scheduled.
+5. The appointee's `currentOffice` is set, an office-transition record is written, and both appointee and governor are notified.
 
-- Must be a character (not NPP)
-- Must have `homeState` matching the vacancy's state
-- Must not already hold an elected office
-- Traditionally same party as vacating senator (but governor's discretion - no hard requirement)
+`GET /api/governors/eligible-appointees?senateClass=1|2|3` lists the candidates (same state, no current office, player characters and NPPs).
 
-**Appointment steps:**
+The appointee serves until the next election for that Senate class. There are no special elections for the Senate: voters get no say until the regular class election. This avoids mid-cycle election spam.
 
-1. Governor navigates to `/officials` page or receives direct link in notification
-2. Clicks "Appoint Senate Replacement" button
-3. Selects eligible character from dropdown (filtered by state and availability)
-4. Confirms appointment
-5. New `ElectedOfficial` document created with:
-   - `officeType: "senate"`
-   - `state: [vacancy state]`
-   - `senateClass: [Class 1/2/3]` (same class as vacancy)
-   - `isAppointment: true`
-   - `appointedBy: [governor characterId]`
-   - `termStart: [now]`
-   - `termEnd: [next Class election endTime]`
-6. Notifications sent:
-   - To appointee: "You have been appointed as US Senator for [State]"
-   - To governor: "You have appointed [Name] as US Senator"
-   - To state residents (optional future enhancement)
+**Example.** A Class 1 senator is elected in game year 2020 (turn 0) with a term ending in 2026 (turn 288). In game year 2022 (turn 110) the senator resigns and the governor appoints a replacement. The appointee serves 178 turns, about 3.7 game years, until the Class 1 election completes at turn 288.
 
-### Appointment Duration
+**Fields** (`src/lib/db/types/officials.ts`): `isAppointment?: boolean` and `appointedBy?: ObjectId` on `ElectedOfficial`; `termEnds` is the term end date.
 
-**Appointed senator serves until the next regular election for that Senate class.**
+### House and State Senate vacancies
 
-**Example:**
+The seat stays vacant with no appointment and no special election. It fills only when the next regular election completes (every 2 game years for the House, every 4 for the State Senate). While vacant the chamber's total seat count drops (the House below 435), party seat counts fall, and the state delegation is smaller.
 
-- **Jan 2020 (Turn 0):** Class 1 election completes; Senator John Smith (D-CA) elected
-- **Term end:** Jan 2026 (Turn 288 = 6 years)
-- **May 2022 (Turn 110):** Senator Smith resigns
-- **May 2022 (Turn 110):** Governor Newsom appoints Sarah Johnson (D-CA) as replacement
-- **Appointment duration:** Until Jan 2026 (Turn 288) - when next Class 1 election completes
-- **Sarah Johnson serves:** 178 turns (3.7 years)
+**Example.** A House member resigns 16 game months into a 24-month term; the seat stays empty for the remaining 8 game months (32 turns) until the regular House election.
 
-### No Special Elections for Senate
+### Governor vacancies (US and Russia)
 
-There are **no special elections** for Senate vacancies. The appointed senator serves the full remainder of the term. Voters do not get to choose the replacement until the next regular Class election.
+When a governor resigns, retires, dies or is removed mid-term, `processByElectionWatcher` spawns a `special_governor` election (`spawnGovernorByElection`):
 
-This simplifies the system and avoids mid-cycle election spam.
+- A **mid-term vacancy** is an `electedOfficials` governor record with no character and no NPP in it (the holder-less record left by retirement or removal). A state that has never seated a governor has no such record and is filled by the regular cycle instead, so a new world does not flood with specials.
+- The election runs a 24-turn filing and primary window, then a 24-turn general. The filing window exists because candidates can only file while the primary is open.
+- The winner is seated as a plain governor, and the next regular Governor election spawns on its normal calendar.
+- Russia is status-gated: its watcher runs only when the country is beta or active.
+- No Lieutenant Governor succession exists in the game.
 
-## House Vacancies
+**Suppressed when:** a live regular governor race will resolve before a by-election spawned now could (`regularRaceFillsSeatFirst`: its `endTurn` is within 48 turns), a special is already live, or a special resolved within the last 48 turns (so an uncontested seat does not respawn a race every turn).
 
-When a House member resigns or is removed:
+**Impact:** while the seat is empty the state has no governor, so no executive powers are available, including appointing senators.
 
-- Seat remains **vacant**
-- No appointment mechanism
-- No special election
-- Seat is filled only when the next regular House election completes (every 2 years)
+### UK MP (Commons) vacancies
 
-**Impact:**
+When an MP dies, retires, resigns, defects, is recalled or is removed, the seat is recorded as a durable vacancy (`UkCommonsVacancy`, reasons `death`, `retirement`, `defection`, `resignation`, `recall`, `removal`; `src/lib/countries/uk/elections/commonsVacancyShell.ts`). The holder-less `commons` record is kept as the anchor.
 
-- House total seat count may drop below 435
-- Party seat counts decrease
-- State delegation size decreases temporarily
+- `processCommonsByElectionWatcher` groups open vacancies per region and spawns one `special_commons` race per region, claiming those vacancies (they move `open` to `scheduled`).
+- The by-election contests only the vacated seats. AHD models regions with a seat count rather than constituencies, so the race runs over the regional electorate scaled down to `carveFraction = vacatedSeats / totalRegionSeats`, clamped to 0-1 (`computeByElectionCarveFraction`, `src/lib/countries/uk/elections/byElectionCarve.ts`). The regional mix of groups and leans is preserved and the reduced electorate goes through the normal vote engine.
+- The winner is seated as a plain Commons member. Sitting MPs keep their rows (the resolve is additive).
+- **Recall:** each seated MP has a recall watch. Infamy at or above 70 opens a petition immediately; favorability at or below 25 for 4 consecutive turns opens one; 5 player signatures also open one. A petition collects signatures for up to 12 turns, then a constituency support check decides whether the MP is removed, which creates a `recall` vacancy.
 
-**Example:**
+**Suppressed when:** a live `special_commons` already covers the region, a regular or snap general will resolve before a by-election could (`commonsByElectionGate`), or a special resolved within the last 48 turns. A snap dissolution cancels live specials, and a general that resolves after a vacancy was scheduled marks that vacancy `subsumed` rather than filled.
 
-- **Nov 2020:** CA-12 elects Nancy Pelosi (D)
-- **Term end:** Nov 2022
-- **June 2021:** Pelosi resigns
-- **Vacancy:** CA-12 seat vacant for 16 months until Nov 2022 House election
+**Impact:** the Commons can sit below 650 seats while seats await a by-election, party seat counts drop, and confidence votes can be affected (fewer MPs voting). See [United Kingdom](./united-kingdom.md) and [UK Elections](./uk-elections.md).
 
-## Governor Vacancies
+### Resignation
 
-When a Governor resigns, retires, dies or is removed mid-term, the seat is filled by an off-calendar special election of type `special_governor` (`src/lib/turn/byElections.ts`). This applies to the countries listed in `BY_ELECTION_COUNTRIES`: the US and Russia.
+Two code paths exist.
 
-- Filing/primary window of 24 turns (`SPECIAL_GOVERNOR_FILING_TURNS`), then a general election of 24 turns (`SPECIAL_GOVERNOR_GENERAL_TURNS`)
-- The winner is seated as a plain governor, and the next regular Governor election spawns on its normal calendar
-- If nobody contests the by-election, another is not spawned for the same seat until `BY_ELECTION_RETRY_COOLDOWN_TURNS = 48` turns have passed
-- No Lt. Governor succession (Lt. Governor is not implemented in the game)
-- No appointment mechanism
+- **Settings resignation** (`resignOfficial`, `src/lib/settings/resignations.ts`): the path used from the player settings. UK Commons seats are tombstoned (holder cleared, record kept) and a `resignation` vacancy is written. Senate resignations notify the governor. The character's `currentOffice` is cleared.
+- **`POST /api/officials/[id]/resign`** (`src/app/api/officials/[id]/resign/route.ts`): the caller must be the office holder or an admin, the official must be in office, and a legislator cannot resign while actively running in an election (executive offices may, so a VP can step down before a contingent ballot). Non-executive resignations delete the record outright, a Senate resignation notifies the governor, and the character receives "You have resigned from [office]".
 
-**Impact:**
+An admin removal uses the same endpoint with admin auth and has the same effect.
 
-- State has no governor until the special election resolves
-- Executive powers unavailable in the meantime (cannot appoint senators, cannot sign/veto bills if state-level legislation implemented)
+## Timing
 
-## State Senate Vacancies
+All watchers run in the hourly turn (`src/simulation/phases/turnPhaseRegistry.ts`), in the election coverage group:
 
-When a State Senator resigns or is removed:
+1. `perpetualElections`, country election phases, leadership elections and `staleCandidateCleanup` run first.
+2. `byElectionWatcher` (`processByElectionWatcher`) runs next and reads the settled seat state.
+3. `commonsByElectionWatcher` runs immediately after, with a separate country scope (UK) and election type.
+4. Both are skipped while the world is in its founding period, since every seat is being elected and nothing is mid-term.
 
-- Seat remains **vacant**
-- No appointment mechanism
-- No special election
-- Seat is filled only when the next regular State Senate election completes (every 4 years)
+Within the Commons watcher the order is: backstop untracked holder-less records into vacancies, advance recall petitions, reconcile scheduled vacancies against finished races, then spawn new by-elections.
 
-**Impact:**
+Senate appointment is not a turn event: it happens when the governor calls the API, at any time while the seat is empty.
 
-- State Senate total seat count decreases
-- Party seat counts decrease
-- Legislative quorum may be affected (future: quorum requirements)
+## Edge cases and limits
 
-## UK MP (Commons) Vacancies
+- **No governor, no appointment.** If the sitting governor is an NPP or the office is itself vacant, no notification is sent and no player can appoint. The seat stays vacant until the next class election.
+- **Uncontested by-election.** The seat stays vacant after it resolves, and the 48-turn cooldown prevents an instant respawn.
+- **Several vacancies in one UK region** are filled by one race; count-less records are sized from the region's deficit, never below one seat each.
+- **Duplicate trigger.** Vacancy creation is idempotent per record, so a turn retry or simultaneous triggers do not double a race.
+- **Appointee rules.** Anyone who already holds an office, an NPP that is retired, and anyone from another state is refused.
+- **Deliberately excluded:** House and State Senate special elections (no per-district race design), Lieutenant Governor succession, death and expulsion by chamber vote.
 
-When an MP resigns or is removed, the seat is recorded as a durable vacancy (`src/lib/countries/uk/elections/commonsVacancyShell.ts`) and a by-election is held for it:
+## Connections
 
-- The by-election contests only the vacated seat(s). AHD models regions with a seat count rather than individual constituencies, so it runs over the regional electorate scaled down to the vacated seats' share of the region, `carveFraction = vacatedSeats / totalRegionSeats` (`byElectionCarve.ts`). The regional mix of groups and leans is preserved.
-- The reduced electorate runs through the normal vote engine.
+**Driven by:**
 
-**Impact:**
+- [Election Mechanics](./elections.md): regular cycles decide when a vacancy is superseded (`regularRaceFillsSeatFirst`, `ensurePerpetualElections`).
+- Resignation, retirement and removal (`src/lib/settings/resignations.ts`, `src/lib/retireCharacter.ts`) create the holder-less record the watchers read.
+- UK recall petitions (`recallPetitionShell.ts`) create `recall` vacancies.
 
-- Commons total seat count can drop below 650 while a seat awaits its by-election
-- Party seat counts decrease until it resolves
-- May affect confidence votes (fewer MPs voting)
+**Affects:**
 
-## Resignation Mechanics
+- [State-Level Power](./state-level-power.md): a vacant governorship removes executive powers, including senate appointments.
+- [United Kingdom](./united-kingdom.md): Commons seat counts and confidence votes.
+- Chamber seat counts and party seat counts (House, State Senate, Senate, Commons).
+- Action and fund bonuses: an appointed senator receives the Senate office bonuses at the next refresh (see [Stats & Actions](./stats-actions.md)).
 
-### Player Resignation
+## Future enhancements (not built)
 
-Any player holding elected office can resign at any time (except during active election they're running in).
-
-**API:** `POST /api/officials/[id]/resign`
-
-**Auth:** Must be the character who holds that office OR an admin
-
-**Validation:**
-
-- Official must be currently in office (`ElectedOfficial` exists)
-- Character must not be actively running in an election (prevents abuse)
-
-**Effect:**
-
-1. `ElectedOfficial` document deleted
-2. If Senate: Governor notification sent (appoint replacement)
-3. If House/State Senate: No action (seat vacant); Governor and UK MP seats go to a by-election
-4. Character's `currentOffice` field cleared
-5. Notification sent to character: "You have resigned from [office]"
-
-### Admin Removal
-
-Admins can remove any official via Admin → Officials panel.
-
-**API:** Same as resignation (`POST /api/officials/[id]/resign` with admin auth)
-
-**Effect:** Identical to player resignation
-
-## Database Schema
-
-### ElectedOfficial (Updated)
-
-Add fields to track appointments:
-
-```ts
-interface ElectedOfficial {
-  _id: ObjectId;
-  characterId: ObjectId;
-  officeType: OfficeType;
-  state: string;
-  senateClass?: SenateClass;
-  termStart: Date;
-  termEnd: Date;
-
-  // New fields for appointments
-  isAppointment: boolean; // true if appointed, false if elected
-  appointedBy?: ObjectId; // characterId of appointing governor (if isAppointment true)
-
-  createdAt: Date;
-  updatedAt: Date;
-}
-```
-
-### Migration
-
-Update all existing `ElectedOfficial` documents:
-
-```ts
-db.electedOfficials.updateMany(
-  { isAppointment: { $exists: false } },
-  { $set: { isAppointment: false } }
-);
-```
-
-## API Routes
-
-### POST /api/officials/[id]/resign
-
-Resign from elected office.
-
-**Auth:** Must be the character who holds that office OR admin
-
-**Body:** None
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "You have resigned from US Senator for California"
-}
-```
-
-**Side effects:**
-
-- `ElectedOfficial` document deleted
-- If Senate: Governor receives appointment notification
-- Character profile updated
-
-### POST /api/governors/appoint-senator
-
-Governor appoints replacement senator.
-
-**Auth:** Must be an active Governor
-
-**Body:**
-
-```json
-{
-  "characterId": "507f1f77bcf86cd799439011",
-  "senateClass": 1
-}
-```
-
-**Validation:**
-
-- User is a governor
-- Senate vacancy exists in user's state for specified class
-- Candidate is eligible (see eligibility above)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "appointee": {
-    "characterId": "507f1f77bcf86cd799439011",
-    "name": "Sarah Johnson",
-    "party": "democrat"
-  },
-  "termEnd": "2026-01-15T00:00:00Z"
-}
-```
-
-### GET /api/governors/eligible-appointees
-
-Get list of characters eligible for Senate appointment.
-
-**Auth:** Must be an active Governor
-
-**Query params:**
-
-- `senateClass`: 1 | 2 | 3 (which class vacancy to fill)
-
-**Response:**
-
-```json
-{
-  "candidates": [
-    {
-      "characterId": "507f1f77bcf86cd799439011",
-      "name": "Sarah Johnson",
-      "party": "democrat",
-      "homeState": "CA"
-    }
-    // ... more candidates
-  ]
-}
-```
-
-**Filtering:**
-
-- `homeState` matches governor's state
-- Not currently holding office
-- Is a player character (not NPP)
-
-## UI Components
-
-### Officials Page (`/officials`)
-
-Add **Vacancies** section:
-
-```
-┌──────────────────────────────────────┐
-│ 📋 Current Vacancies                  │
-│                                        │
-│ US Senate:                             │
-│ • California, Class 1                  │
-│   [Appoint Replacement] ← If governor │
-│                                        │
-│ US House:                              │
-│ • CA-12 (vacant since June 2021)      │
-│ • NY-14 (vacant since Aug 2021)       │
-└──────────────────────────────────────┘
-```
-
-### Appoint Senator Modal
-
-Modal triggered by "Appoint Replacement" button:
-
-```
-┌──────────────────────────────────────────┐
-│ Appoint US Senator for California         │
-│                                            │
-│ Vacancy: Class 1 Senate seat              │
-│ Term End: January 2026 (178 turns)        │
-│                                            │
-│ Select Appointee:                          │
-│ [Dropdown: Sarah Johnson (Democrat)]       │
-│                                            │
-│ ℹ️ Note: Appointed senator serves until   │
-│ the next Class 1 election in Jan 2026.    │
-│                                            │
-│           [Cancel]  [Confirm Appointment]  │
-└──────────────────────────────────────────┘
-```
-
-### Character Profile (If Appointed)
-
-Show appointment badge on appointed officials:
-
-```
-┌──────────────────────────────────────┐
-│ Sarah Johnson                         │
-│ US Senator for California (Class 1)   │
-│ 📌 Appointed by Gov. Gavin Newsom     │ ← Badge
-│ Term: May 2022 - Jan 2026             │
-└──────────────────────────────────────┘
-```
-
-## Resign Button
-
-Add to character's own profile page (when holding office):
-
-```
-┌──────────────────────────────────────┐
-│ Your Office: US Senator for California│
-│                                        │
-│ ⚠️ [Resign from Office]                │
-└──────────────────────────────────────┘
-```
-
-Clicking triggers confirmation modal:
-
-```
-⚠️ Are you sure you want to resign as US Senator for California?
-
-This action cannot be undone. Your seat will become vacant immediately.
-
-[Cancel]  [Confirm Resignation]
-```
-
-## Future Enhancements
-
-1. **Special elections** - Allow states to opt-in to special elections for House/State Senate
-2. **Lt. Governor succession** - Implement Lt. Governor office; auto-succession on Governor vacancy
-4. **Death/mortality** - Characters die of natural causes or events; triggers vacancies
-5. **Expulsion** - Congress can expel members via 2/3 vote; triggers vacancy
+1. Special elections for House and State Senate.
+2. Lieutenant Governor office with automatic succession.
+3. Death and mortality events that trigger vacancies.
+4. Chamber expulsion by a two-thirds vote.
 
 ## Related pages
 
 - [Election Mechanics](./elections.md) - Election cycles and perpetual races
 - [United Kingdom](./united-kingdom.md) - Commons vacancies and by-elections
 - [State-Level Power](./state-level-power.md) - Governors and appointments
+
+Last checked: 2026-10-29, version 1.18.0

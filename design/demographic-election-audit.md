@@ -1,5 +1,7 @@
 # Demographic System Audit & Election Realism Proposal
 
+Historical record: this page describes the demographic and election system as audited on 2026-02-23, in the 12-archetype era. For current behaviour see [Granular electorate as shipped](./granular-electorate-as-shipped.md) and [Election engine](./election-engine.md).
+
 **Date:** 2026-02-23  
 **Goal:** Audit the demographic system and propose a new election approach that reuses existing appeal while improving realism.
 

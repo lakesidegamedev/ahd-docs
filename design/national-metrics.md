@@ -1,5 +1,7 @@
 # National Metrics System
 
+Player guide: [National Metrics](https://www.ahousedividedgame.com/wiki/national-metrics)
+
 ## Overview
 
 The national metrics system has two layers. Schema and approval still use 10 `MetricCategoryId` buckets (including `population`) on each `stateMetrics` document. The live metric-engine registry (`METRIC_REGISTRY` in `src/lib/metricEngine/registry/index.ts`) is 74 nodes in 9 categories; there is no population registry file, and extra engine nodes include country-specific ones (`gcseAttainment`, `nhsWaitingTime`, `bbcTrust`, `bundeswehrReadiness`, and others). Each state has a `stateMetrics` document; population-weighted national averages are derived each turn and stored under the country-specific `NATIONAL_SCOPE`. Current scopes cover US, UK, SCO (`sco_national`), WAL (`wal_national`), JP, DE, BR, IE, CN, NG, RU (`su_national`), and DD (`dd_national`).
@@ -138,6 +140,59 @@ Metrics are recomputed and snapshotted during the tail of each turn, all as `run
 
 The metric history cap is 96 entries (2 in-game years). History for national-scope IDs (`"federal"`, `"uk_national"`) is also written to `stateMetricHistory` by `snapshotMetricHistory`, so the national metrics detail page can render turn-by-turn charts using the same code path as state pages.
 
+### Order within the phase
+
+The table above lists the main writers. The full order inside `stateEffectsAndNationalAggregation` is: `ministerialOrders` (see [Ministerial Orders](./ministerial-orders.md)), `policyEffects`, `demographicEffects`, `metricDecay`, then `metricEngine` (the 74-node registry), `demographicFlows`, `statehood`, `census`, `eraCrossing`, `metricActivation`, `cabinetYearCrossing`, `nationalMetrics`, `fiscalBaseGrowth`, `economicModel`, `inflationRecalc`, and finally `metricHistory` and `approvalSnapshot` (run together) near the end of the phase. So every writer finishes before the national average is taken, and history and approval snapshots record the finished values.
+
+## Rules
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `METRIC_HISTORY_CAP` | 96 entries per metric (2 game years at 48 turns per year) | `src/lib/metricHistory.ts` |
+| Government approval history | 20 entries, most recent last | `src/lib/db/types/governmentApproval.ts` |
+| State approval vote-pool coefficient | 0.2 in `1 + (approval - 0.5) * 0.2` | `src/lib/electionEngine/tallyManagement.ts` |
+| Presidential approval coefficient | 0.5 | `src/lib/presidentialElectionEngine.ts` |
+| Office strength | Governor 1.0, House 0.9, Senate 0.8, State Senate 0.85 | `src/lib/electionEngine/constants.ts` |
+| `BASE_APPROVAL` (also the default when metrics are missing) | 50 | `src/lib/utils/governmentApproval.ts` |
+| Metric registry size | 74 nodes in 9 categories | `src/lib/metricEngine/registry/index.ts` |
+| National scope ids | federal, uk_national, sco_national, wal_national, jp_national, de_national, br_national, ie_national, cn_national, ng_national, su_national, dd_national | `src/lib/constants/nationalScope.ts` |
+
+National value of a metric: `sum(stateValue * statePopulation) / sum(statePopulation)` over the country's states, excluding national-scope documents (`computeNationalMetrics`, `src/lib/nationalMetrics.ts`).
+
+Worked example: a country has two states, A with 30 million people and unemployment 4.0%, and B with 10 million and 8.0%. The national unemployment is `(4.0 * 30 + 8.0 * 10) / 40 = 5.0%`. A policy that cuts B's unemployment by 1 point lowers the national figure by `1 * 10 / 40 = 0.25` points. Ministerial orders are clamped to 0.08 per metric per turn, so a minister alone cannot move a metric by more than that each turn.
+
+Why approval is computed two ways: the metrics page compares a country against the global average so that national approval is not pinned near 50%, while the approval chart averages state approvals, each measured against its own country, because that is cheap to snapshot every turn. The two numbers can differ.
+
+## What moves a metric
+
+State metrics change from enacted laws (policy effects), demographic shifts, the metric engine's own model links between nodes, cabinet orders and settings, the budget and economic model, decay toward baseline (`metricDecay`), and events such as crises. Players move them by passing laws, running cabinet actions and managing the budget; they cannot edit a metric directly.
+
+## Edge cases and limits
+
+- National-scope documents are never averaged back into aggregates (`NATIONAL_SCOPE_IDS` filter), which would double count.
+- A state with no population contributes nothing to the weighted average.
+- Missing metrics default to 50% approval so one absent node cannot swing a vote pool.
+- History arrays drop the oldest entry once at 96; approval history at 20.
+- Approval skips `populationGrowth`, `medianAge`, `sexRatio` and `dependencyRatio` as approval terms; `migrationRate` stays.
+- Country-specific nodes (for example `gcseAttainment`, `nhsWaitingTime`) exist only in the countries that use them, and `collegeEnrollment` no longer exists (it was merged into `universityEnrollment`).
+- Both metrics routes send `Cache-Control: no-store`, so a cached copy cannot show a stale approval.
+- Rankings are direction-aware: for lower-is-better metrics a low value ranks well.
+
+## Connections
+
+Driven by:
+
+- [Bills & Legislation](./bills-legislation.md) and [Policy System](./policy-system.md): enacted laws write state metric effects (`processStatePolicyEffects`).
+- [Ministerial Orders](./ministerial-orders.md) and [Cabinet](./cabinet.md): per-turn order and setting deltas (`processMinisterialOrders`).
+- [Demographics](./demographics.md): `demographicEffects` and `demographicFlows` adjust metrics and population.
+- [National Budget](./national-budget.md): `economicModel` and `fiscalBaseGrowth` write GDP, unemployment and inflation effects.
+
+Affects:
+
+- [Government Approval](./government-approval.md): approval is computed from state metrics against national and global averages (`src/lib/utils/governmentApproval.ts`).
+- [Elections](./elections.md): approval scales the vote pool in `tallyManagement.ts` and `presidentialElectionEngine.ts`.
+- [National Budget](./national-budget.md): inflation, GDP growth and unemployment read from the metrics feed revenue, tax-base growth and the inflation model.
+
 ## Database
 
 ### `stateMetrics` collection
@@ -203,3 +258,5 @@ Government approval feeds into the vote accumulation phase of general elections.
 - [National Budget](./national-budget.md), Treasury panels and fiscal display
 - [Bills & Legislation](./bills-legislation.md), How laws move metrics
 - [Elections](./elections.md), Vote pool scaling by approval
+
+Last checked: 2026-10-29, version 1.18.0

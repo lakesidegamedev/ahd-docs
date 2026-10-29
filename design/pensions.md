@@ -2,6 +2,8 @@
 
 Second-pillar pension funds attached to unions. The state pension (first pillar) is a separate pay-as-you-go budget line (`{cc}.health.socialInsurance.primary`) funded out of tax; this system does not touch it. An occupational pension is bargained into a collective agreement alongside wages: the employer pays a contribution rate into a fund the union holds, covered workers accrue a claim against that fund, and the fund pays benefits to retirees out of its own cash. It ships as part of the A8 union-bargaining work and depends on `labourSystemMode >= "full"` (see `design/labour.md`) for the bargaining path that sets the rate; the turn-processing pass itself runs whenever an active `CollectiveAgreement` carries a `pensionContributionRate`.
 
+Player guide: [Pensions](https://www.ahousedividedgame.com/wiki/pensions)
+
 Every anchor (₳) that enters a scheme was debited from a real employer's `liquidCapital` and ledgered on both legs. A scheme cannot mint assets. This is deliberately unlike the NPP investable-cash accrual, which is an uninstrumented modelled mint outside the ledger perimeter, a pension scheme that minted its own assets would be a second one of those in a system whose whole point is that the assets are real and can fall short.
 
 ## Bargaining the rate
@@ -130,7 +132,11 @@ Below `PENSION_MIN_INVESTMENT_ANCHOR` (₳1,000), the pass invests nothing (no f
 
 `refreshSchemeInvestedValues` recomputes `investedValueAnchor` from the live `indexFundPositions` (units × fund's `quotedNav`) and writes it back, only for schemes whose value actually changed. It runs twice per pension turn: once before the contribution/accrual sweep (so a top-up is charged against today's mark, not a stale one) and once after the investment pass (so the union surface never shows already-invested cash as still liquid). A position pointing at a deleted fund values at zero.
 
-## Order within the turn
+## Timing
+
+The `pensionTurn` phase runs once per turn, immediately after `corporationTurn` (`src/simulation/phases/turnPhaseRegistry.ts`), because it reads the `laborCost` that phase writes. Bargaining itself happens outside the turn pass, when a campaign settles (`src/lib/unions/bargaining.ts`); the settled rate then takes effect from the next pension pass.
+
+### Order within the turn
 
 1. `refreshSchemeInvestedValues` (mark to market before anything reads a funding ratio)
 2. Per active agreement: contribution → top-up → accrual (this order specifically, so a top-up is never billed against a shortfall the same turn's own accrual created)
@@ -146,19 +152,21 @@ Below `PENSION_MIN_INVESTMENT_ANCHOR` (₳1,000), the pass invests nothing (no f
 
 ## Constants reference
 
+All constants live in `src/lib/pensions/rules.ts`. The funding-band cut-offs of 1.1 (surplus) and 0.9 (funded) are the same file; the 0.35 base and 0.3 leverage share in the mediation weight are in `src/lib/unions/bargaining.ts`.
+
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PENSION_CONTRIBUTION_RATE_MIN` | 0 | Floor on bargained contribution rate |
-| `PENSION_CONTRIBUTION_RATE_MAX` | 0.15 | Ceiling on bargained contribution rate (15% of covered wage bill) |
-| `PENSION_ACCRUAL_RATE` | 0.08 | Liability accrued per turn as a share of covered wage bill |
-| `PENSION_DEFICIT_RATIO` | 0.9 | Funding ratio below which a top-up is owed |
-| `PENSION_CRITICAL_RATIO` | 0.6 | Funding ratio below which the band is "critical" |
-| `PENSION_TOPUP_FRACTION` | 0.05 | Share of the shortfall charged as top-up per turn |
-| `PENSION_RETIREMENT_RATE` | 0.01 | Share of not-yet-in-payment liability that retires per turn |
-| `PENSION_BENEFIT_DRAWDOWN_RATE` | 0.02 | Share of in-payment stock paid out per turn |
-| `PENSION_LIQUIDITY_BUFFER_TURNS` | 8 | Turns of benefits-due kept in cash before investing |
-| `PENSION_CASH_FLOOR_FRACTION` | 0.1 | Minimum share of cash never invested |
-| `PENSION_MIN_INVESTMENT_ANCHOR` | ₳1,000 | Minimum cash before an investment pass bothers |
+| `PENSION_CONTRIBUTION_RATE_MIN` (`src/lib/pensions/rules.ts`) | 0 | Floor on bargained contribution rate |
+| `PENSION_CONTRIBUTION_RATE_MAX` (`src/lib/pensions/rules.ts`) | 0.15 | Ceiling on bargained contribution rate (15% of covered wage bill) |
+| `PENSION_ACCRUAL_RATE` (`src/lib/pensions/rules.ts`) | 0.08 | Liability accrued per turn as a share of covered wage bill |
+| `PENSION_DEFICIT_RATIO` (`src/lib/pensions/rules.ts`) | 0.9 | Funding ratio below which a top-up is owed |
+| `PENSION_CRITICAL_RATIO` (`src/lib/pensions/rules.ts`) | 0.6 | Funding ratio below which the band is "critical" |
+| `PENSION_TOPUP_FRACTION` (`src/lib/pensions/rules.ts`) | 0.05 | Share of the shortfall charged as top-up per turn |
+| `PENSION_RETIREMENT_RATE` (`src/lib/pensions/rules.ts`) | 0.01 | Share of not-yet-in-payment liability that retires per turn |
+| `PENSION_BENEFIT_DRAWDOWN_RATE` (`src/lib/pensions/rules.ts`) | 0.02 | Share of in-payment stock paid out per turn |
+| `PENSION_LIQUIDITY_BUFFER_TURNS` (`src/lib/pensions/rules.ts`) | 8 | Turns of benefits-due kept in cash before investing |
+| `PENSION_CASH_FLOOR_FRACTION` (`src/lib/pensions/rules.ts`) | 0.1 | Minimum share of cash never invested |
+| `PENSION_MIN_INVESTMENT_ANCHOR` (`src/lib/pensions/rules.ts`) | ₳1,000 | Minimum cash before an investment pass bothers |
 
 ## Key Files
 
@@ -176,3 +184,32 @@ Below `PENSION_MIN_INVESTMENT_ANCHOR` (₳1,000), the pass invests nothing (no f
 - `src/components/unions/UnionPensionSchemePanel.tsx`, union dashboard panel
 - `src/components/corporation/financials/financialsModel.ts`, the `"pension"` financial-statement line item
 - `src/lib/corporations/queries/corporationDetail.ts`, computes `pensionContributionCost`/`pensionTopUpCost`/`pensionSchemesInDeficit` for the corp financials surface
+
+## Edge cases and limits
+
+- **No pension bargained.** An omitted or zero rate writes no term on the agreement and no scheme document is created. Nothing accrues.
+- **Rate bounds.** Offers are validated to 0 to 0.15. A mediated rate of 0 is not written.
+- **Employer cannot pay.** Contribution and top-up debits go through `atomicallyDebitCorpLiquidCapital`, which will not overdraw. A failed debit is counted in `shortfalls`; the accrual still lands, so the liability grows regardless.
+- **Labour system off or no wage bill.** An absent or non-finite `sector.laborCost` counts as zero, so nothing is contributed or accrued. The page does not invent a wage bill.
+- **Zero liabilities.** Funding ratio reads 1 when liabilities are 0 or less, and 0 when assets are 0 or less. No top-up is owed at ratio 1.
+- **Cash never goes negative.** Benefit payment and fund purchases use guarded updates on `assetsAnchor`, so a concurrent write cannot overdraw a scheme.
+- **Unpaid benefits are not forgiven.** The unpaid slice stays as liability, which keeps the scheme in deficit and keeps the top-up running.
+- **No agreement left.** Benefits keep running for any scheme with liabilities above 0, even when no agreement is active.
+- **Index funds off.** Investing is skipped and the scheme holds cash. Only broad `active` funds qualify; sector funds are excluded on purpose to avoid concentration.
+- **Small cash.** Under 1,000 anchors investable, no purchase is made. Units are whole; cost is units times NAV.
+- **Deleted fund.** A position in a deleted fund is marked at zero.
+- **First pension on an existing agreement.** The scheme is created only when an agreement settles with a rate above zero.
+
+## Connections
+
+**Driven by**
+- [Labour](./labour.md): the covered wage bill (`sector.laborCost`, read in `src/lib/pensions/pensionTurn.ts`) sets contribution and accrual; the bargaining path sets the rate (`src/lib/unions/bargaining.ts`).
+- [Corporations](./corporations.md): the employer's `liquidCapital` pays contributions and top-ups.
+- Index funds: fund NAV marks invested units to market (`src/lib/pensions/schemeAssets.ts`).
+
+**Affects**
+- Employer finances: contribution and top-up appear as a Pensions line in the corporation financial statement (`src/lib/corporations/queries/corporationDetail.ts`).
+- Union dashboard: funding ratio and band are shown on the union page (`src/app/api/unions/[id]/route.ts`).
+- Index funds: scheme purchases add to a fund's unit supply and cash.
+
+Last checked: 2026-10-29, version 1.18.0

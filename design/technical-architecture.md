@@ -24,7 +24,7 @@
 
 ### Turn Processor
 
-- `processTurn()` in `src/lib/turnSystem.ts` is the single entry point. It is fired in-process by `node-cron` (`src/lib/cron.ts`), scheduled from `instrumentation.ts` at server boot, not by an external cron service. Schedule is `0 * * * *` (hourly), or `0,30 * * * *` when `GameState.fastMode` is on. `GET /api/cron/turn` also exists as an HTTP-triggerable fallback (protected by `requireCron()`/`CRON_SECRET`) with a `30 * * * *` backup fire that only runs if the primary missed its slot.
+- `processTurn()` in `src/lib/turnSystem.ts` is the single entry point. It is fired in-process by `node-cron` (`src/lib/cron.ts`), scheduled from `instrumentation.ts` at server boot, not by an external cron service. Schedule is `0 * * * *` (hourly, or `30 * * * *` when the `TURN_CRON_MINUTE` environment variable is 30), or `0,30 * * * *` when `GameState.fastMode` is on (schedule helpers in `src/lib/cron/turnCronMinute.ts`). `GET /api/cron/turn` also exists as an HTTP-triggerable fallback (protected by `requireCron()`/`CRON_SECRET`) with a backup fire half an hour after the primary (`30 * * * *` by default) that only runs if the primary missed its slot.
 - The phase list now lives in a registry (`src/simulation/phases/turnPhaseRegistry.ts`, phase names enumerated in `src/simulation/phases/turnPhaseNames.ts`) rather than being inlined in `turnSystem.ts`. `BASE_TURN_PHASE_NAMES` currently has **151 phases**, plus per-country election phases from `COUNTRY_ELECTION_PHASES`. Each phase runs through the shared turn-phase runtime (`src/simulation/engine/turnPhaseRuntime.ts`), failures log to Sentry but don't halt subsequent phases.
 - **Election-resolution ordering is critical:** primaries must resolve before vote accumulation; votes must accumulate before timers advance; timers must advance before elections resolve. The table below groups phases by concern; it is illustrative, not an exhaustive phase-by-phase listing (see the registry files for the full current set, which also includes governor/SCOTUS, extraction/prospecting, decolonization, spheres of influence, impeachment, by-elections, and ledger-reconciliation phases not shown below).
 
@@ -45,7 +45,7 @@
 | 13. History & health       | `metricHistory`, `approvalSnapshot`, `interestRateSnapshot`, `partyHistorySnapshot`, `gameHealthSnapshot`, `suspiciousDetection`                                                                                                                                             | After metrics and central-bank updates              |
 | 14. Persistence            | `GameState` update, `TurnLog` insert, in-process event emit                                                                                                                                                                                                                  | **Critical, not wrapped in try/catch**              |
 
-- Server-enforced `lastTurnProcessed` timestamp prevents clock drift. `getGameTime()` uses this as `effectiveNow`, not `new Date()`, so election phase display stays correct even after batch turns.
+- Server-enforced `lastTurnProcessed` timestamp prevents clock drift. `getGameTime()` (`src/lib/time/gameTime.ts`) uses this as `effectiveNow`, not `new Date()`, so election phase display stays correct even after batch turns.
 - `src/lib/cabinetTransition.ts` (`clearCabinetOnTransition`), clears all cabinet members when a new president takes office; called from election resolution, not the turn loop directly.
 
 ### Multi-Country Support
@@ -66,7 +66,7 @@
 
 ### Hero Image System
 
-- Tall gradient banners proxied through `/api/images/hero/[slug]` (avoids Wikimedia hotlinking). Cached 24 hours.
+- Tall gradient banners served through `/api/images/hero/[slug]`, which answers with a 307 redirect to the hosted image for the slug (no server-side proxying, so it costs no function time).
 - Slug set covers government/institution banners per country (`white-house`, `house-of-commons`, `downing-street`, `national-diet`, `bank-of-england`, `federal-reserve`, `great-hall-of-the-people`, etc.) plus one banner per commodity sector (`commodity-steel`, `commodity-oil`, `commodity-software`, ...). See `HERO_URLS` in `src/app/api/images/hero/[slug]/route.ts` for the current list.
 - Component: `<HeroImage>` (`src/components/HeroImage.tsx`) wraps Next.js `<Image>` with the proxy URL.
 
@@ -181,7 +181,7 @@
 
 - **DB indexes**: managed via versioned migration entries under `src/lib/migrations/entries/` and the index seeder (`src/lib/admin/seed/seedIndexes.ts`); too many to enumerate here.
 - **Turn processor**: Single-threaded sequential; `/api/cron/turn` allows up to `maxDuration = 800` seconds for the full phase pipeline, well above the old 60-second target.
-- **Game time cache**: `getGameTime()` caches for 5 seconds; invalidated explicitly by `sync-date`.
+- **Game time cache**: `getGameTime()` (`src/lib/time/gameTime.ts`) caches for 5 seconds; invalidated explicitly by `sync-date`.
 
 ## Testing
 
@@ -222,7 +222,7 @@
 | `/api/news`                                          | GET/POST            | News feed and post creation                                                                 |
 | `/api/country/[code]/approval`                       | GET                 | National government approval, per country                                                   |
 | `/api/country/[code]/budget/federal`                 | GET                 | Federal budget data, per country                                                            |
-| `/api/images/hero/[slug]`                            | GET                 | Wikimedia image proxy (24h cache)                                                           |
+| `/api/images/hero/[slug]`                            | GET                 | Hero banner redirect (307 to the image URL)                                                           |
 | `/api/roadmap`                                       | GET                 | Public roadmap data for wiki page                                                           |
 | `/api/admin/seed`                                    | GET/POST            | Universal game seeder (admin only)                                                          |
 | `/api/admin/roadmap`                                 | GET/POST/PUT/DELETE | Roadmap item management (admin only)                                                        |
@@ -235,7 +235,7 @@
 | System                                                                             | Status         |
 | ---------------------------------------------------------------------------------- | -------------- |
 | Authentication + characters                                                        | ✅ Complete    |
-| Turn system (modular, 120+ phases via a phase registry)                            | ✅ Complete    |
+| Turn system (modular, 150+ phases via a phase registry)                            | ✅ Complete    |
 | Elections (all 5 types, perpetual, Electoral College)                              | ✅ Complete    |
 | NPP system (entry, dropout, influence, Speaker/leadership auto-vote)               | ✅ Complete    |
 | Bill lifecycle (two chambers + President)                                          | ✅ Complete    |
@@ -251,7 +251,7 @@
 | Admin panel (fully modularised, Law Types, Universal Seeder)                       | ✅ Complete    |
 | Map view (real geographic paths, Political Lean mode)                              | ✅ Complete    |
 | Player bio + profile page                                                          | ✅ Complete    |
-| Achievements system (58 achievements, rarity tiers)                                | ✅ Complete    |
+| Achievements system (rarity tiers; `src/lib/achievements/`)                                | ✅ Complete    |
 | Notifications (146 types, pagination, filtering)                                   | ✅ Complete    |
 | Discord integration                                                                | ✅ Complete    |
 | Multi-country support (29 configured countries)                                    | ✅ Complete    |
@@ -266,3 +266,5 @@
 | Policy effects on state metrics and granular demographics                          | ✅ Complete    |
 | Presidential and regional executive orders                                         | ✅ Complete    |
 | Special executive appointments beyond the existing cabinet and succession systems  | 🔲 Planned     |
+
+Last checked: 2026-10-29, version 1.18.0

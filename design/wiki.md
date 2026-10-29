@@ -78,7 +78,7 @@ For entity pages that have no user-authored content, the system generates templa
 
 - **Politicians** - `src/lib/wiki/politicianFlavor.ts` picks a bio template and "approach" phrase deterministically based on a hash of the politician's ID. Inputs are name, state, party, office status, and whether they are an NPP.
 - **Parties** - `src/lib/wiki/partyFlavor.ts` returns hand-written blurbs for `democrat`, `republican`, and `independent`; generic template for all other parties.
-- **Leadership roles** - `src/lib/wiki/leadershipFlavor.ts` provides static blurbs and responsibility lists for all 10 congressional leadership roles.
+- **Leadership roles** - `src/lib/wiki/leadershipFlavor.ts` provides static blurbs and responsibility lists for the 15 leadership roles it defines: the 10 US congressional roles plus the German Bundestag speaker, the Chinese NPCSC and CPPCC chairs, and the Nigerian House and Senate presiding officers.
 
 ### Wikilink Resolution
 
@@ -155,7 +155,7 @@ Stores per-politician data that augments auto-generated profile pages. Key field
 
 | Method | Path                       | Description                                                                                                            |
 | ------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/api/wiki`                | List all wiki pages (no status filter - returns all)                                                                   |
+| `GET`  | `/api/wiki`                | List published wiki pages without content bodies; private pages are hidden from non-admins                                                                   |
 | `POST` | `/api/wiki`                | Submit a new page; requires auth; status set to `pending_review`                                                       |
 | `GET`  | `/api/wiki/[slug]`         | Fetch a single page by slug; enforces status visibility rules                                                          |
 | `GET`  | `/api/wiki/search`         | Full-text search over published pages; params: `q`, `tags` (comma-separated), `limit`                                  |
@@ -176,12 +176,14 @@ Stores per-politician data that augments auto-generated profile pages. Key field
 | `GET`    | `/api/admin/wiki/review-queue`          | List all `pending_review` pages sorted by creation date                                |
 | `POST`   | `/api/admin/wiki/review/[slug]/approve` | Approve a pending page; optionally apply edits to content, title, description, or tags |
 | `POST`   | `/api/admin/wiki/review/[slug]/reject`  | Reject a pending page (returns it to `draft`); requires a reason string                |
+| `POST`   | `/api/admin/wiki/reseed`                | Re-run the seed pages into `wikiPages`                                                 |
+| `POST`   | `/api/admin/wiki/sync-prior-submissions`| Rename legacy ObjectId-embedded slugs to sequentialId slugs                            |
 
 ---
 
 ## Custom Markdown Components
 
-Wiki page content supports embedded interactive components via fenced code blocks with a custom language identifier. The registry lives in `src/lib/wiki/componentRegistry.ts`.
+Wiki page content supports embedded interactive components via fenced code blocks with a custom language identifier. The registry (`WIKI_COMPONENT_REGISTRY`) lives in `src/lib/wiki/componentRegistry.ts`; an unknown identifier falls back to a plain code block.
 
 | Language identifier     | Component                  | Description                                          |
 | ----------------------- | -------------------------- | ---------------------------------------------------- |
@@ -190,6 +192,14 @@ Wiki page content supports embedded interactive components via fenced code block
 | `senate-classes`        | `SenateClassesDiagram`     | Senate class rotation diagram                        |
 | `congress-snapshot`     | `CongressSnapshot`         | Live widget showing current House/Senate seat counts |
 | `vote-share-calculator` | `VoteShareCalculator`      | Interactive calculator for vote share math           |
+| `clearing-posture`      | `ClearingPostureDiagram`   | Clearing posture diagram                             |
+| `capital-loop`          | `CapitalLoopDiagram`       | Capital loop diagram                                 |
+| `commodity-distribution`| `CommodityDistribution`    | Commodity distribution widget                        |
+| `country-history`       | `CountryHistory`           | Country history widget                               |
+| `sector-seed-map`       | `SectorSeedMap`            | Sector seed map                                      |
+| `starting-state-dashboard` | `StartingStateDashboard` | Starting-state dashboard                            |
+| `cabinet-guide`         | `CabinetGuide`             | Cabinet guide widget                                 |
+| `guide-screenshot`      | `WikiGuideScreenshot`      | Guide screenshot embed                               |
 
 ---
 
@@ -227,3 +237,5 @@ required for country-scoped party pages. Country and feature aliases include
 common names such as `america`, `britain`, `ussr`, `campaign-presence`, and
 `independence-referendums`; consult `WIKI_REDIRECTS` for the complete current
 map.
+
+Last checked: 2026-10-29, version 1.18.0

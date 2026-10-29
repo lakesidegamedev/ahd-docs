@@ -1,8 +1,12 @@
 # Election Engine
 
-## Overview
-
 The Election Engine is the core vote calculation and tally management system for all elections in A House Divided. It handles vote distribution across demographic groups, vote accumulation over time, and election resolution.
+
+Player guide: [Election Mechanics](https://www.ahousedividedgame.com/wiki/election-mechanics), [General Elections](https://www.ahousedividedgame.com/wiki/general-elections) and [Vote Factor Ledger](https://www.ahousedividedgame.com/wiki/vote-factor-ledger)
+
+For the race lifecycle (types, durations, primaries, entry and withdrawal) see [Elections](./elections.md). For the election-night display layer see [Live Election Results](./live-election-results.md).
+
+## Overview
 
 **Location:** `src/lib/electionEngine/`
 
@@ -65,11 +69,14 @@ directionBonus = DIRECTION_BONUS_PER_AXIS × (directionFactor(EP) + directionFac
 // candidate's lean conflicts in sign with their own party's position (party gate)
 
 influenceScore = includeInfluenceInAppeal ? normalizeNPI(politicalInfluence) × 12.5 : 0
-// state races: includeInfluenceInAppeal = false (influence is reach only)
-// presidential races: includeInfluenceInAppeal = true (adds up to 25 pts)
+// Every live path (state general, presidential general, group-level allocation, polls)
+// passes includeInfluenceInAppeal = false, so influence is reach only. The term remains
+// in calcAppeal (default true) but is not used by the election engines.
 
-appeal = positionScore + directionBonus + influenceScore   // capped at MAX_APPEAL
+appeal = positionScore + directionBonus + influenceScore   // capped at MAX_APPEAL = 50
 ```
+
+Constants in `src/lib/utils/demographicAppeal.ts`: `MAX_APPEAL = 50`, `APPEAL_POSITION_FLOOR = 0.5`, `APPEAL_POSITION_EXPONENT = 1.5`, `DIRECTION_BONUS_PER_AXIS = 5`. Reach is `normalizeNPI(x) = sqrt(clamp(x, 0, 100) / 100)` (`src/lib/utils/normalizeNPI.ts`), floored at `VOTE_REACH_FLOOR = sqrt(1/100) = 0.1` so a candidate at zero influence is a steep disadvantage rather than erased (`electionFormulaFactors.ts`).
 
 `useAveragedPositions` is a swing-flow-only option (`voteDistributionSwingFlow.ts`); the group-level allocation path (`voteDistribution.ts`) does not blend candidate and party positions.
 
@@ -95,6 +102,22 @@ orgVoteWeight = normalizedOrgShare ** ORG_WEIGHT_EXPONENT  // ORG_WEIGHT_EXPONEN
 // Primaries
 org = 1  // uniform; intra-party Org cancels
 ```
+
+### Other swing-flow weight factors
+
+The swing-flow per-group weight (`voteDistributionSwingFlow.ts`) multiplies several more factors on top of appeal, reach, approval and org. Each is neutral (1.0) when its input is absent.
+
+| Factor | Value | Source |
+| --- | --- | --- |
+| Personal org floor | `0.1 × reach × approval`, used if above the party's Org weight | `PERSONAL_ORG_FLOOR_CAP = 0.1`, `electionFormulaFactors.ts` |
+| Infamy multiplier | `1 - 0.05 × infamy/100` (0.95 at infamy 100) | `INFAMY_PENALTY_MAX = 0.05`, `src/lib/utils/infamy.ts` |
+| Registration resistance | `1 + 0.3 × reg/100` (1.0 to 1.3) | `REG_RESISTANCE_MAX_BONUS = 0.3`, `electionFormulaFactors.ts` |
+| Registration baseline (UK regions only) | `max(0.005, reg/100) ^ 0.5` | `REG_BASELINE_EXPONENT`, `REG_BASELINE_MIN_SHARE`, `electionFormulaFactors.ts` |
+| Candidate Support mood | `0.6 + 0.8 × support/100` (0.6 to 1.4), applied to group votes after allocation | `SUPPORT_MOOD_FLOOR`, `SUPPORT_MOOD_CEILING`, `electionFormulaFactors.ts` |
+| State org bonus | up to +15% general, +25% primary | `MAX_STATE_ORG_BONUS_GENERAL = 0.15`, `MAX_STATE_ORG_BONUS_PRIMARY = 0.25`, `constants.ts` |
+| Home-state bonus | +5% general, +20% primary | `HOME_STATE_BONUS_GENERAL = 0.05`, `HOME_STATE_BONUS_PRIMARY = 0.2`, `constants.ts` |
+| Personal-stat tenure erosion | influence and favorability lose 3% per consecutive term beyond the first, max 15% | `PERSONAL_STAT_TENURE_EROSION_PER_TERM`, `PERSONAL_STAT_TENURE_EROSION_MAX`, `electionFormulaFactors.ts` |
+| Midterm opposition boost | 1.05 | `midtermOppositionBoost.ts` |
 
 ### NPP Weight Penalty
 
@@ -260,18 +283,43 @@ All defined in `src/lib/electionEngine/constants.ts` unless noted.
 | `NPP_GENERAL_WEIGHT_MULTIPLIER`  | 0.8   | NPP penalty in general elections with a player in the race                               |
 | `NPP_PRIMARY_SCORE_MULTIPLIER`   | 0.5   | NPP score penalty in primaries with a player in the same primary                         |
 | `ORG_WEIGHT_EXPONENT`            | 0.2   | Diminishing-returns exponent on normalized Org share (`electionFormulaFactors.ts`)        |
+| `APPEAL_POSITION_EXPONENT`       | 1.5   | Curve on policy distance (`src/lib/utils/demographicAppeal.ts`)                           |
+| `APPEAL_POSITION_FLOOR`          | 0.5   | Keeps appeal above zero (`demographicAppeal.ts`)                                         |
+| `DIRECTION_BONUS_PER_AXIS`       | 5     | Tribal direction bonus per axis (`demographicAppeal.ts`)                                  |
+| `MAX_APPEAL`                     | 50    | Appeal ceiling (`demographicAppeal.ts`)                                                  |
+| `APPROVAL_SCALAR_EXPONENT`       | 0.8   | Exponent on favorability (`demographicAppeal.ts`)                                        |
+| `ELECTION_DAY_TURNS`             | 4     | Final band length (`voteCalculations.ts`)                                                 |
+| `RAMP_TURNS`                     | 8     | Ramp band length (`voteCalculations.ts`)                                                  |
+| `EARLY_POOL_SHARE` / `RAMP_POOL_SHARE` / `FINAL_POOL_SHARE` | 0.5 / 0.2 / 0.3 | Share of the pool per band (`voteCalculations.ts`)               |
+| `COATTAIL_MAX_BONUS`             | 0.09  | Max coattail swing (`constants.ts`)                                                       |
+| `COATTAIL_APPROVAL_SATURATION`   | 25    | Approval points from 50 for full coattail (`constants.ts`)                                |
+| `SUPPORT_DELTA_BUDGET`           | 0.30  | Persuasion budget: candidate Support (`persuasionDrivers.ts`)                             |
+| `POLICY_DISTANCE_BUDGET`         | 0.15  | Persuasion budget: policy distance (`persuasionDrivers.ts`)                               |
+| `MONEY_BUDGET`                   | 0.20  | Persuasion budget: money (`persuasionDrivers.ts`)                                         |
+| `INCUMBENCY_BUDGET`              | 0.10  | Persuasion budget: incumbency and the flat fallback (`persuasionDrivers.ts`)              |
+| `INCUMBENCY_APPROVAL_PIVOT`      | 46    | Approval at which shield turns to drag (`persuasionDrivers.ts`)                           |
+| `INCUMBENCY_SHIELD_MAX`          | 0.10  | Executive shield cap (`persuasionDrivers.ts`)                                             |
+| `LEGISLATIVE_INCUMBENCY_SHIELD`  | 0.06  | US Senate flat shield (`persuasionDrivers.ts`)                                            |
+| `LEGISLATIVE_TENURE_FATIGUE_PER_TERM` | 0.01 | Senate shield loss per term beyond the first (`persuasionDrivers.ts`)              |
+| `LEGISLATIVE_INCUMBENCY_MIN`     | 0.01  | Senate shield permanent floor (`persuasionDrivers.ts`)                                    |
+| `MIDTERM_OPPOSITION_MULTIPLIER`  | 1.05  | Opposition nominal-share bump (`midtermOppositionBoost.ts`)                               |
+| `PERSONAL_ORG_FLOOR_CAP`         | 0.1   | Personal org floor (`electionFormulaFactors.ts`)                                          |
+| `VOTE_REACH_FLOOR`               | 0.1   | Minimum reach, `sqrt(1/100)` (`electionFormulaFactors.ts`)                                |
+| `REG_RESISTANCE_MAX_BONUS`       | 0.3   | Registration resistance (`electionFormulaFactors.ts`)                                     |
+| `SUPPORT_MOOD_FLOOR` / `SUPPORT_MOOD_CEILING` | 0.6 / 1.4 | Support mood range (`electionFormulaFactors.ts`)                       |
+| `STANDARD_MULTI_SEAT_MIN_SHARE`  | 0.10  | Flat seat gate for listed chambers (`src/lib/turn/election/rules/seatEligibility.ts`)     |
+| US House seat gate               | 10% to 20% | `clamp(1/(seats+1), 0.1, 0.2)`, 20% for non-US House and unlisted types (`seatEligibility.ts`) |
 
 `MONETARY_LAG_TURNS` (12) is not an election-engine constant. It lives in `src/lib/budget/inflation.ts` and governs interest-rate change lag, unrelated to elections.
 
-## Integration Points
+## Timing
 
-### Turn Processing
-
-Election vote accumulation runs in the **`electionResolutionAndGovernment`** phase of the turn-phase registry, which comments call "Group 7". It is strictly sequential, since reordering steps corrupts elections (drops final-turn votes, or resolves offices from stale tallies):
+One turn is one real hour (48 turns = 1 game year). Election vote accumulation runs once per turn in the **`electionResolutionAndGovernment`** phase of the turn-phase registry, which comments call "Group 7". It is strictly sequential, since reordering steps corrupts elections (drops final-turn votes, or resolves offices from stale tallies):
 
 ```typescript
 // src/simulation/phases/turnPhaseRegistry.ts
 // electionResolutionAndGovernment phase (sequential sub-phases):
+0. withdrawInactiveCandidates - withdrawInactiveCandidates()
 1. candidatePartySweep    - sweepPartyMismatchedCandidates()
 2. primaryResolution      - resolvePrimariesIfNeeded()
 3. voteAccumulation       - accumulateGeneralElectionVotes() (calls accumulateVoteTurn() per election)
@@ -281,11 +329,14 @@ Election vote accumulation runs in the **`electionResolutionAndGovernment`** pha
 7. electionResolution     - resolveGeneralElections()
 8. clearResolvedSupport   - processClearResolvedSupport()
 9. leadershipVacate       - vacateLeadershipAfterElections() (only if generals resolved this turn)
+// then: parliamentaryGovernmentFormation (government formation after resolution)
 ```
 
 `resolvePrimariesIfNeeded`, `recordPrimarySnapshots`, and `accumulateGeneralElectionVotes` live in `src/lib/turn/primaryResolution.ts`; `resolveGeneralElections` lives in `src/lib/turn/electionResolution.ts`.
 
-### Country System
+Order relative to related systems: primaries resolve before accumulation so eliminated candidates are never tallied. Accumulation runs before the campaign spend reset so the tally reads this turn's `Campaign.spendThisTurn`. Accumulation runs before timers advance so the last turn's votes are counted before the election is marked completed. Resolution reads the finished tally, never a stale one.
+
+## Country System
 
 The election engine uses country-aware party lookups:
 
@@ -294,6 +345,59 @@ majorPartySet = getMajorPartiesForRegion(countryId, parentRegionId);
 ```
 
 `getMajorPartiesForRegion()` has region-specific overrides (e.g. UK Scotland → SNP/Labour, UK Wales → Labour/Conservative, UK Northern Ireland → DUP/Sinn Féin, Japan Kansai → Ishin/LDP) and falls back to each country's configured `majorPartyIds` otherwise. There is no "CA" (Canada) country; the roster currently spans US, UK, JP, DE, DD, FR, IT, ES, SE, TR, AT, FI, GR, IE, CN, RU, PL, HU, RO, BG, YU, CS, NG, and BR.
+
+## Worked example
+
+One demographic group, two candidates, the group has a 100,000-vote pool this turn. Direction bonus, org, NPP and infamy factors are left out (equal or neutral) so the three live levers show.
+
+| | Candidate A | Candidate B |
+| --- | --- | --- |
+| Group lean (econ, social) | 2, 1 | 2, 1 |
+| Candidate position | 1, 1 (distance 1) | -1, 1 (distance 3) |
+| `positionRaw = 50 - 5 × distance` | 45 | 35 |
+| Position score `25 × (raw/50)^1.5 + 0.5` | 21.85 | 15.14 |
+| Political influence, reach `sqrt(PI/100)` | 49 → 0.70 | 64 → 0.80 |
+| Favorability, scalar `(fav/100)^0.8` | 60 → 0.665 | 70 → 0.752 |
+| Weight (appeal × reach × approval) | 10.16 | 9.11 |
+| Share of the 100,000 pool | 52,740 | 47,260 |
+
+A has the better policy fit by 44 percent but only a 5.5 point share edge, because B's higher reach and approval claw most of it back. Because approval multiplies the whole weight, a 10 point favorability swing on the last day moves more votes than the same swing in the early band. In the final 4 turns each turn carries 7.5% of the whole pool.
+
+Turn pool for a 48-turn general window: early band 36 turns at `0.5 / 36 = 1.389%` of the pool each, ramp band 8 turns at `0.2 / 8 = 2.5%` each, final band 4 turns at `0.3 / 4 = 7.5%` each. Total 36 × 1.389 + 8 × 2.5 + 4 × 7.5 = 100%.
+
+## Edge cases and limits
+
+- **Zero influence:** reach is floored at 0.1 (`VOTE_REACH_FLOOR`) so a fresh character is a steep disadvantage, not removed from the race.
+- **Zero favorability:** the approval scalar is 0, so the candidate gets 0 votes. This is deliberate ("if voters do not approve of you they will not vote for you").
+- **Zero Org in a populated state:** the party's Org weight is 0, but the personal org floor (`0.1 × reach × approval`) rescues a genuinely supported candidate. No Org data anywhere in the state is a neutral 1.
+- **Pool is conserved:** the pool is split, never inflated. Missing demographics or a total weight of zero fall back to an equal split.
+- **Short races:** if `totalTurns <= ELECTION_DAY_TURNS (4)` the pool is spread evenly. The window must start at the general-election start (`primaryEndTurn`), not the election `startTurn`, or the final-turn share balloons (ticket #955).
+- **Spoiler skipped for:** RCV states, one-party states, and any non-general election. The spoiler never transfers more than the nearest major party holds.
+- **NPP penalty** applies only in generals with a human in the race; primaries use the 0.5 score multiplier instead.
+- **Influence is not appeal:** influence feeds reach only, so it cannot be double-counted (see Appeal Calculation).
+- **Withdrawn candidates** are excluded from every share and their votes are removed from the tally, not redistributed.
+- **Coattails** exclude the executive's own race and the head-of-government race. **Midterm boost** no-ops when government is unresolved or vacant.
+- **Turnout** is clamped to 0 to 100 after modifiers.
+- **Single-seat races** never use the seat-share incumbency fallback, since a two-candidate split is not a meaningful incumbent share.
+
+## Connections
+
+**Driven by:**
+
+- [Demographics](./demographics.md): group sizes, turnout and leans feed the pool and appeal (`StateDemographics`, `resolveTurnout()`).
+- [Canvassing](./canvassing.md) and [Fundraising and Ads](./fundraising-ads.md): GOTV and canvassing write `StateDemographicTurnout.modifiers`, which `resolveTurnout()` reads each turn.
+- [Campaign Strategy](./campaign-strategy.md): campaign and advertise actions raise influence and favorability, the two stats the engine reads in `fetchEnrichedCandidates()`.
+- [Government Approval](./government-approval.md): state approval scales the turn pool (`tallyManagement.ts`), and executive approval drives coattails and incumbency (`govCoattail.ts`, `presidentialCoattail.ts`, `accountability.ts`).
+- [NPP System](./npp-system.md): NPP entry decides which candidates exist; NPPs take the 0.8 general weight penalty.
+- Voting system (`states.votingSystem`): FPTP or RCV decides whether the spoiler step runs.
+- [Parties](./parties.md): party Org and registration feed the org and registration factors.
+
+**Affects:**
+
+- [Elections](./elections.md): tallies from `accumulateVoteTurn()` decide winners in `resolveGeneralElections()`.
+- [Cabinet](./cabinet.md), [Parliamentary Government](./parliamentary-government.md) and [Congress Leadership](./congress-leadership.md): resolved elections change office holders, which triggers leadership vacating and government formation later in the same phase.
+- [Live Election Results](./live-election-results.md): the results page reads these tallies and never feeds back.
+- [Contingent Election](./contingent-election.md): a presidential Electoral College with no majority hands off to it.
 
 ## Error Handling
 
@@ -339,11 +443,19 @@ approvalCoattailMultiplier(approval) =
   1 + clamp((approval - BASE_APPROVAL) / COATTAIL_APPROVAL_SATURATION, -1, 1) × COATTAIL_MAX_BONUS
 ```
 
-An executive exactly at `BASE_APPROVAL` (the neutral approval baseline) contributes 1.0× (no-op); above it the party's races get a lift, up to `COATTAIL_MAX_BONUS` at `COATTAIL_APPROVAL_SATURATION` points above baseline; below it, an equal-magnitude drag. `govCoattail.ts` resolves the sitting regional executive per state (preferring the damped stored `stateApprovalHistory` snapshot over a live recompute) and excludes the executive's own race (no self-coattail) and the head-of-government race itself. `presidentialCoattail.ts` mirrors this at national scope, reading the sitting President's party and stored national approval; currently US-only (`HEAD_OF_GOVERNMENT_TYPE_BY_COUNTRY = { US: "president" }`), since non-US heads of government (UK PM, DE chancellor, JP shugiin) aren't wired in yet. Coattails apply as a **nominal-share multiplier**, not as a persuasion-driver component, kept separate so they don't get double-counted against the incumbency driver below.
+Constants (`constants.ts`): `COATTAIL_MAX_BONUS = 0.09` (+/-9%), `COATTAIL_APPROVAL_SATURATION = 25` points. `BASE_APPROVAL = 50` (`src/lib/utils/governmentApproval.ts`). An executive exactly at 50 contributes 1.0× (no-op); at 75 or above the party's races get the full +9%; at 25 or below, a full -9% drag.
+
+`govCoattail.ts` resolves the sitting regional executive per state (preferring the damped stored `stateApprovalHistory` snapshot over a live recompute). It excludes the executive's own race (no self-coattail) and the head-of-government race itself.
+
+`presidentialCoattail.ts` mirrors this at national scope, reading the sitting President's party and stored national approval. It is currently US-only (`HEAD_OF_GOVERNMENT_TYPE_BY_COUNTRY = { US: "president" }`), since non-US heads of government (UK PM, DE chancellor, JP shugiin) are not wired in yet.
+
+Coattails apply as a **nominal-share multiplier**, not as a persuasion-driver component, so they are not double-counted against the incumbency driver below.
 
 ### Median-Voter Driver (`medianVoter.ts`)
 
-Replaces the policy-distance driver's old hard-coded `(0, 0)` centrism reference with the state's actual turnout-weighted median voter: `computeMedianVoter()` averages each demographic group's economic/social lean, weighted by `categoryWeight × populationPct × turnoutPct`. It is a weighted average, not a true statistical median, deliberate, since per-voter modeling isn't part of this engine. For US presidential races specifically, `computeNationalEvWeightedMedian()` aggregates each state's median EV-weighted (a 55-EV state pulls the national signal 55× harder than a 3-EV state) rather than population-weighted, reflecting that campaigns court the Electoral College map, not raw population. `usesEvWeightedNationalMedian()` gates this to US president only; other head-of-government races still use the state/national default. Zero-weight or mirror-symmetric inputs return the neutral `{ ep: 0, sp: 0 }`.
+Replaces the policy-distance driver's old hard-coded `(0, 0)` centrism reference with the state's actual turnout-weighted median voter. `computeMedianVoter()` averages each demographic group's economic/social lean, weighted by `categoryWeight × populationPct × turnoutPct`. It is a weighted average, not a true statistical median, deliberately, since per-voter modeling is not part of this engine.
+
+For US presidential races, `computeNationalEvWeightedMedian()` aggregates each state's median weighted by electoral votes (a 55-EV state pulls the national signal 55× harder than a 3-EV state) rather than by population, because campaigns court the Electoral College map. `usesEvWeightedNationalMedian()` gates this to US president only; other head-of-government races use the state/national default. Zero-weight or mirror-symmetric inputs return the neutral `{ ep: 0, sp: 0 }`.
 
 ### Persuasion Drivers (`persuasionDrivers.ts`)
 
@@ -372,12 +484,13 @@ The incumbency driver branches on race type, in priority order:
 
 1. **Single-winner executive own-race** (`incumbentPartyId` set, governor, president, etc.): full-magnitude directional shield/drag scaled by the sitting executive's approval via the **executive approval curve**:
    ```typescript
-   approvalAdjustedIncumbencyBudget(approval, pivot = INCUMBENCY_APPROVAL_PIVOT) =
-     approval >= pivot
-       ? min(INCUMBENCY_SHIELD_MAX, (approval - pivot) × INCUMBENCY_APPROVAL_SLOPE)
-       : -min(INCUMBENCY_DRAG_MAX, (pivot - approval) × INCUMBENCY_APPROVAL_SLOPE)
+   // executiveIncumbencyBudget(approval, pivot = 46), src/lib/government/rules/accountability.ts
+   approval >= pivot
+     ? min(0.10, (approval - pivot) × 0.01)
+     : -min(0.20, min(0.10, shortfall × 0.01) + 0.10 × max(0, shortfall - 10) / max(1, pivot - 10))
+   // shortfall = pivot - approval
    ```
-   `INCUMBENCY_APPROVAL_PIVOT = 46`, `INCUMBENCY_SHIELD_MAX = INCUMBENCY_DRAG_MAX = 0.1` (±10pp), `INCUMBENCY_APPROVAL_SLOPE = 0.01`. The pivot sits below the live national mean, so most incumbents get a smaller shield and only the weakest (~44-46 approval) tip into a mild drag.
+   `INCUMBENCY_APPROVAL_PIVOT = 46` and `INCUMBENCY_SHIELD_MAX = 0.1` live in `persuasionDrivers.ts`; the slope (0.01), the drag cap (0.20) and the second drag term live in `accountability.ts` as literals (there are no `INCUMBENCY_DRAG_MAX` or slope constants). The shield caps at +10pp at approval 56. The drag is continuous down to zero approval: -6pp at approval 40, -10pp at 36, -20pp at 0. The pivot sits below the live national mean, so most incumbents get a smaller shield and only the weakest tip into drag.
 2. **Single-seat legislative own-race** (`legislativeIncumbentPartyId` set, US Senate): a flat, officeholder-based shield that ignores approval/favorability (already priced in elsewhere) and never becomes a drag: `LEGISLATIVE_INCUMBENCY_SHIELD = 0.06` (+6pp), decaying `LEGISLATIVE_TENURE_FATIGUE_PER_TERM = 0.01` per term beyond the first, floored at `LEGISLATIVE_INCUMBENCY_MIN = 0.01` (+1pp permanent floor).
 3. **Multi-seat / legislature fallback** (`incumbentSeatShareByParty` map, from `incumbentSeatShare.ts`): the prior cycle's per-party seat-share (computed by `computeSeatShareFromTally()` from the last resolved tally on the same seat key) scales the shield linearly: `(shareJ − shareI) × INCUMBENCY_BUDGET`. Used for proportional/multi-seat races (US House, UK Regional Council, JP Shugiin/Sangiin, DE Bundestag). Single-seat races deliberately do NOT use this fallback, a two-candidate vote split isn't a meaningful "incumbent share" signal, and returns an empty map (⇒ 0 driver contribution) when there's no prior resolved election on the same seat key.
 
@@ -389,3 +502,5 @@ The incumbency driver branches on race type, in priority order:
 - **Vote Calculations:** `src/lib/electionEngine/voteCalculations.ts` - Turn vote weight math
 - **Demographic Appeal:** `src/lib/utils/demographicAppeal.ts` - Appeal calculation utilities
 - **Countries Config:** `src/lib/constants/countries.ts` - Major party definitions
+
+Last checked: 2026-10-29, version 1.18.0

@@ -4,7 +4,9 @@
 
 Defence procurement lets a country's ministry award contracts to domestic corporations to build materiel (arsenal components) for its military. The subsystem is a set of independent guardrails around what used to be an almost unbounded transfer channel from the national defence appropriation into corporate cash, the [defence price-band drain](#background-the-price-band-drain). Each guardrail is a small, pure module so the award route, the delivery sweep, and the client-side award form can all agree on the same numbers.
 
-**Location:** `src/lib/military/`
+Player guide: [Defence Procurement](https://www.ahousedividedgame.com/wiki/defence-procurement)
+
+**Location:** `src/lib/military/`, with tender bidding in `src/lib/governmentContracts/`
 
 **Key files:**
 
@@ -15,10 +17,27 @@ Defence procurement lets a country's ministry award contracts to domestic corpor
 - `defencePriceRatios.ts` - Live commodity price ratios feeding lot costing
 - `defenceFillEligibility.ts` - Whether a plant can hold/deliver a given contract
 - `procurementGate.ts` - Global pause switch for new procurement
+- `defenceTermination.ts` - Cost of tearing up a signed contract (cause versus convenience)
+- `defenceMinisterInterests.ts` - Minister's stake in a competing domestic defence supplier
+- `src/lib/turn/defenceDeliveryTurn.ts` - The per-turn delivery sweep that applies the caps above
 
 ## Background: the Price-Band Drain
 
 A delivery credits the supplier `pricePerLot - productionCost` per lot. Under the original cost model, a lot could be priced in the hundreds of millions while costing a few thousand to build, a margin above 99.99%. Because the price band's top was the GDP anchor (five orders of magnitude above the true build cost) and the cost model was an unrelated flat commodity-recipe figure, a defence contract was very close to a pure transfer of national appropriation into one corporation's cash balance. A minister with a stake in the supplier directly benefited. The guardrails below are the mitigation, not a full clawback (contracts already signed keep their terms).
+
+## Tenders and Bidding (`src/lib/governmentContracts/`)
+
+New defence contracts are no longer direct offers from a minister to a named CEO. The defence seat holder (an acting holder has the same authority) publishes a **tender** fixing the component, number of lots, required grade and maximum price per lot. Eligible domestic corporations nominate a certified plant and bid a price inside the price band. Bids are sealed until bidding closes, and the CEO may revise or withdraw a bid until then. The minister then picks any qualifying bid and publishes a reason; there is no automatic winner. The winning bid activates the order with no second acceptance step.
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `BIDDING_TURNS_MIN` / `BIDDING_TURNS_MAX` / `BIDDING_TURNS_DEFAULT` | 6 / 48 / 24 turns | `src/lib/governmentContracts/rules.ts` |
+| `AWARD_WINDOW_TURNS` | 24 turns after bidding closes | `src/lib/governmentContracts/rules.ts` |
+| `CONTRACTS_PAGE_SIZE` | 10 results per page on the country board | `src/lib/governmentContracts/rules.ts` |
+
+Publishing reserves the maximum obligation (lots times maximum price) against the appropriation and the window quota; award transfers the actual winning value and releases the difference. An open tender therefore holds resources for at most 72 turns (48 bidding plus 24 award). The tender's maximum price is checked against the current price floor for that component and grade, and a tender below it is refused. Bidding costs nothing. Existing signed contracts and any legacy direct offers keep their stored terms.
+
+All the guardrails below (window cap, supplier cap, price band, self-dealing, fill eligibility) still apply to a tender award.
 
 ## Contract Award Limits (`defenceContractLimits.ts`)
 
@@ -67,6 +86,21 @@ The answer to self-dealing is **disclosure plus a political price**, not another
 - `selfDealingFavorabilityPenalty({contractValue, tranche})` scales `SELF_DEALING_BASE_PENALTY = 1.5` up to `SELF_DEALING_MAX_PENALTY = 8` favorability points, proportional to the contract's share of the window's procurement notional, a token order costs almost nothing, routing the whole quarter's budget to yourself is a career event.
 - `selfDealingDisclosure()` writes one public wire-voice line naming the minister, the interest, and the contract value/lots, it goes on the public order book.
 
+## Terminating a Contract (`defenceTermination.ts`)
+
+Tearing up a signed contract used to be free, instant, and returned both the appropriation and the window quota, so a minister could cancel a rival's order and re-award the room to their own plant. Termination is now priced by basis (`terminationBasis`):
+
+| Basis | When | Fee | Quota |
+| --- | --- | --- | --- |
+| Withdrawal | Contract still pending, supplier never accepted | 0 | Released |
+| Cause | Supplier at fault for `DEFENCE_TERMINATION_CAUSE_TURNS = 3` delivery turns in a row | 0 | Released |
+| Convenience | Anything else | `round(undelivered lots x pricePerLot x TARGET_SUPPLIER_MARGIN)`, i.e. 15% of the undelivered value | Stays spent |
+
+- Supplier-fault reasons (`SUPPLIER_FAULT_REASONS`): `no_output`, `supplier_ineligible`, `supplier_cannot_fund_loss`. Buyer-side shortfalls (`appropriation_short`, `turn_spend_cap`) never count, so underfunding the budget cannot buy a free cancellation.
+- The fee is paid from the defence appropriation immediately; if it cannot cover the fee the termination is refused.
+- Favorability penalty: `TERMINATION_BASE_PENALTY = 1` up to `TERMINATION_MAX_PENALTY = 6`, scaled by the order's share of the window tranche. If the minister holds a stake (owner, or at least `MATERIAL_STAKE_SHARE`) in a different domestic corporation with a defence plant (`findCompetingSupplierInterest`), the penalty is multiplied by `TERMINATION_CONFLICTED_MULTIPLIER = 2`.
+- The cancellation is disclosed on the public wire (`terminationDisclosure`) and the supplier is notified (`terminationNoticeToSupplier`).
+
 ## Fill Eligibility (`defenceFillEligibility.ts`)
 
 `resolveFillEligibility()` is the single shared answer to "can this plant fill this order", used by the award picker, the award route, the CEO's accept, and the delivery sweep, previously each carried its own version and disagreed. AWARDABLE MUST MEAN DELIVERABLE.
@@ -93,7 +127,67 @@ State ownership is not a fill-eligibility factor: a National Corporation banks i
 
 This is a kill switch for a procurement-drain exploit, not a subsystem teardown.
 
+## Worked Example
+
+A country has an annual defence line of 48,000,000,000 and a lot price of 150,000,000 (grade 2, so the grade scale is 1.0).
+
+| Step | Calculation | Result |
+| --- | --- | --- |
+| Window procurement notional | 48,000,000,000 x (1 - 0.55) x (12 / 48) | 5,400,000,000 |
+| Country cap | floor(5,400,000,000 / 150,000,000) | 36 lots |
+| Private supplier cap | max(1, floor(36 x 1/3)) | 12 lots |
+| State-owned supplier cap | full window | 36 lots |
+| Accrual per turn | 48,000,000,000 x 0.45 / 48 | 450,000,000 |
+| Country turn spend cap | 450,000,000 x 3 | 1,350,000,000 (9 lots) |
+| Private supplier turn cap | 1,350,000,000 x 1/3 | 450,000,000 (3 lots) |
+| Production cost | 150,000,000 x (1 - 0.15) | 127,500,000 |
+| Price floor | ceil(127,500,000 x 1.12) | 142,800,000 |
+| Price ceiling | min(anchor 150,000,000, cost x 2 = 255,000,000) | 150,000,000 |
+| Suggested price | 127,500,000 / 0.85 | 150,000,000 |
+
+So a private plant awarded the full 12 lots delivers 3 per turn and finishes in 4 turns. If the minister owns that plant and awards 1,800,000,000 (one third of the tranche), the self-dealing penalty is 1.5 + (1/3) x (8 - 1.5) = 3.67, shown as 3.7 favorability points. Cancelling that order for convenience after 3 of 12 lots delivered pays a fee of 9 x 150,000,000 x 0.15 = 202,500,000.
+
+## Timing
+
+- **Tender lifecycle:** `governmentContractExpiry` (tenders past their award deadline become Canceled) and `governmentContractMaximaRefresh` (open tenders' maximum price re-checked against the live floor) are phases in `src/simulation/phases/turnPhaseRegistry.ts`, running after commodity prices.
+- **Delivery sweep:** `applyDefenceDeliveries` runs inside the `ministerialOrders` phase (`processMinisterialOrders` in `src/lib/turn/ministerialOrderProcessing.ts`, run right after `crisisTurn` and before `policyEffects`) once per country per turn, before planned-economy state arms production, naval repair, refit and nuclear stockpile accrual. Materiel has to arrive before it can be issued, and conventional deliveries settle before the nuclear programme competes for the same appropriation.
+- **Idempotency:** a contract settles at most once per turn (`defenceDeliveryMoveKey`), so a re-run turn replays rather than pays twice.
+- **Windows:** `defenceContractWindow(countryId, turn)` splits turns into 12-turn windows starting at turn 1, so windows are turns 1 to 12, 13 to 24, and so on.
+- **Award time:** caps, price band, self-dealing and eligibility are checked when a tender is published and awarded, not at delivery. The spend cap and eligibility are checked again at each delivery.
+
+## Edge cases and limits
+
+- **Unspent window room does not carry forward.** A fresh tranche opens each window.
+- **Lot caps floor at 1.** If the country cap is above zero, the private supplier cap is at least 1 lot. If the defence line or lot price is zero or negative, every cap is 0.
+- **One-lot floor on delivery.** If a country has paid nothing yet this turn, at least one lot settles even when its price exceeds the turn cap; the floor is per country per turn, so splitting an order into many contracts does not multiply it.
+- **Cap never shrinks a window.** The per-turn cap is 3x the steady accrual and a window is 12 turns, so the cap only spreads payouts, never reduces the total a buyer can spend.
+- **Price floor wins over ceiling.** If input costs run away so the cost-derived floor exceeds the anchor ceiling, the ceiling is raised to the floor: nothing may be written below cost plus 12%.
+- **Cost shocks hit the supplier, not the taxpayer.** `lotCostIndex` is clamped to 0.7 to 1.5, and the price stays inside the band.
+- **Grade out of range.** `normalizeGrade` rounds and clamps to 0 to 3, and a missing grade is treated as 3.
+- **Self-dealing is disclosed, not blocked.** The penalty is capped at 8 favorability points, so no single award ends a career outright. Only the same player or the minister's own recorded shareholding of 5% or more counts; there is no relationship graph.
+- **Demilitarisation.** A country under a demilitarisation settlement may award no new contract and no company may accept one from it until the bar lapses; live contracts keep delivering.
+- **Paused procurement.** Only new awards and acceptances stop; live deliveries, cancel and decline continue.
+- **Planned economies** (Soviet Union, East Germany) receive state arms output outside tenders (`stateArmsIndustry.ts`), and AI-run or state suppliers submit an initial suggested-price bid but get no direct-award shortcut.
+- **Legacy contracts** settle on `legacyLotProductionCost` and keep the price and margin they were struck at.
+
+## Connections
+
+**Driven by:**
+
+- [National Budget](./national-budget.md): the defence line sets every cap (`resolveDefenseLine` in `src/lib/turn/defenseEnvelope.ts`, `SEED_UPKEEP_TARGET_SHARE` in `src/lib/military/appropriation.ts`).
+- [Commodities](./commodities.md): world price ratios feed lot cost (`defencePriceRatios.ts`).
+- [Corporations](./corporations.md): plant output and strategy decide fill eligibility and who can bid.
+- [Government Approval](./government-approval.md): self-dealing and termination penalties reduce the minister's favorability.
+
+**Affects:**
+
+- [Conflict System](./conflict-system-as-shipped.md): delivered lots enter the national arsenal (`depositLots`) and become unit strength and refit.
+- [Corporations](./corporations.md): award payments credit supplier cash (`applyMoneyMove` in `defenceDeliveryTurn.ts`).
+- [National Budget](./national-budget.md): deliveries draw down the defence appropriation encumbrance.
+
 ## Related Systems
 
 - [conflict-system-as-shipped.md](./conflict-system-as-shipped.md) - Arsenal components, unit grades, and how procured materiel becomes combat effectiveness
 - [corporations.md](./corporations.md) - Corporate sectors, strategies, revenue
+
+Last checked: 2026-10-29, version 1.18.0

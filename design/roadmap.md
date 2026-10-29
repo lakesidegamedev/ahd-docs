@@ -1,5 +1,7 @@
 # Product Roadmap
 
+Historical record: this page describes work as of 2026-08-11. For current behaviour see [Core Systems](./core-systems.md) and the as-shipped pages such as [Capacity Economy as Shipped](./capacity-economy-as-shipped.md).
+
 _Last updated: 2026-08-11_
 
 > Product snapshot, not a mechanics reference. Feature counts and balance constants in this page can age quickly. Use the in-game wiki for player rules and the as-shipped engineering/design pages for current implementation details.

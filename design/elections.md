@@ -1,8 +1,12 @@
 # Elections
 
-## Overview
+Elections run perpetually across five US race types: House, Senate, Governor, State Senate, and President (other countries add their own types, see [UK Elections](./uk-elections.md), [Germany Elections](./germany-elections.md) and [Japan Elections](./japan-elections.md)). Each election has a **primary phase** (intra-party competition) followed by a **general phase** (inter-party competition). One turn = one hour; timers advance each turn.
 
-Elections run perpetually across five race types: House, Senate, Governor, State Senate, and President. Each election has a **primary phase** (intra-party competition) followed by a **general phase** (inter-party competition). One turn = one hour; timers advance each turn.
+Player guide: [Election Mechanics](https://www.ahousedividedgame.com/wiki/election-mechanics), with [Primaries](https://www.ahousedividedgame.com/wiki/primaries) and [General Elections](https://www.ahousedividedgame.com/wiki/general-elections)
+
+The vote math itself (appeal, reach, swing flow, drivers) is documented in [Election Engine](./election-engine.md); this page covers the race lifecycle, primaries, entry and withdrawal, and the presidential specifics.
+
+## Overview
 
 ## Election Types
 
@@ -66,20 +70,20 @@ Senate classes staggered by 96 hours (2 years): Class 1 now, Class 2 +96h, Class
 
 Durations are configurable per election; new elections inherit from the most recently completed election for that slot. Source: `src/lib/turn/perpetualElections.ts` (`DEFAULT_DURATIONS`).
 
-## Turn Processing Order
+## Timing
 
-Election steps run as strictly sequential sub-phases of the `electionResolutionAndGovernment` phase in `src/simulation/phases/turnPhaseRegistry.ts`:
+Election steps run once per turn as strictly sequential sub-phases of the `electionResolutionAndGovernment` phase in `src/simulation/phases/turnPhaseRegistry.ts`:
 
-1. **Withdraw inactive candidates**
-2. **Candidate party sweep**, withdraws stale or ineligible candidacies after party switches
-3. **Resolve primaries**, eliminates losers when `primaryEndTime` passes; must run before vote accumulation
-4. **Accumulate general election votes**, one turn of votes for all active general-phase elections; **must run before timer advancement**
-5. **Campaign spend reset**, clears `Campaign.spendThisTurn` after the tallies have read it
-6. **Advance election timers**, marks elections "completed" when `endTime` passes
-7. **Record primary snapshots**, for elections still in primary phase (trend data)
-8. **Resolve completed general elections**, determines winners, updates `electedOfficials`, spawns next cycle
-9. **Clear resolved support, vacate leadership**, removes leadership from members who lost/changed office
-10. **Parliamentary government formation**
+1. **Withdraw inactive candidates** (`withdrawInactiveCandidates`)
+2. **Candidate party sweep** (`candidatePartySweep`), withdraws stale or ineligible candidacies after party switches
+3. **Resolve primaries** (`primaryResolution`), eliminates losers when `primaryEndTime` passes; must run before vote accumulation
+4. **Accumulate general election votes** (`voteAccumulation`), one turn of votes for all active general-phase elections; **must run before timer advancement**
+5. **Campaign spend reset** (`campaignSpendReset`), clears `Campaign.spendThisTurn` after the tallies have read it
+6. **Advance election timers** (`electionTimers`), marks elections "completed" when `endTime` passes
+7. **Record primary snapshots** (`primarySnapshots`), for elections still in primary phase (trend data)
+8. **Resolve completed general elections** (`electionResolution`), determines winners, updates `electedOfficials`, spawns next cycle
+9. **Clear resolved support, vacate leadership** (`clearResolvedSupport`, `leadershipVacate`), removes leadership from members who lost/changed office
+10. **Parliamentary government formation** (`parliamentaryGovernmentFormation`)
 
 NPP behavior, bill lifecycle and the campaign turn (income, actions, maintenance) run in other phases.
 
@@ -109,9 +113,21 @@ When `primaryEndTime` passes, `resolvePrimariesIfNeeded()` in `src/lib/turn/prim
 4. Win/loss notifications sent to player candidates
 5. General vote tally initialized (or created if missing)
 
+Weights and clamps live in `src/lib/primaryScore.ts` (`calcPrimaryScore`, `calcPresidentPrimaryScore`, `PRESIDENT_PRIMARY_*_WEIGHT`) and `src/lib/utils/infamy.ts` (`INFAMY_PENALTY_MAX = 0.05`). The score is rounded to one decimal.
+
+**Worked example (state race).** Candidate A: economic lean 1.0, social 0.5, favorability 60, political influence 49, infamy 20. State lean (1.5, 0.0), party position (2.0, 1.0).
+
+- State alignment: `25 - (0.5 + 0.5) × 1.25 = 23.75`
+- Party alignment: `15 - (1.0 + 0.5) × 0.75 = 13.875`
+- Favorability: `60/100 × 35 = 21`
+- Influence: `sqrt(49/100) × 25 = 17.5`
+- Raw 76.125, times the infamy multiplier `1 - 0.05 × 0.20 = 0.99` gives **75.4**.
+
+Rival B has alignment 30, favorability 70 (24.5), influence 64 (20) and no infamy: raw 74.5, score **74.5**. A wins by 0.9 points. Had A carried infamy 100 the multiplier would be 0.95 and A would score 72.3 and lose, so infamy matters mainly in close primaries.
+
 ## Vote Accumulation (General Phase)
 
-Handled by `src/lib/electionEngine.ts` and `accumulateVoteTurn()`.
+Handled by the `src/lib/electionEngine/` module (`accumulateVoteTurn()` in `tallyManagement.ts`).
 
 ### Model
 
@@ -178,7 +194,7 @@ The full pipeline from candidate and state to votes per turn (shared with poll a
 > - **Presidential race**: use **National Political Influence** (`nationalInfluence`)
 
 1. **Reach**, `normalizeNPI(influence)`: fraction of turned-out voters the candidate can reach. Sqrt curve, hard-capped at 1.0 once PI/NPI reaches 100. Both state and presidential general elections use this curve. Presidential primary reach uses the separate diminishing-return function `1 - exp(-NPI/45)`.
-2. **Appeal (per demographic group)**, Position score `25 × (positionRaw/50)^1.5 + floor`, where `positionRaw = max(0, 50 − |econDiff|×5 − |socialDiff|×5)` and `APPEAL_POSITION_EXPONENT = 1.5` (`src/lib/utils/demographicAppeal.ts`), plus a directional (tribal-voter) bonus of up to `DIRECTION_BONUS_PER_AXIS = 5` per axis, plus `normalizeNPI(influence) × 12.5` when influence is included. Max 50 (position ~25 + influence ~25 at PI=100). Does NOT include favorability, that scales at the end. (γ=2, the legacy squared curve, is still supported as a special case but is not the live default.)
+2. **Appeal (per demographic group)**, Position score `25 × (positionRaw/50)^1.5 + floor`, where `positionRaw = max(0, 50 − |econDiff|×5 − |socialDiff|×5)` and `APPEAL_POSITION_EXPONENT = 1.5` (`src/lib/utils/demographicAppeal.ts`), plus a directional (tribal-voter) bonus of up to `DIRECTION_BONUS_PER_AXIS = 5` per axis, plus an optional `normalizeNPI(influence) × 12.5` term. No live election path switches that term on (`includeInfluenceInAppeal` is false everywhere), so influence acts through reach only. Appeal is capped at `MAX_APPEAL = 50` and does NOT include favorability, that scales at the end. (γ=2, the legacy squared curve, is still supported as a special case but is not the live default.)
 3. **Group-level competitive allocation**, Each demographic group contributes to the turn pool proportionally to its size. Within each group, candidates split that contribution by relative `(appeal × reach × approval × partyOrg × infamyMult)`. Groups vote as blocs; higher appeal with a group yields a larger share of that group's votes.
 4. **Approval scalar**, `(favorability / 100)^0.8`: voters will not support candidates they do not approve of, while the exponent softens the middle of the curve. 0% approval = 0 votes.
 5. **Party org scalar**, General elections: `normalizedOrgShare ^ ORG_WEIGHT_EXPONENT` (`ORG_WEIGHT_EXPONENT = 0.2`), the party's normalized share of statewide Org among all parties, with diminishing returns; no Org data anywhere falls back to a neutral 1×. Primaries use a uniform neutral 1× (intra-party Org cancels). This retired the older flat `0.5 + (org/100)×0.5` scalar (2026-06-18).
@@ -198,7 +214,7 @@ The full pipeline from candidate and state to votes per turn (shared with poll a
 | **National Political Influence (NPI)** | Presidential race only, sqrt scaling via `normalizeNPI`, hard-capped at 1.0 once NPI reaches 100. Above 100 it saturates (no celebrity bonus).   |
 | **Favorability (approval)**            | Final scalar: `(favorability/100)^0.8` (`APPROVAL_SCALAR_EXPONENT`); 0% approval = 0 votes                                                        |
 | **Party org**                          | Final scalar in general elections: `normalizedOrgShare ^ 0.2` (`ORG_WEIGHT_EXPONENT`), a party's normalized share of statewide Org with diminishing returns. Primaries use a uniform neutral 1×. |
-| **Government approval**                | Scales the turn pool by (1 + approval); high-approval states allocate more votes per turn                                                         |
+| **Government approval**                | Scales the turn pool by `1 + (approval - 0.5) × 0.2` (`× 0.5` for president), then by office strength; see the pipeline above                    |
 | **Office strength**                    | Governor 1.0, House 0.9, Senate 0.8, State Senate 0.85, governor races most affected by approval                                                 |
 | **Voting system (FPTP/RCV)**           | FPTP: third-party candidates gain `FPTP_SPOILER_RATE` × their own allocation drawn from nearest major party (spoiler effect). RCV: no adjustment. |
 
@@ -208,7 +224,7 @@ Campaign actions raise favorability and influence; ads raise recognition and fav
 
 **State and general elections (House, Senate, Governor, State Senate, Commons, etc.):** Commissioned polls use the **group-level competitive allocation** and **FPTP spoiler** rules, including **region-aware major parties** and **per-archetype effective favorability** for opponents when that data exists (`src/lib/actions/pollCalculations.ts`, `src/lib/actions/electionOpponents.ts`). Turn-by-turn general-election vote accumulation itself defaults to the **swing-flow model** instead (see above); polls are an appeal-based projection and do not replay the swing-flow driver stack.
 
-**Presidential:** Simulated votes are accumulated **per electoral unit** in `src/lib/presidentialElectionEngine.ts` (averaged party vs character positions, national influence for reach, influence included in appeal, state/district lean, independent penalty, swing-state ground game). The **FPTP spoiler step is applied at half rate** (`PRESIDENTIAL_SPOILER_RATE = 2%`) on the presidential distribution path to prevent fragmented fields from producing EC landslides via winner-take-all. Player polls remain **home-state** projections and do **not** replicate the national presidential model, treat poll topline and in-race breakdowns as **indicative for the character’s state**, not as an Electoral College forecast.
+**Presidential:** Simulated votes are accumulated **per electoral unit** in `src/lib/presidentialElectionEngine.ts` (averaged party vs character positions, national influence for reach, influence kept out of appeal, state/district lean, independent penalty, swing-state ground game). The **FPTP spoiler step is applied at half rate** (`PRESIDENTIAL_SPOILER_RATE = 2%`) on the presidential distribution path to prevent fragmented fields from producing EC landslides via winner-take-all. Player polls remain **home-state** projections and do **not** replicate the national presidential model, treat poll topline and in-race breakdowns as **indicative for the character’s state**, not as an Electoral College forecast.
 
 ## Multi-Seat Races (House, State Senate)
 
@@ -216,7 +232,7 @@ Campaign actions raise favorability and influence; ads raise recognition and fav
 - **Proportional allocation**: Largest-remainder method
 - **Minimum share**: set per chamber by `getMultiSeatMinShare()` in `src/lib/turn/election/rules/seatEligibility.ts`. The US House gate scales with the state delegation, `clamp(1 / (seats + 1), 10%, 20%)`, so small delegations sit at 20% and large ones drop toward 10%. State Senate, Regional Council and most other legislatures use a flat 10% so smaller parties can win seats in larger districts. Chambers not listed there, and non-US House races (such as Nigeria's), keep 20%.
 - **2-seat House special case**: Winner takes both seats unless at least one opponent reaches the minimum share threshold (the House gate above, 10% for State Senate)
-- **Seats estimate**: Updated each vote turn; `voteFraction × totalSeats` per candidate
+- **Seats estimate**: Updated each vote turn using the Hamilton (largest remainder) method over party-pooled votes, see [Election Engine](./election-engine.md#seat-estimation-multi-seat-races)
 
 ## Senate Elections
 
@@ -333,7 +349,7 @@ All race types run perpetually:
 
 - **Scope**: National (`electionType: "president"`, `state: "US"`). Any state can run; no home-state check.
 - **Influence stat**: Uses **NPI** (`nationalInfluence`) exclusively, not `politicalInfluence`. NPI grows passively each turn (+state influence ÷ 100). Reach uses a sqrt curve hard-capped at 1.0 once NPI reaches 100; presidential primary scoring uses a separate linear-up-to-cap function on the same value.
-- **Primaries**: One national primary per party; national appeal score (population-weighted state blend). Independents skip primary; enter during general phase only.
+- **Primaries**: One national primary per party; national appeal score (population-weighted state blend). Independents enter the "independent" primary like any party (see Candidacy Rules) and pay the 0.3× vote penalty in the general.
 - **General**: Per-state (and ME/NE district) vote accumulation; Electoral College resolution. 538 total EV; 270 to win.
 - **Electoral College**: `ELECTORAL_VOTE_UNITS` in `src/lib/constants/states.ts`. ME and NE split by congressional district (ME: 2 at-large + CD1 + CD2; NE: 2 at-large + CD1 + CD2 + CD3). District lean proxies applied for ME/NE (see `UNIT_LEAN`).
 - **Independent penalty**: 0.3× vote share in general (70% reduction).
@@ -435,7 +451,7 @@ Travel is a presidential-only mechanic. State-level races use standard campaign/
 - **Attack** (influence action): Reduces target Favorability by 1, costs 2 Infamy to attacker
 - **Action-point cost**: priced dynamically per target in `src/lib/influence/simpleInfluence.ts` and `src/lib/influence/rules.ts`. A boost to another player costs the equivalent self-action quote plus a 1.25x premium (attack uses 1.5x), scaled by a distance multiplier for out-of-state targets, so the price is not a flat number. Favorability strikes compete with campaigning, fundraising and political operations for a player's turn.
 - **Per-turn cap**: `MAX_NET_FAVORABILITY_SWING_PER_TURN = 12`, the net favorability change any one target can absorb from player support/attack actions in a single turn, in either direction. This is a backstop against extreme coordinated pile-ons, not the primary limiter (the AP cost is); it sits well above normal single-turn swings.
-- **Failure chance**: Attacks can fail based on attacker's Infamy (`failureChance = infamy × 10`). Failed attacks still cost 2 Infamy.
+- **Failure chance**: an attack fails when a 0 to 999 roll is below `infamy × 10`, so the failure chance in percent equals the attacker's Infamy (`src/lib/influence/simpleInfluence.ts`). Failed attacks still cost 2 Infamy.
 - **Infamy drain**: Infamy > 20% causes passive Favorability drain each turn (`(infamy − 20) × 0.05%`)
 - **Cross-state cost**: Attacking out-of-state targets costs more action points, scaled by a distance multiplier
 
@@ -466,7 +482,7 @@ The election vote calculation pipeline is implemented across two modules:
 | `voteDistributionSwingFlow.ts` | Two-phase pairwise swing-flow allocation; default vote model for general elections. Layers coattails, median-voter, persuasion, and incumbency drivers on top of the base appeal calculation |
 | `tallyManagement.ts`     | Accumulates vote turns, initializes tallies, computes seat estimates for multi-seat races                                                          |
 | `voteCalculations.ts`    | Turn vote weight formula (three-tier closing surge: 50% early / 20% ramp / 30% final 4 turns), state turnout calculation                            |
-| `resolvedTurnout.ts`     | Combines static `StateDemographics.turnout` with dynamic `StateDemographicTurnout.modifiers` from GOTV/canvassing/suppression                      |
+| `resolvedTurnout.ts`     | Combines static `StateDemographics.turnout` with dynamic `StateDemographicTurnout.modifiers` from GOTV and canvassing                      |
 | `candidateEnrichment.ts` | Fetches character/NPP data and merges with candidate records for vote calculations                                                                 |
 | `types.ts`               | `EnrichedCandidate`, `DistributeVotesOptions`, `AccumulateVoteTurnPreload`                                                                         |
 | `constants.ts`           | `FPTP_SPOILER_RATE` (0.04), `PARTY_STRENGTH_BY_OFFICE` (deprecated, now in CountryConfig)                                                         |
@@ -492,7 +508,7 @@ Each turn, `accumulateVoteTurn()` in `tallyManagement.ts` runs the following pip
 
 1. **Fetch tally + candidates**, Load `ElectionVoteTally` and active `ElectionCandidate` records
 2. **Load state context**, State demographics, categories, party orgs, turnout modifiers
-3. **Resolve effective turnout**, `resolveTurnout()` combines baseline turnout with GOTV/canvassing/suppression modifiers
+3. **Resolve effective turnout**, `resolveTurnout()` combines baseline turnout with GOTV and canvassing modifiers
 4. **Compute turn pool**, `turnVoteWeight()` allocates the pool in a three-tier closing surge: 50% early, 20% in the 8-turn ramp band, 30% in the final 4 turns
 5. **Apply party strength**, State government approval × office strength scales the pool
 6. **Enrich candidates**, `fetchEnrichedCandidates()` merges character/NPP stats (policies, favorability, influence, archetype approvals)
@@ -558,6 +574,71 @@ State-level results for presidential, governor, and senate elections can be expl
   - `GET /api/elections/[id]/state/[stateId]/county-results`, county vote distribution
   - `GET /api/elections/[id]/state/[stateId]/cd-results`, district seat assignments
 
+## Constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| Election durations (total / primary / general hours) | House 96/48/48, Senate 288/240/48, Governor, State Senate, President 192/144/48 | `DEFAULT_DURATIONS`, `src/lib/constants/electionDurations.ts` |
+| Turns per game year | 48 (one turn per real hour) | `src/lib/constants/electionDurations.ts` |
+| Senate class stagger | 96 hours | `src/lib/turn/perpetualElections.ts` |
+| Vote pool bands | early 0.5, ramp 0.2 (8 turns), final 0.3 (4 turns) | `EARLY_POOL_SHARE`, `RAMP_POOL_SHARE`, `RAMP_TURNS`, `FINAL_POOL_SHARE`, `ELECTION_DAY_TURNS`, `src/lib/electionEngine/voteCalculations.ts` |
+| FPTP spoiler rate | 0.04 state, 0.02 presidential | `FPTP_SPOILER_RATE`, `PRESIDENTIAL_SPOILER_RATE`, `src/lib/electionEngine/constants.ts` |
+| NPP weights | 0.8 general, 0.5 primary score | `NPP_GENERAL_WEIGHT_MULTIPLIER`, `NPP_PRIMARY_SCORE_MULTIPLIER`, `constants.ts` |
+| Position exponent / approval exponent | 1.5 / 0.8 | `APPEAL_POSITION_EXPONENT`, `APPROVAL_SCALAR_EXPONENT`, `src/lib/utils/demographicAppeal.ts` |
+| Org exponent | 0.2 | `ORG_WEIGHT_EXPONENT`, `src/lib/electionEngine/electionFormulaFactors.ts` |
+| Party strength modifier | `1 + (approval - 0.5) × 0.2` state, `× 0.5` president | `tallyManagement.ts`, `src/lib/presidentialElectionEngine.ts` |
+| Office strength | Governor 1.0, President 1.0, House 0.9, State Senate 0.85, Senate 0.8 | `src/lib/countries/us/institutionsFacts.ts` |
+| State primary score weights | alignment 25 state + 15 party (40 party-only fallback), favorability 35, influence 25 | `calcPrimaryScore`, `src/lib/primaryScore.ts` |
+| Presidential primary score weights | alignment 40, party influence 20, national reach 15, favorability 25 | `PRESIDENT_PRIMARY_*_WEIGHT`, `src/lib/primaryScore.ts` |
+| Infamy score penalty | up to 5% at infamy 100 | `INFAMY_PENALTY_MAX`, `src/lib/utils/infamy.ts` |
+| Independent presidential vote penalty | 0.3 | `INDEPENDENT_VOTE_PENALTY`, `src/lib/presidentialElectionEngine.ts` |
+| State lean tiebreaker | 0.1 per point (0.3 for ME/NE districts), clamped 0.8 to 1.2 | `STATE_LEAN_STRENGTH`, `DISTRICT_LEAN_STRENGTH`, `LEAN_MULT_MIN`, `LEAN_MULT_MAX`, `presidentialElectionEngine.ts` |
+| Presidential position blend | `partyPositionWeight` 1/3, so 75% candidate and 25% party | `presidentialElectionEngine.ts` |
+| Electoral votes | 538 total, 270 to win | `TOTAL_ELECTORAL_VOTES`, `ELECTORAL_MAJORITY`, `src/lib/constants/states.ts` |
+| Travel action cost | EV 5 or less: 3, 10 or less: 5, 20 or less: 7, above 20: 10 | `getTravelActionCost`, `src/lib/constants/states.ts` |
+| Multi-seat minimum share | US House `clamp(1/(seats+1), 10%, 20%)`, 20% non-US House and unlisted types, 10% listed chambers | `getMultiSeatMinShare`, `src/lib/turn/election/rules/seatEligibility.ts` |
+| Net favorability swing per target per turn | 12 | `MAX_NET_FAVORABILITY_SWING_PER_TURN`, `src/lib/influence/simpleInfluence.ts` |
+| Attack cost | 2 infamy, -1 target favorability | `src/lib/influence/simpleInfluence.ts` |
+| Campaign / advertise base fund cost | 20,000 / 100,000 (before tier and GDP scaling) | `CAMPAIGN_BASE_FUND_COST`, `ADVERTISE_BASE_FUND_COST`, `src/lib/actions/rules.ts` |
+| Fundraise action cost | 3 action points | `FUNDRAISE_ACTION_COST`, `src/lib/actions/rules.ts` |
+
+## Edge cases and limits
+
+- **One race at a time.** `findBlockingActiveCandidacy` rejects a second entry. This keeps a player from splitting campaign effort and stats across races.
+- **Home state only**, except President, which is national. Cross-country entry is rejected with 403.
+- **Entry closes with the primary.** After `primaryEndTime` the enter route returns 400; there is no late entry.
+- **Withdrawal is final.** The campaign document is deleted, tally votes are removed (not redistributed) and the candidate cannot re-enter that election. This stops candidates from banking votes and then dodging scrutiny.
+- **Single-candidate primary.** A party with a single candidate has nobody to eliminate, so that candidate is the nominee.
+- **Primary score floors.** Alignment terms are floored at 0, so a candidate far from the party still scores on favorability and influence. Influence and favorability are clamped to 0 to 100. A missing state lean falls back to the 40-point party-only alignment.
+- **Infamy** reduces scores by at most 5%, and NPPs have none.
+- **Short general windows.** If a general lasts 4 turns or fewer the pool is spread evenly (see Election Engine). Commons and snap elections run 24h primary plus 24h general, so their bands are compressed.
+- **Spoiler** is skipped for RCV and one-party states, and presidential races use half the rate to stop fragmented fields from producing Electoral College landslides.
+- **Electoral College:** 269-269 is broken by a deterministic coin flip from the election and candidate IDs. Maine and Nebraska split by congressional district.
+- **NPPs are barred from presidential races in player-enabled countries** so players always get the chance to contest the presidency. The bar lifts where no player contests it, and for the first round of Russian direct presidential ballots.
+- **Running mate** cannot be the current President or the nominee.
+- **Travel** is presidential only, one state at a time, general phase only.
+- **Perpetual spawn:** a slot with an active or upcoming race is never spawned twice. Durations always come from `DEFAULT_DURATIONS`, so admin timer edits do not drag the schedule.
+
+## Connections
+
+**Driven by:**
+
+- [Demographics](./demographics.md): group sizes, turnout and leans set the vote pool and appeal (`resolveTurnout()`).
+- [Government Approval](./government-approval.md): state approval scales the turn pool (`tallyManagement.ts`) and executive approval drives coattails and incumbency.
+- [Campaign Strategy](./campaign-strategy.md) and [Fundraising and Ads](./fundraising-ads.md): campaign, advertise and fundraise actions raise influence, favorability and funds, read by the primary score and by `fetchEnrichedCandidates()`.
+- [Canvassing](./canvassing.md): writes the turnout modifiers read during accumulation.
+- [NPP System](./npp-system.md): `processElectionEntry()` in `src/lib/turn/npp/electionEntry.ts` fills fields with NPP candidates.
+- States' `votingSystem` setting (FPTP or RCV), changed by legislation, switches the spoiler step on or off.
+- [Parties](./parties.md): party positions, Org and leadership feed primary alignment and general weights.
+
+**Affects:**
+
+- [Election Engine](./election-engine.md): the per-turn tally this page's lifecycle schedules.
+- [Cabinet](./cabinet.md), [Congress Leadership](./congress-leadership.md) and [Parliamentary Government](./parliamentary-government.md): `resolveGeneralElections()` updates `electedOfficials`, then leadership is vacated and governments form in the same phase.
+- [Contingent Election](./contingent-election.md): a presidential race with no Electoral College majority.
+- [Snap Elections](./snap-elections.md): spawn extra compressed elections using the same engine.
+- [Live Election Results](./live-election-results.md): reads the tallies for the election-night display.
+
 ## Related Documentation
 
 - [Core Systems](./core-systems.md), Turn structure, term cycles
@@ -566,3 +647,5 @@ State-level results for presidential, governor, and senate elections can be expl
 - [Campaign Strategy](./campaign-strategy.md), Fundraising, campaign operations, endorsements
 - [Technical Architecture](./technical-architecture.md), Implementation status
 - [Cabinet](./cabinet.md), Cabinet nominations use Senate confirmation (related process)
+
+Last checked: 2026-10-29, version 1.18.0

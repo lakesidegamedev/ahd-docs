@@ -1,238 +1,146 @@
 # Party Slate
 
+Technical design for the Party Slate: the national and state party board where leadership assigns players or same-party NPPs to the races in each state or region, and the turn pass that turns those assignments into candidacies.
+
+Player guide: no dedicated wiki page covers the Slate yet. The nearest player page is [Primaries](https://www.ahousedividedgame.com/wiki/primaries), which mentions slate fill for NPPs only.
+
 ## Overview
 
-The Party Slate system gives national party leadership a central board for
-planning who should run in each state or regional race.
+The Party Slate gives party leadership a central board for planning who should run in each state or regional race.
 
-It is a national-party planning and assignment surface, not a separate election
-system. Slate helps party leadership:
+It is a national-party planning and assignment surface, not a separate election system. Slate helps party leadership:
 
 - view every eligible race by state or region
 - assign players or same-party NPPs to those races
 - persist those assignments across cycles until manually changed
 - coordinate candidate movement between same-state races
 
-The current player-facing surfaces live under:
-
-- the national party `Slate` tab
-- each scoped state or regional party `Slate` tab
+The player-facing surfaces live under the national party `Slate` tab and each scoped state or regional party `Slate` tab.
 
 ## Scope
 
-Slate is designed around subnational and legislative races. Presidential races
-do not use the Slate board.
+Slate is designed around subnational and legislative races. Presidential races do not use the Slate board: the assignment route refuses them with "Presidential races do not use the slate assignment board." (`src/app/api/country/[code]/parties/[id]/slate/[electionId]/invitations/route.ts`), and the persistence sync skips them (`syncPersistentSlateAssignments` in `src/lib/turn/npp/slateResponses.ts`).
 
-The board renders as:
+The board renders as a country map for countries with map support, with a selected-state or selected-region race list beneath it. Scoped state or regional party views render the same race list without the national map. Hover summaries on the map show party presence and race counts.
 
-- a country map for countries with map support
-- a selected-state or selected-region race list beneath that map
+Each race card shows the race name, cycle, timing and phase context, assigned candidates, the assignment state, the election phase strip, and embedded primary or general results when available. That embedded status data comes from the same shared election display pipeline used on the state and election pages, so Slate does not keep its own election-summary model.
 
-Scoped state or regional party views can render the same race list without the
-national map.
+## Rules
 
-## State / Region View
+| Rule | Value | Source |
+| --- | --- | --- |
+| NPP loyalty needed to be Slate-compliant | 40 or more | `SLATE_NPP_LOYALTY_THRESHOLD` in `src/lib/slateAssignments.ts` |
+| NPP stubbornness allowed to be Slate-compliant | 70 or less | `SLATE_NPP_STUBBORNNESS_THRESHOLD` in `src/lib/slateAssignments.ts` |
+| Missing loyalty or stubbornness | treated as 50 | `src/lib/slateAssignments.ts` |
+| State or regional leadership bonus | loyalty requirement minus 5, stubbornness ceiling plus 5 | `STATE_SLATE_ASSIGNMENT_BONUS` in `src/lib/slateAuthority.ts` |
+| Candidates one party may hold on one race | 3, players and NPPs sharing the same pool | `SLATE_ASSIGNMENT_CAP` in `src/lib/slateAssignmentCap.ts` |
+| Statuses that hold a slot | `invited`, `considering`, `accepted`, `filed` | `src/lib/slateAssignmentCap.ts` |
+| Fit score shown to the chair | `round((loyalty * 0.65 + (100 - stubbornness) * 0.35) * 10) / 10` | `computeSlateAssignmentScore` in `src/lib/slateAssignments.ts` |
+| Incumbent fit score floor | 80 | `decideNPPSlateResponse` in `src/lib/turn/npp/slateResponse.ts` |
+| Player assignment fit score | 100 | `buildCharacterSlateCandidate` in the invitations route |
 
-Each state or region can be selected from the map. Once selected, Slate shows
-every currently relevant race in that geography.
+### Compliance formula
 
-The map is meant to answer:
+An NPP is Slate-compliant when, with the assigner's bonus applied:
 
-- where the party has player or NPP presence
-- which places currently have active Slate-relevant races
-- where leadership should click to manage assignments
+```
+loyalty >= 40 - loyaltyRequirementReduction
+stubbornness <= 70 + stubbornnessAllowanceBonus
+```
 
-Current hover summaries focus on party presence and race counts rather than old
-priority color signals.
+The bonus is 5 and 5 when the assigner is a `State / Regional Party Chair` or `State / Regional Party Vice Chair` for the race's own state. National chairs and vice chairs, and admins, get 0 and 0 (`getSlateAcceptanceStatBonus` in `src/lib/slateAuthority.ts`). The same thresholds match the discipline-watch mental model.
 
-## Race Cards
+Worked example. An NPP has loyalty 37 and stubbornness 72.
+- National chair assigns: needs loyalty 40 or more and stubbornness 70 or less. Fails both. The chip shows `Likely to Decline`.
+- State chair assigns: needs loyalty 35 or more and stubbornness 75 or less. Passes both. The chip shows `Likely to Accept`, and the NPP files next turn.
+- An NPP with loyalty 34 fails even under the state bonus.
 
-Each Slate race card currently includes:
+### Assignment authority
 
-- race name
-- cycle / timing / phase context
-- assigned candidates
-- current assignment state
-- integrated election phase strip
-- embedded primary or general results when available
+`resolveSlateAuthority` (`src/lib/slateAuthority.ts`) lets these roles manage Slate rows:
 
-That embedded status data is intentionally sourced from the same shared election
-display pipeline used on the state and election pages, so Slate does not invent
-its own election-summary model.
+- `National Party Chair` and `National Party Vice Chair`, read from `party.chairId` and `party.viceChairId`
+- `State / Regional Party Chair` and `State / Regional Party Vice Chair` for races in their own state, read from the `statePartyOrg` document for that state
+- admin override (no bonus, no role label)
 
-## Assignment Authority
+Everyone else can view but not modify. The national page and the scoped page write the same underlying Slate rows, so assignments and notes stay in sync. Authority checks the seat holder directly, so the acting-chair inheritance in [party-leadership-authority.md](./party-leadership-authority.md) does not apply here. A party whose chair seat is vacant has no national Slate manager unless the vice-chair seat is filled, because the vice-chair is a named role in its own right.
 
-National and scoped state or regional party leadership can manage Slate assignments:
+For NPP assignments the route also requires party NPP control (`getPartyNppControlStatus`), and returns 403 with the control error otherwise.
 
-- `National Party Chair`
-- `National Party Vice Chair`
-- `State / Regional Party Chair` for races in that state or region
-- `State / Regional Party Vice Chair` for races in that state or region
-- admin override
+### Player assignments
 
-Other players may still view Slate, but they cannot modify assignments.
+When a player is assigned, the row is written as `accepted` immediately with fit score 100, the assignment appears on the board, and the player gets an in-game notification naming the assigner and, when applicable, their role label. A player must live in the race's state, belong to the party and not already be filed in another race this cycle; otherwise the route returns 400 or 409.
 
-Both the national page and the scoped state or regional page write into the same
-underlying Slate rows, so assignments and notes stay synchronized across both
-surfaces.
+Slate does not auto-file players. The turn filing pass only handles `candidateType: "npp"` rows (`fileAcceptedSlateRows`), so the player still has to enter the race through the election flow. If they never do, the row simply stays `accepted` and keeps holding one of the three slots.
 
-## Candidate Types
+### NPP assignments
 
-Slate supports assigning:
+NPP behaviour is relationship-free and fully deterministic (`decideNPPSlateResponse`, `src/lib/turn/npp/slateResponse.ts`). Order of checks:
 
-- player characters
-- same-party NPPs
+1. Retired NPP: declined, reason `retired`.
+2. Election cooldown still running for this NPP: declined, reason `cooldown`.
+3. Incumbent holding the seat: accepted, fit score at least 80.
+4. Not Slate-compliant: declined, reason `low_compliance`.
+5. Otherwise accepted.
 
-Assignments are specific to a race and geography.
+There is no randomness, so the pre-turn chip is exactly what the turn produces.
 
-## Player Assignments
+Before turn resolution Slate shows `Likely to Accept` or `Likely to Decline`, a forward-looking signal. After the turn, an NPP that enters the race shows `Accepted` (and later `Filed`), and one that fails shows `Declined`.
 
-When a player is assigned through Slate:
+### Statuses
 
-- the assignment appears on the board immediately
-- the player receives an in-game notification
-- the notification identifies the assigner and, when applicable, whether they
-  are the `National Party Chair`, `National Party Vice Chair`, `State Party Chair`,
-  or `State Party Vice Chair`
+`invited`, `accepted`, `declined`, `withdrawn`, `filed` (type in `src/lib/db/types/recruitmentSlate.ts`). `considering` is deprecated legacy: the resolver no longer produces it, but `processSlateResponses` still reads any pre-existing `considering` row and resolves it to `accepted` or `declined`. Declined and withdrawn rows release their slot. Refusal reasons include `low_compliance`, `retired`, `cooldown`, `in_other_race`, `ineligible_region` and `slate_full`; `low_relationship`, `low_ambition` and `race_priority_mismatch` remain in the type for old rows.
 
-Slate itself does not auto-file the player into the race. The player still has
-to enter the race through the election flow.
+### Persistence
 
-## NPP Assignments
+Assignments stay on the board across turns, after election processing and into the next race cycle. `syncPersistentSlateAssignments` hydrates an empty race from the latest slate for the same country, party, state and election type, skipping pairs that cannot have a template. They change only when leadership updates or withdraws them, or when a candidate files.
 
-NPP Slate behavior is relationship-free and instead uses discipline/compliance
-stats.
+### Same-state movement
 
-### Compliance Rule
+Assigning a candidate to a new same-state race tombstones their other same-state rows as `withdrawn` (ticket #906). For a compliant NPP, `reconcileSlateMoves` and the filing pass can withdraw them from the old race and file them into the target. A compliant slated NPP is not auto-picked into other races or auto-defended into an incumbent seat the chair has moved them off (`slateSuppressesAutoPick`, `slateSuppressesIncumbentDefense` in `src/lib/turn/npp/slateOverride.ts`). Non-compliant NPPs keep their autonomous behaviour. If another same-party candidate is already in the target race, the Slate NPP still joins and creates a contested primary rather than replacing the existing entrant.
 
-An NPP is considered Slate-compliant when:
+### Withdrawing
 
-- `loyalty >= 40`
-- `stubbornness <= 70`
+Withdrawing removes the candidate from the slot rather than leaving a placeholder. A candidate withdrawn from one same-state race is free to be assigned to another.
 
-This threshold intentionally matches the current discipline-watch mental model.
+## Timing
 
-### State / Regional Leadership Bonus
+The Slate runs inside the NPP behaviour phase (`src/lib/turn/nppBehavior.ts`), in this order each turn:
 
-When a `State / Regional Party Chair` or `State / Regional Party Vice Chair`
-issues the Slate assignment for a race in their own geography, the assigned NPP
-gets a hidden compliance bonus:
+1. NPP mortality.
+2. Load NPP context.
+3. `syncPersistentSlateAssignments`: carry prior-cycle assignments into empty races.
+4. `processSlateResponses`: resolve every `invited` or `considering` NPP row to `accepted` or `declined`.
+5. `processElectionEntry` (`src/lib/turn/npp/electionEntry.ts`): incumbent defenders re-file first, then `trimOverCapSlates`, then `fileAcceptedSlateRows` (Phase 1a), then the generic party-pool fallback.
+6. Endorsements and bill voting.
 
-- effective `loyalty` requirement reduced by `5`
-- effective `stubbornness` ceiling increased by `5`
+Responses run before entry so accepted rows are ready to file in the same turn. Slate challengers file after incumbents, so they can still create a same-party primary against the sitting NPP. Both passes are idempotent. Assignments by a chair resolve on the next turn, never immediately.
 
-This bonus only applies to assignments made by scoped state or regional party
-leadership. National leadership uses the baseline thresholds above.
+## Edge cases and limits
 
-### Acceptance Signal
-
-Before turn resolution, Slate shows a prediction chip:
-
-- `Likely to Accept`
-- `Likely to Decline`
-
-This is a forward-looking signal, not a resolved state.
-
-### Resolved State
-
-After turn processing:
-
-- if the NPP actually enters the race, the chip becomes `Accepted`
-- if the NPP fails to enter, the chip becomes `Declined`
-
-That avoids showing resolved acceptance too early.
-
-## Persistence
-
-Slate assignments are intentionally persistent.
-
-Assignments remain on the board:
-
-- across turns
-- after election processing
-- into the next race cycle
-
-They only change when party leadership manually updates or withdraws them, or
-when a candidate actually files / resolves into a more specific state like
-`Filed`.
-
-## Same-State Candidate Movement
-
-Slate is designed to support moving a candidate between races in the same state.
-
-When leadership assigns a candidate to a new same-state race:
-
-- older same-state Slate rows for that candidate are removed
-- the new assignment becomes the current intended race
-
-For compliant NPPs, the next turn can:
-
-- withdraw them from an old active race if necessary
-- file them into the newly assigned target race
-
-If another same-party candidate already exists in that target race, the Slate
-NPP can still join and create a contested primary rather than forcibly replacing
-the existing entrant.
-
-## Statuses
-
-Slate currently uses statuses such as:
-
-- `invited`
-- `accepted`
-- `declined`
-- `withdrawn`
-- `filed`
-
-> `considering` is a deprecated legacy status. The NPP resolver no longer
-> produces it (NPP responses are binary on compliance); the turn pass still
-> re-evaluates any pre-existing `considering` rows so they resolve to
-> `accepted` / `declined` by compliance.
-
-### Pending vs Resolved
-
-Fresh assignments should not immediately present themselves as fully resolved.
-
-The important player-facing distinction is:
-
-- pending assignment / pre-turn prediction
-- filed or declined after actual turn resolution
-
-## Withdrawing from Slate
-
-Withdrawing a candidate from Slate is intended to remove that candidate from the
-Slate slot rather than leaving behind a stale placeholder row.
-
-If a candidate is withdrawn from one same-state race, they can then become
-available again for another race in that state.
-
-## Election Display Integration
-
-Slate cards now embed:
-
-- election phase status
-- `Primary Results` when a race is in or coming out of primary
-- `General Results` once the race is in general
-
-This is meant to make Slate a planning tool that still reflects the live state
-of the election calendar without forcing leadership to leave the page.
-
-## Design Intent
-
-Slate is meant to function as the party's campaign bench-management board.
-
-It should help answer:
-
-- which races need a candidate
-- who leadership wants in each race
-- whether an NPP is likely to cooperate
-- what the race already looks like in primary/general terms
-
-It is not meant to replace candidate filing, election pages, or direct player
-campaign choices. It is a coordination layer above those systems.
-
-## Related Docs
-
-- [party-building.md](./party-building.md)
-- [party-influence.md](./party-influence.md)
-- [elections.md](./elections.md)
+- **Cap of 3 per party per race.** The route rejects a fourth with a 409 ("This race already has 3 assigned candidates"). A player who filed their own candidacy does not spend a slot; an active NPP candidacy without a slate row does. If a race is already over the cap, `trimOverCapSlates` withdraws the extras, keeping defending incumbents first, then ballot position by how long they have stood, then oldest invitation. Overflow at filing is marked `slate_full`.
+- **Slate locks** when the race is not `upcoming` or `active`, or when the primary has closed. Assigning after the primary would otherwise file straight into the general (409).
+- **Already filed.** A `filed` row cannot be reassigned; an existing live row returns "already on the slate".
+- **Incumbents always accept** to defend their seat.
+- **Retired and cooldown NPPs** always decline regardless of stats.
+- **Presidential races** are excluded; they use the regular election flow.
+- **Losing the chair seat** does not delete existing rows, because assignments persist until someone with authority changes them. The new holder inherits the board.
+- **Worlds without player chairs** behave as if the Slate did not exist: no chair-managed slate means no override, and the sync short-circuits.
+
+## Connections
+
+**Driven by**
+- [Parties](./parties.md) and [party-building.md](./party-building.md): chair and vice-chair seats, and state party org leadership, decide who can assign (`resolveSlateAuthority`).
+- [NPP system](./npp-system.md): loyalty and stubbornness personality traits decide acceptance (`isNppSlateCompliant`).
+- [Elections](./elections.md): open primaries and their phase decide which races appear and when the board locks (`isPrimaryClosed`).
+
+**Affects**
+- [Elections](./elections.md): accepted NPP rows become `ElectionCandidate` entries during `processElectionEntry`, creating or contesting primaries.
+- Player notifications: assigning a player writes a notification (`notifyAssignedPlayer`).
+- [Party influence](./party-influence.md): none directly. Slate is a coordination layer and does not spend influence.
+
+## Design intent
+
+Slate is the party's campaign bench-management board. It answers which races need a candidate, who leadership wants in each, whether an NPP is likely to cooperate, and what the race already looks like. It does not replace candidate filing, election pages or direct player campaign choices.
+
+Last checked: 2026-10-29, version 1.18.0

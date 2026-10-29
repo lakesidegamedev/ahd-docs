@@ -2,6 +2,8 @@
 
 Extractable resources model sovereign ownership of natural wealth. States hold an extraction capacity ceiling (a daily basis, not a fixed per-turn amount); corporations can hold exclusive contracts granting them a share of that capacity. Uncontracted capacity flows freely to all extraction sectors in the state.
 
+Player guides: [Resources](https://www.ahousedividedgame.com/wiki/resources-overview) and [Extraction Contracts](https://www.ahousedividedgame.com/wiki/extraction-contracts).
+
 ## Extractable Resources
 
 Six resources can be extracted, defined by `EXTRACTABLE_RESOURCES` in `src/lib/constants/commodities.ts`:
@@ -140,9 +142,56 @@ If the new contract would over-allocate and `force` is false, the server returns
 - `src/app/api/contracts/extraction/[id]/route.ts`: DELETE
 - `src/components/congress/GrantContractModal.tsx`: Grant form (over-allocation confirmation flow)
 - `src/components/state/StatePageTabsResources.tsx`: State resources UI with admin grant/revoke
-- `scripts/seeds/stateResourceCapacity.ts`: CLI wrapper for the capacity seed; data lives in `src/lib/seeds/reference/stateResourceCapacity.ts` (191 state entries across 18 countries; unlisted states default to zero capacity for every resource)
+- `scripts/seeds/stateResourceCapacity.ts`: CLI wrapper for the capacity seed; data lives in `src/lib/seeds/reference/stateResourceCapacity.ts` (unlisted states default to zero capacity for every resource)
+
+## Rules and constants
+
+| Constant | Value | Source |
+| --- | --- | --- |
+| `GOVT_CONTRACT_MAX_TOTAL_SHARE` | 0.75 (total of offered plus active contract share per state and resource) | `src/lib/constants/prospecting.ts` |
+| `CONTRACT_SHARE_MIN` | 0.01 | `src/lib/constants/prospecting.ts` |
+| `CONTRACT_SHARE_MAX` | 0.75 | `src/lib/constants/prospecting.ts` |
+| `CONTRACT_ROYALTY_RATE_MIN` / `MAX` | 0 / 0.02 (fraction of contracted capacity market value per turn) | `src/lib/constants/prospecting.ts` |
+| `CONTRACT_TERM_TURNS_MIN` / `MAX` | 24 / 480 turns | `src/lib/constants/prospecting.ts` |
+| `CONTRACT_OFFER_EXPIRY_TURNS` | 24 turns | `src/lib/constants/prospecting.ts` |
+| `CONTRACT_DEFAULT_MISSED_PAYMENTS` | 3 missed royalty payments trigger default | `src/lib/constants/prospecting.ts` |
+| `PROSPECT_DURATION_TURNS` | 6 | `src/lib/constants/prospecting.ts` |
+| `PROSPECT_YIELD_MIN` / `MAX` | 0.03 / 0.08 of current capacity | `src/lib/constants/prospecting.ts` |
+| `PROSPECT_MAX_GAIN_FRACTION` | 0.2 of current capacity per survey | `src/lib/constants/prospecting.ts` |
+| `PROSPECT_MAX_ACTIVE_PER_INITIATOR` | 6 | `src/lib/constants/prospecting.ts` |
+| Extractable resources | 6 | `EXTRACTABLE_RESOURCES`, `src/lib/constants/commodities.ts` |
+| Commodity types tracked | 27 | `COMMODITY_TYPES`, `src/lib/constants/commoditiesCore.ts` |
+
+Prospecting surveys (`src/lib/extraction/commands/launchCorpProspect.ts`, `launchGovernmentProspect.ts`) are how capacity grows beyond the seed and R&D; the 75% total-share ceiling exists so open-access extractors are never fully crowded out. Worked example: a state with 300,000 bbl of oil capacity and one contract at share 0.5 holds 150,000 bbl for the contract holder and leaves an open pool of 150,000 bbl. If open-access demand is 200,000 bbl the open sectors are squeezed to a multiplier of 0.75.
+
+## Timing
+
+Extraction caps are applied in the `commodityPrices` phase (`processCommodityPriceTurn`, `src/lib/turn/commodityPriceTurn.ts`, registered in `src/simulation/phases/turnPhaseRegistry.ts`). Contracts are read at the start of that phase, so a contract granted or revoked during turn N is effective in turn N+1. The multipliers feed `computeRawSupplyDemand`, which produces the supply side of that turn's commodity price update. Offer expiry, royalty payment and default are handled by the extraction commands (`src/lib/extraction/commands/`), outside the price pass.
+
+## Edge cases and limits
+
+- **No capacity document.** The compatibility fallback is multiplier 1 (uncapped). A seeded state with an empty `resources` map has capacity 0 and cannot extract.
+- **Over-allocation.** Only the admin direct-grant path can exceed 100%; the open pool then reads 0 and uncontracted sectors produce nothing for that resource. Player offers cannot exceed the 75% ceiling.
+- **Output below cap.** A contract holder producing less than `totalCapacity x share` has multiplier 1.
+- **Revoked contracts.** Soft deleted, excluded from all queries; share returns to the open pool next turn.
+- **Non-extraction sectors and non-extractable commodities** are never touched by the multipliers.
+- **R&D growth.** Capacity increases only for states that already have a capacity document.
+- **Unit basis.** Capacity is documented on a daily basis like `sector.revenue`; the seed file header describes the same figure as a per-turn ceiling. The code path was not traced to settle which; treat the daily reading as the engine's convention.
+
+## Connections
+
+**Driven by**
+- [Corporations](./corporations.md): extraction sector output and R&D breakthroughs raise state capacity (`$inc` on `stateResourceCapacity`).
+- [Bills & Legislation](./bills-legislation.md) and congress contract tabs: government contract offers (`src/lib/extraction/commands/issueContractOffer.ts`).
+
+**Affects**
+- [Commodities](./commodities.md): capped supply feeds the global price update (`src/lib/turn/commodityPriceTurn.ts`).
+- [Corporations](./corporations.md): royalties are paid to the issuer and count as `revenue.resourceRoyalties` (`acceptContractOffer.ts`).
+- [Subsidies](./subsidies.md) and [Tariffs](./tariffs.md): sibling resource-sector levers.
 
 ## Related Systems
 
 - [Commodities](./commodities.md): Pricing engine that consumes extraction output
 - [Corporations](./corporations.md): Sectors that produce commodity supply; extraction sectors are the direct consumers of contracts
+
+Last checked: 2026-10-29, version 1.18.0

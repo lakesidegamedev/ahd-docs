@@ -9,6 +9,8 @@ and build a more disciplined internal faction without creating a separate party.
 They are a **national-party-only** feature. State and regional party chapters do
 not own caucuses.
 
+Player guide: [Caucuses](https://www.ahousedividedgame.com/wiki/caucuses)
+
 ## Core Structure
 
 Each caucus has:
@@ -20,12 +22,31 @@ Each caucus has:
 - a `Chair`
 - a `Vice Chair`
 - a caucus `treasury`
-- a caucus `Tax` rate from `0%` to `5%`
+- a caucus `Tax` rate from `0%` to `5%` (`taxRate`, validated `min(0).max(5)` in the caucus routes under `src/app/api/country/[code]/parties/[id]/caucuses/`)
 - a roster of player and NPP members
 - a set of caucus policy positions
 
 The current player-facing surface lives inside the national party page under the
 `Caucuses` tab.
+
+## Rules and constants
+
+| Rule | Value | Source |
+| --- | --- | --- |
+| Min chair-NPP relationship to recruit | 60 (`CAUCUS_NPP_RECRUIT_MIN_RELATIONSHIP`) | `src/lib/constants/partyOrg.ts` |
+| Recruit cooldown, caucus-wide | 12 turns (`CAUCUS_NPP_RECRUIT_COOLDOWN_TURNS`); wall-clock fallback `CAUCUS_NPP_RECRUIT_COOLDOWN_MS` = 12 hours for memberships without a `joinedAtTurn` | `src/lib/constants/partyOrg.ts` |
+| Min chair-NPP relationship to stay | 20 (`CAUCUS_NPP_RETENTION_MIN_RELATIONSHIP`) | `src/lib/constants/partyOrg.ts` |
+| Relationship decay | 0.1 per turn toward 0 (`NPP_RELATIONSHIP_DECAY_PER_TURN`), rounded to one decimal | `src/lib/constants/partyOrg.ts`, `src/lib/turn/partyOrg/caucusRelationshipMaintenance.ts` |
+| Tax rate | 0 to 5 percent of each active member's per-turn campaign-fund income, rounded down | `src/lib/turn/caucusTax.ts` |
+| Health recent window | 12 turns (`CAUCUS_RECENT_WINDOW_TURNS`) | `src/lib/caucus/caucusHealth.ts` |
+| At-risk warning buffer | 10 above the retention floor, so under 30 (`CAUCUS_WARNING_BUFFER`) | `src/lib/caucus/caucusHealth.ts` |
+| Exit risk labels | Critical below 20, Elevated below 25, Watch from 25 to under 30 | `classifyExitRisk` in `src/lib/caucus/caucusHealth.ts` |
+| Chair election length | Same as the national party election, `NATIONAL_ELECTION_DURATION_TURNS` = 72 turns, when no national election exists to copy | `src/lib/nationalPartyElectionConstants.ts`, `src/lib/caucusChairElections.ts` |
+| Name | 2 to 80 characters | caucus routes |
+| Description | up to 500 characters | caucus routes |
+| Motto | up to 120 characters | caucus routes |
+| Colour | `#RRGGBB` hex | caucus routes |
+| Caucuses per member | 1 (one active caucus per player or NPP) | `members/route.ts` under the caucus routes |
 
 ## Sub-Tabs
 
@@ -201,6 +222,43 @@ Caucuses can define internal policy positions. These positions are intended to
 signal what the caucus stands for inside the party and help support factional
 identity beyond simple membership.
 
+## Timing
+
+- **`caucusTax` phase** runs in the party-and-treasury block of the turn (`src/simulation/phases/turnPhaseRegistry.ts`) alongside `treasuryTurn`, and must not overlap NPP fund generation because both increment NPP funds. Each active caucus with a positive `taxRate` taxes every active player and NPP member once per turn.
+- **`nppRelationshipMaintenance` phase** runs later in the same turn, after `emptyPartyCleanup` and `coalitionDisbandVotes` and before NPP behavior. It first decays every stored NPP-to-character relationship, then removes active NPP caucus members whose decayed score with the current Chair is under 20. Order matters: the retention check uses the already-decayed score, not last turn's.
+- **Chair elections** are created on the party's national leadership schedule, so a caucus Chair race opens and closes with the national Chair race for the same party and country.
+- **Health labels** are not stored. They are computed when the page or analytics tab is read, from memberships, whip defiance and elections.
+
+## Edge cases and limits
+
+- A missing relationship record counts as 0, below the retention floor, so a neglected NPP link dissolves on the next maintenance pass.
+- When a member leaves, is banned, or is deleted, `cleanupCaucusParticipationForCharacters` withdraws their candidacy, deletes their votes, closes their membership and clears any Chair or Vice Chair seat they held. The caucus then reads as Fragile (vacant Chair).
+- Retention follows the current Chair. A new Chair inherits the NPP members but their relationship is measured against the new Chair, so a Chair change can trigger exits.
+- Members who cannot afford their tax that turn are skipped and the treasury is not credited for them, so no member is pushed into negative funds.
+- The 12-turn cooldown is per caucus, not per NPP, and freezes when the game is paused (turn-based, with the millisecond value only a fallback).
+- NPPs never run or vote in Chair elections. Ties go to the earliest declaration.
+- The 60 versus 20 gap is deliberate: recruiting is hard, keeping is easy, so one big meeting does not lock in a bloc, but regular upkeep does.
+- Health precedence, first match wins: Fragile for vacant Chair, any Critical NPP, any forced exit in the last 12 turns, or 3 or more active whip defiance cases; Strained for any at-risk NPP, any voluntary leave in the window, any defiance case, or an election in progress; otherwise Healthy.
+
+### Worked example
+
+An NPP recruited at relationship 70 loses 0.1 per turn with no top-up. It enters the at-risk list as Watch just under 30 (turn 400), becomes Elevated below 25 (turn 450), Critical below 20 (turn 500), and exits on the first maintenance pass where the score is under 20 (turn 501). Any gain from relationship-building actions pushes that clock back by 10 turns per point.
+
+## Connections
+
+Driven by:
+- Party membership and the national party Chair schedule (`src/lib/caucusChairElections.ts`).
+- NPP relationship scores, which are raised by player relationship actions (see `src/lib/capital/actions.ts`) and decay in `caucusRelationshipMaintenance.ts`. See [party-influence.md](./party-influence.md).
+- Member campaign-fund income (`projectCharacterGeneration` and `projectNppGeneration` in `src/lib/utils/fundGeneration.ts`), the base the tax applies to.
+- Whip defiance snapshots (`buildWhipDefianceSnapshots` in `src/lib/partyWhips/whipDefiance.ts`), see [party-whips.md](./party-whips.md).
+
+Affects:
+- Caucus treasury and the parent party treasury through `emitTreasuryTransaction` audit rows (sends and transfers).
+- NPP `factionId`, which other NPP systems read (Slate leverage, NPP behavior).
+- Party analytics `Caucus Health` summary (`src/lib/parties/queries/analytics.ts`).
+- Caucus whips on bills and leadership votes for members only.
+- Member divergence scoring in one-party states: a member's score takes `CAUCUS_COHESION_WEIGHT` = 0.6 from their caucus (`src/lib/onePartyState/factionDivergence.ts`).
+
 ## Design Intent
 
 Caucuses are meant to create:
@@ -218,3 +276,5 @@ separate ballot lines or separate election parties.
 - [party-building.md](./party-building.md)
 - [party-whips.md](./party-whips.md)
 - [party-influence.md](./party-influence.md)
+
+Last checked: 2026-10-29, version 1.18.0

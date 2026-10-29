@@ -1,5 +1,7 @@
 # UK + JP Devolved Executives - Design & Phased Plan
 
+Historical record: this page describes the phased plan for UK and JP devolved executives, as of the rollout of the regional executive offices. For current behaviour see [United Kingdom](./united-kingdom.md) and [UK Elections](./uk-elections.md).
+
 **Status:** Historical implementation plan; the regional executive offices and
 election wiring described here have shipped. Do not treat unresolved questions
 or phase checklists below as current behavior.
