@@ -13,11 +13,15 @@ Margin of Victory was called Electioneer before September 2026. The old web addr
 - **Handle events.** Scandals, debates, breaking news and historical moments arrive each week. Some need an answer; others just happen to you.
 - **Beat the opponent.** An AI campaign plays against you with the same tools, paces its money and goes negative when it falls behind.
 
+![The main campaign screen in the 2024 campaign: the electoral map, the electoral vote bar and resources in the header, and the action panel.](images/overview-main-screen.png)
+
 Every game uses a seed, so the same seed and the same choices replay the same campaign. That is what makes the daily challenge fair: everyone plays the same election on the same seed.
 
 ## A week at a glance
 
 A standard campaign is 9 weeks. Every week follows the same loop:
+
+![Diagram of the weekly loop: read, plan, end the turn and review, repeated for 9 weeks, then the count and score.](images/overview-weekly-loop.svg)
 
 1. **Read.** Check the map, the electoral vote bar and the trends screen.
 2. **Plan.** Queue up to 3 actions a day across 7 days, from a weekly pool set by your candidate and difficulty (11 for Biden on Normal in 2020).

@@ -8,6 +8,8 @@ This page describes the US campaign. Other countries use the same weekly loop wi
 
 A standard campaign is 9 weeks. The setup wizard also offers a short 5 week sprint and a long 14 week race. Only the standard length counts for the leaderboard. Each turn has four parts:
 
+![Diagram of the weekly loop: your plan, the opponent, events, then resolution, repeating each week until Election Day and then the result. Week 1 has no events.](images/the-campaign-week-loop.svg)
+
 1. **Your plan.** Queue actions across the seven days of the week. You can undo anything before you end the turn. The first week has no events, so you can read the map and plan in peace.
 2. **The opponent.** The AI campaign acts according to the difficulty: where it targets, how much it spends and how often it makes a mistake.
 3. **Events.** Scheduled and random events arrive. Some ask you to decide; others apply on their own. Any event you leave unanswered is resolved for you with a sensible default when you end the turn.
@@ -27,6 +29,10 @@ A standard campaign is 9 weeks. The setup wizard also offers a short 5 week spri
 | Staff capacity | 6 | Only field offices use it. Never refills |
 | Momentum fade | National keeps 75% a week, state keeps 70% | Can turn negative |
 
+![Line chart of momentum falling from 100 over 8 weeks: national momentum keeps 75% each week and state momentum keeps 70%.](images/the-campaign-week-momentum-fade.svg)
+
+*State momentum fades slightly faster than national momentum.*
+
 ### Plan bonuses
 
 Actions resolve in order from day 1 to day 7, so order matters. A rally before advertising in the same state gives the ads +20%, field offices before get-out-the-vote in the same state give the push +25%, policy prep before an issue pitch or issue ad gives +20%, and opposition research before contrast ads gives +25%. The full rules are on [Campaign actions](campaign-actions.md).
@@ -41,6 +47,12 @@ Cash you plan to spend is reserved the moment you queue the action. You cannot q
 - **Plan on the day strip.** Each day shows up to three slots. When you reach the pool limit, the plus buttons stop working.
 - **Undo freely.** Remove any queued action before you end the turn. Nothing is spent until resolution.
 - **Read the week-in-review.** It lists your projected electoral votes before and after, your cash change and each action's effect, with the opponent's moves and events listed after yours.
+
+![The week plan panel in the 2020 campaign on Normal with three actions queued on day 2, the per day cap, and the cash and actions counters at the top.](images/the-campaign-week-day-cap.png)
+
+*Three actions on one day is the cap. The plus button on that day is dimmed.*
+
+![The Week in review panel after a week resolves, showing projected electoral votes before and after, the cash change, each action's effect and the plan bonus line.](images/the-campaign-week-review.png)
 
 Tips: put setup actions on days 1 to 3 and payoffs on days 4 to 7. Do not leave slots empty early in the campaign, because unused slots do not carry over. Keep some cash back for the final weeks, because the opponent also spends more as election day nears.
 

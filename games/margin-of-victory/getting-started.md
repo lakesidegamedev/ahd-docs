@@ -16,6 +16,8 @@ The product page is https://lakesidegames.net/margin-of-victory/. Native phone a
 - **Supporter+ and Supporter++:** [plans](https://lakesidegames.net/store/#supporter-plans) that include the Complete Collection while they are active. Sign in with the same Lakeside account in the game.
 - **Earlier purchases:** bundles or codes you already have stay yours and keep working.
 
+![The Unlock this election dialog for a locked election, with buy options, the sign in prompt for redeeming a code and the full bundle list.](images/getting-started-locked-election.png)
+
 You never need to pay to play the free elections. A locked election shows an Unlock prompt where you can buy it, sign in or redeem a code. Purchases follow your Lakeside account across devices. Store: https://lakesidegames.net/store/. See [Elections](elections.md) for the full list.
 
 ## Your first campaign
@@ -24,6 +26,12 @@ You never need to pay to play the free elections. A locked election shows an Unl
 2. Choose your side, running mate, difficulty, event mode and campaign length in the setup wizard.
 3. Follow the first-launch tutorial. It walks through one week of planning.
 4. Plan your week, end the turn, and read the week-in-review to see what moved and why.
+
+![The Ticket step of the setup wizard with Joe Biden selected and Kamala Harris as running mate.](images/getting-started-ticket.png)
+
+![The Briefing step of the setup wizard with event mode, difficulty and campaign length options and the Begin button.](images/getting-started-setup-briefing.png)
+
+![The first week planning screen with the tutorial overlay open on its first step.](images/getting-started-tutorial.png)
 
 ### Choosing a difficulty
 
