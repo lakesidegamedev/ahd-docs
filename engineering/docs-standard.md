@@ -18,7 +18,7 @@ Not every page is a mechanic page. The audit applies the full checklist only to 
 | Type | Examples | Rules that apply |
 | --- | --- | --- |
 | Mechanic | Labour, Freight, War, Polls and scoring | Everything below |
-| Guide | Getting started, first campaign walkthrough | Hard rules, accuracy, links |
+| Guide | Getting started, first campaign walkthrough | Hard rules, accuracy, links, quality and visuals |
 | Reference | Glossary, country hubs, scenario lists | Hard rules, accuracy, links |
 | History | Changelogs, beta and iteration notes | Hard rules only |
 
@@ -43,6 +43,31 @@ Sections in this order, with these headings or close equivalents.
 4. **Edge cases and limits.** Caps, floors, clamps, what happens at zero, and what is deliberately excluded and why.
 5. **Connections.** The same two lists as the player page, naming the code path where the effect passes between systems.
 6. **Last checked** line, as above.
+
+## Quality and depth
+
+A page can have every section and still be thin. These rules are about whether a player finishes the page able to make a good decision.
+
+- **Complete.** Covers every decision the system offers the player, including the edge cases players actually hit (what happens at zero, at the cap, when you lose office, when the country changes era), not only the happy path.
+- **Worked example.** At least one concrete example with real numbers: "a sector at wage level 1.2 in a state with median income X pays Y and gains Z workers over N turns".
+- **Answers real questions.** The questions players ask most about this mechanic in support tickets and community channels are answered on the page. If a question keeps coming up, the page is missing something.
+- **Explains why.** Says what the rule is for, the way Grand Century's war page explains why combat width exists. A player who knows the reason can predict edge cases the page does not list.
+- **Readable.** Plain words. Jargon is defined or linked to the glossary the first time it appears. No paragraph runs past about 120 words; break it into steps, a list or a table.
+- **Right size.** Long enough to cover the above, no padding. A mechanic page under about 250 words is almost always too thin; one over about 2,000 words should probably be split.
+
+## Visuals
+
+Pictures carry what prose cannot. Each visual earns its place by answering a question faster than text would.
+
+| Visual | Required when | Rule |
+| --- | --- | --- |
+| **Screenshot** | The page tells a player to do something in the game's interface | Shows the screen where the action happens, cropped to the relevant panel, with no real player names or private data. Alt text says what it shows. Retaken when that screen changes. |
+| **Chart** | A value changes over a range or over time: decay, scaling with a stat, caps that bend, price curves, cooldown cycles | Generated from the game's constants by code, never drawn from hand-typed numbers, so it cannot drift from the game. Labelled axes with units. |
+| **Diagram** | The system has a multi-step flow, or three or more connections to other systems | Shows the flow or the Driven by and Affects links. In A House Divided, use or add a wiki widget (see `src/lib/wiki/componentRegistry.ts`) so the diagram renders in game. |
+
+Technical pages need a diagram when the system runs across more than one turn phase or more than two source files, showing the order things happen in.
+
+In A House Divided, screenshots live in `public/wiki-images/guides/` and are embedded with `![alt](/wiki-images/guides/<name>.png)`; charts and diagrams are wiki widgets. In the other games, images sit next to the page and charts are SVG files produced by a script in the game repo that reads the game's own constants.
 
 ## Hard rules (every page type)
 
@@ -83,6 +108,22 @@ The audit marks each check pass, fail or not applicable.
 | T6 | Every number on the player page also appears here with its source |
 | T7 | Has a Last checked date |
 
+### Quality and visuals
+
+| ID | Check |
+| --- | --- |
+| Q1 | Covers every player decision the system offers, including common edge cases |
+| Q2 | Has at least one worked example with real numbers |
+| Q3 | Answers the most common player questions about this mechanic |
+| Q4 | Explains why the rule exists, not only what it is |
+| Q5 | Readable: jargon defined or linked, no paragraph over about 120 words |
+| Q6 | Right size for the mechanic: not a stub, not a page that should be split |
+| Q7 | Has a screenshot wherever it tells the player to act in the interface |
+| Q8 | Has a constants-generated chart wherever a value changes over a range or time |
+| Q9 | Has a diagram for multi-step flows or three or more connections |
+
+Q1 to Q6 apply to mechanic and guide pages. Q7 to Q9 apply to player mechanic and guide pages; technical pages are checked for the phase-order diagram under T4.
+
 ### Hard rules
 
 | ID | Check |
@@ -108,7 +149,7 @@ Audit findings are ranked for fixing in this order.
 
 1. **Critical.** A wrong number or claim a player would act on, or anything failing R3.
 2. **High.** Stale behaviour, a mechanic with no player page, or a player page showing material players cannot act on (R2).
-3. **Medium.** Missing required sections, one-way connections, missing technical layer.
-4. **Low.** Style, dashes, missing Last checked line, broken non-critical links.
+3. **Medium.** Missing required sections, one-way connections, missing technical layer, a mechanic page that fails Q1 or Q2, or a missing chart or screenshot the page clearly needs.
+4. **Low.** Style, dashes, missing Last checked line, broken non-critical links, readability (Q5), and other missing visuals.
 
 Within a severity band, pages players visit most come first.
