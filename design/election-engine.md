@@ -47,7 +47,7 @@ for each demographic group:
     approval = approvalScalar(effectiveFavorability)
     org = isGeneralElection ? orgVoteWeight(partyOrgByParty, party) : 1
 
-    weight = appeal × reach × approval × org × nppPenalty
+    weight = appeal × reach × approval × org × nppPenalty × (further factors, see below)
 
   candidate's group votes = groupPool × (candidate's weight / total weight)
 ```
@@ -73,12 +73,14 @@ influenceScore = includeInfluenceInAppeal ? normalizeNPI(politicalInfluence) × 
 // passes includeInfluenceInAppeal = false, so influence is reach only. The term remains
 // in calcAppeal (default true) but is not used by the election engines.
 
-appeal = positionScore + directionBonus + influenceScore   // capped at MAX_APPEAL = 50
+appeal = positionScore + directionBonus + influenceScore   // not clamped
 ```
+
+`calcAppeal` does not clamp its result. With influence off (every live path) the highest possible appeal is 25.5 + 10 = 35.5. `MAX_APPEAL = 50` is a normaliser used by the poll and vote-potential estimators (`appeal / MAX_APPEAL`), not a cap.
 
 Constants in `src/lib/utils/demographicAppeal.ts`: `MAX_APPEAL = 50`, `APPEAL_POSITION_FLOOR = 0.5`, `APPEAL_POSITION_EXPONENT = 1.5`, `DIRECTION_BONUS_PER_AXIS = 5`. Reach is `normalizeNPI(x) = sqrt(clamp(x, 0, 100) / 100)` (`src/lib/utils/normalizeNPI.ts`), floored at `VOTE_REACH_FLOOR = sqrt(1/100) = 0.1` so a candidate at zero influence is a steep disadvantage rather than erased (`electionFormulaFactors.ts`).
 
-`useAveragedPositions` is a swing-flow-only option (`voteDistributionSwingFlow.ts`); the group-level allocation path (`voteDistribution.ts`) does not blend candidate and party positions.
+`useAveragedPositions` blends candidate and party positions (`(partyPositionWeight × party + candidate) / (partyPositionWeight + 1)`, skipped for independents). Both engines support it. Only the US presidential general turns it on (`partyPositionWeight = 1/3`, so 75% candidate and 25% party); state races and primaries pass it off. Both engines also pass the candidate's party position to `calcAppeal` for the party gate on the direction bonus.
 
 ### Effective favorability
 
@@ -103,9 +105,9 @@ orgVoteWeight = normalizedOrgShare ** ORG_WEIGHT_EXPONENT  // ORG_WEIGHT_EXPONEN
 org = 1  // uniform; intra-party Org cancels
 ```
 
-### Other swing-flow weight factors
+### Other weight factors
 
-The swing-flow per-group weight (`voteDistributionSwingFlow.ts`) multiplies several more factors on top of appeal, reach, approval and org. Each is neutral (1.0) when its input is absent.
+Both engines multiply several more factors on top of appeal, reach, approval and org. Each is neutral (1.0) when its input is absent. The personal org floor, personal-stat tenure erosion, coattails and the midterm opposition boost are swing-flow only. The group-level path (`voteDistribution.ts`) applies the rest, plus a per-party demographic favorability bonus, the one-party regime multiplier, UK manifesto popularity, targeted ad bonuses and, in primaries only, the party-fit penalty and presidential-primary regional and party-influence terms. In the group-level path registration and Support mood apply in general elections only.
 
 | Factor | Value | Source |
 | --- | --- | --- |
@@ -148,7 +150,7 @@ if (isGeneralElection && votingSystem !== "rcv" && !isOnePartyState):
 - `PRESIDENTIAL_SPOILER_RATE = 0.02` (half the state-level rate; applied only when passed explicitly via `spoilerRate`, which the presidential engine does)
 - Distance metric: `|EP_diff| + |SP_diff|` (Manhattan)
 
-**Exemptions:** RCV elections skip the spoiler step entirely. One-party states also skip it. The regime multiplier already encodes ruling-vs-approved dominance by an order of magnitude, and "third party bleeds the major" doesn't describe that regime type.
+**Exemptions:** RCV elections skip the spoiler step entirely. One-party states also skip it, on both engines (`shouldApplyFptpSpoiler`, `rules/spoilerTransfers.ts`). The one-party check reads the country's current government type from country state, so a country that leaves one-party rule mid-game picks up the spoiler step at once. The regime multiplier already encodes ruling-vs-approved dominance by an order of magnitude, and "third party bleeds the major" doesn't describe that regime type.
 
 ### Turn vote accumulation
 
@@ -195,6 +197,7 @@ effectiveTurnPool = capTurnSliceToRemainingElectorate(effectiveTurnPool, already
 - The registered-voter gate scales only the turn pool, never `totalPool`: the distributors normalise each group as `contribution / totalPool` and then multiply by the turn pool, so scaling both would cancel. Shares, seats and winners are unaffected, only magnitudes.
 - The cumulative ceiling means ballots already cast plus this slice never exceed the registered electorate. The approval multiplier sits outside the earlier caps, so this last cap is what keeps turnout at or under 100%.
 - A missing registration pool leaves the pool untouched (prior behaviour for most non-US worlds).
+- When demographics v2 builds a participation summary, the registered-voter gate is skipped there because the v2 electorate already counts only registered voters (`registeredShare`). The cumulative ceiling still applies.
 
 ### Dynamic turnout resolution
 
@@ -335,7 +338,7 @@ The election engine uses country-aware party lookups:
 majorPartySet = getMajorPartiesForRegion(countryId, parentRegionId);
 ```
 
-`getMajorPartiesForRegion()` has region-specific overrides (e.g. UK Scotland → SNP/Labour, UK Wales → Labour/Conservative, UK Northern Ireland → DUP/Sinn Féin, Japan Kansai → Ishin/LDP) and falls back to each country's configured `majorPartyIds` otherwise. There is no "CA" (Canada) country; the roster currently spans US, UK, JP, DE, DD, FR, IT, ES, SE, TR, AT, FI, GR, IE, CN, RU, PL, HU, RO, BG, YU, CS, NG, and BR.
+`getMajorPartiesForRegion()` has region-specific overrides (e.g. UK Scotland → SNP/Labour, UK Wales → Labour/Conservative, UK Northern Ireland → DUP/Sinn Féin, Japan Kansai → Ishin/LDP) and falls back to each country's configured `majorPartyIds` otherwise. There is no "CA" (Canada) country; the roster (`CountryId` in `src/lib/constants/countriesCore.ts`) currently spans US, UK, JP, DE, DD, FR, IT, ES, SE, TR, AT, FI, GR, IE, CN, RU, PL, HU, RO, BG, YU, CS, BLR (Belarus), UKR (Ukraine), BAL (Baltics), NG and BR, plus SCO and WAL as their own country entries.
 
 ### Constants and tunables
 
@@ -385,7 +388,7 @@ All defined in `src/lib/electionEngine/constants.ts` unless noted.
 | `electionVoteTallies` | `totalVotes`, `candidateNames`, `candidateParties`, `turnSnapshots`, `primaryVotes`, `finalized`, `totalVotesByUnit` (president) | `totalVotes`, `candidateNames`, `candidateParties`, `turnSnapshots[]` (each: `turn`, `slicePart`, `recordedAt`, `cumulativeVotes`, `sharesPct`, `seatsEstimate`, `participation`), `seatsEstimate`, `updatedAt`; resolution adds `resolutionPath`, `resolvedSeatHolders`, `resolvedTotalSeats`, `primaryResults` | Totals, shares and seat projections on election pages and the results board |
 | `elections` | `startTurn`, `endTurn`, `primaryEndTurn` (and Date twins), `electionType`, `countryId`, `state`, `cycle`, `allocationMethod`, `totalSeats` | none | Yes, race pages |
 | `electionCandidates` | `status`, `party`, `isNPP`, `characterId`, `nppId`, `seatsRequested` | none (withdrawal cleanup writes the tally) | Yes, candidate lists |
-| `characters`, `npps` | `favorability`, `politicalInfluence`, `nationalInfluence`, `infamy`, `economicPosition`, `socialPosition`, tenure | none | Stats shown on profiles |
+| `characters`, `npps` | `favorability`, `politicalInfluence`, `nationalInfluence`, `infamy`, `policies.economic`, `policies.social`, tenure | none | Stats shown on profiles |
 | `politicalParties` | `economicPosition`, `socialPosition`, `sequentialId`, `countryId` | none | Yes |
 | `states` | `population`, `votingEligiblePopulation`, `votingSystem`, lean | none | Partly |
 | `stateDemographics`, `demographicCategories`, `demographicDefaults` | group population, turnout, leans, `categoryWeights` | none | Partly (state pages) |
@@ -433,6 +436,7 @@ One turn is one real hour (48 turns = 1 game year). Election vote accumulation r
 7. electionResolution     - resolveGeneralElections()
 8. clearResolvedSupport   - processClearResolvedSupport()
 9. leadershipVacate       - vacateLeadershipAfterElections() (only if generals resolved this turn)
+10. huAssemblyReform      - runHuAssemblyReform() (1991-default worlds, game year 2012 on)
 // then: parliamentaryGovernmentFormation (government formation after resolution)
 ```
 
@@ -535,7 +539,7 @@ The check: `13 × 3.846% + 8 × 2.5% + 4 × 7.5% = 50% + 20% + 30% = 100%`. This
 
 **Step 3: group split.** One demographic group holds 20% of the total pool contribution, so `groupPool = 68,850 × 0.20 = 13,770`.
 
-**Step 4: candidate weights inside the group.** Direction bonus, org, NPP and infamy factors are left out (equal or neutral) so the three live levers show.
+**Step 4: candidate weights inside the group.** Org, NPP and infamy factors are left out (equal or neutral). The direction bonus is not neutral here and is included: A leans the group's way on both axes, B leans against it on the economic axis. Both candidates' parties agree in sign with them, so the party gate does not suppress it.
 
 | | Candidate A | Candidate B |
 | --- | --- | --- |
@@ -543,24 +547,26 @@ The check: `13 × 3.846% + 8 × 2.5% + 4 × 7.5% = 50% + 20% + 30% = 100%`. This
 | Candidate position | 1, 1 (distance 1) | -1, 1 (distance 3) |
 | `positionRaw = 50 - 5 × distance` | 45 | 35 |
 | Position score `25 × (raw/50)^1.5 + 0.5` | 21.85 | 15.14 |
+| Direction bonus `5 × (factor EP + factor SP)` | 5 × (1 + 1) = 10 | 5 × (0 + 1) = 5 |
+| Appeal | 31.85 | 20.14 |
 | Political influence, reach `sqrt(PI/100)` | 49 → 0.70 | 64 → 0.80 |
 | Favorability, scalar `(fav/100)^0.8` | 60 → 0.665 | 70 → 0.752 |
-| Weight (appeal × reach × approval) | 10.16 | 9.11 |
-| Share of the group pool | 52.74% | 47.26% |
-| Votes from this group | 7,262 | 6,508 |
+| Weight (appeal × reach × approval) | 14.81 | 12.11 |
+| Share of the group pool | 55.01% | 44.99% |
+| Votes from this group | 7,575 | 6,195 |
 
-A has the better policy fit by 44 percent but only a 5.5 point share edge, because B's higher reach and approval claw most of it back. Because approval multiplies the whole weight, a 10 point favorability swing on the last day moves more votes than the same swing in the early band. In the final 4 turns each turn carries 7.5% of the whole pool.
+A's appeal is 58 percent higher (44 percent from position alone, the rest from the direction bonus) but the share edge is only 10 points, because B's higher reach and approval claw most of it back. Without the direction bonus A would win the group only 52.7 to 47.3. Because approval multiplies the whole weight, a 10 point favorability swing on the last day moves more votes than the same swing in the early band. In the final 4 turns each turn carries 7.5% of the whole pool.
 
 **Step 5: spoiler.** If a third candidate (Chen, Green) were also in the race and the group-level allocation gave Adams (Democrat) 400,000, Brooks (Republican) 450,000 and Chen 200,000 across all groups, the nearest major party to Chen by Manhattan distance is Adams. `spoiled = 200,000 × 0.04 = 8,000`. Adams ends at 392,000, Chen at 208,000, Brooks unchanged at 450,000. Under RCV or in a one-party state this step is skipped.
 
-**Step 6: stored result.** The turn's per-candidate votes are rounded and added to `totalVotes`; the snapshot stores `cumulativeVotes` and `sharesPct`, and multi-seat races add `seatsEstimate`. The swing-flow model replaces Step 4 and 5 for generals but keeps the same pool, scaling and caps; this trace uses the group-level allocation because that is the shared foundation and what polls and primaries use.
+**Step 6: stored result.** The turn's per-candidate votes are rounded and added to `totalVotes`; the snapshot stores `cumulativeVotes` and `sharesPct`, and multi-seat races add `seatsEstimate`. The swing-flow model replaces Step 4 for generals but keeps the same pool, scaling and caps, and still runs the Step 5 spoiler afterwards; this trace uses the group-level allocation because that is the shared foundation and what polls and primaries use.
 
 ## Edge cases and limits
 
 - **Zero influence:** reach is floored at 0.1 (`VOTE_REACH_FLOOR`) so a fresh character is a steep disadvantage, not removed from the race.
 - **Zero favorability:** the approval scalar is 0, so the candidate gets 0 votes. This is deliberate ("if voters do not approve of you they will not vote for you").
 - **Zero Org in a populated state:** the party's Org weight is 0, but the personal org floor (`0.1 × reach × approval`) rescues a genuinely supported candidate. No Org data anywhere in the state is a neutral 1.
-- **Pool is conserved:** the pool is split, never inflated. Missing demographics or a total weight of zero fall back to an equal split.
+- **Pool is conserved:** the pool is split, never inflated. A group whose total weight is zero splits its pool equally.
 - **Short races:** if `totalTurns <= ELECTION_DAY_TURNS (4)` the pool is spread evenly. `resolveTurnWindow` floors `totalTurns` at 4. The window must start at the general-election start (`primaryEndTurn`), not the election `startTurn`, or the final-turn share balloons (ticket #955).
 - **No early band:** a window of 12 turns or fewer has `earlyCount = 0`, so the early share folds into the ramp share and the window still sums to the pool.
 - **Spoiler skipped for:** RCV states, one-party states, and any non-general election. The spoiler never transfers more than the nearest major party holds.
@@ -592,8 +598,8 @@ A has the better policy fit by 44 percent but only a 5.5 point share edge, becau
 
 ## Failure and recovery
 
-- **Missing demographics** gives an equal vote split for that election rather than a failure.
-- **Zero total weight** gives an equal vote split.
+- **Missing demographics** or a missing state document: `accumulateVoteTurn` returns without writing, so the election keeps its prior tally for the turn (see below).
+- **Zero total weight** in a group gives an equal split of that group's pool.
 - **Withdrawn candidates** are excluded from vote share calculations; tally cleanup (`removeWithdrawnCandidateFromTally()`) removes votes and data, including every presidential unit tally.
 - **Missing state or tally document:** the turn returns early without writing; the next turn picks the election up again. A tally missing entirely is rebuilt by tally initialization when the election opens or the primary resolves.
 - **A stuck or re-run turn:** the same-turn guard on `turnSnapshots` makes accumulation idempotent, so rerunning the turn does not double count.
@@ -631,7 +637,7 @@ Related code: `src/simulation/phases/turnPhaseRegistry.ts` (orchestrates electio
 | `src/lib/electionEngine/tallyManagement.halfTurn.test.ts` | Early and rest halves across every ballot engine |
 | `src/lib/electionEngine/resolvedTurnout.scalePool.test.ts` | Registered gate and electorate caps |
 | `src/lib/electionEngine/turnoutWiring.integration.test.ts` | Turnout modifiers wired into accumulation |
-| `src/lib/electionEngine/voteDistribution.test.ts` | Group-level allocation, spoiler step |
+| `src/lib/electionEngine/voteDistribution.test.ts`, `src/lib/electionEngine/rules/spoilerTransfers.test.ts` | Group-level allocation, spoiler transfer and gate |
 | `src/lib/electionEngine/voteDistributionSwingFlow.test.ts`, `voteDistributionSwingFlowDiff.test.ts`, `voteDistributionSwingFlowFamilies.test.ts` | Swing-flow allocation, parity with the legacy allocator, race-family coverage |
 | `src/lib/electionEngine/electionFormulaFactors.test.ts` | Org weight, reach floor, registration factors, Support mood, tenure erosion |
 | `src/lib/electionEngine/persuasionDrivers.test.ts`, `medianVoter.test.ts`, `coattailMagnitude.test.ts`, `govCoattail.test.ts`, `presidentialCoattail.test.ts`, `midtermOppositionBoost.test.ts` | Driver modules |
@@ -639,20 +645,21 @@ Related code: `src/simulation/phases/turnPhaseRegistry.ts` (orchestrates electio
 | `src/lib/electionEngine/candidateEnrichment.test.ts` | Enrichment |
 | `src/lib/turn/election/rules/seatEligibility.test.ts` | Multi-seat minimum shares |
 | `src/lib/utils/demographicAppeal.test.ts`, `src/lib/utils/normalizeNPI.test.ts`, `src/lib/utils/infamy.test.ts` | Appeal, reach and infamy math |
-| `src/lib/turn/elections/electionHalfTick.test.ts` | Half-hour tick |
+| `src/lib/turn/elections/electionHalfTick.test.ts`, `src/lib/electionEngine/rules/turnSlice.test.ts` | Half-hour tick, slice planning |
 | `src/lib/presidentialElectionEngine.test.ts` and its `leanMultiplier`, `campaignStrength`, `registration` siblings | Presidential engine |
 
-Known gaps: `approvalVoteMultiplier.ts` and `rules/turnSlice.ts` have no dedicated test files (covered only through the accumulation tests); the sub-phase order of the registry has no test; no test pins the office-strength table per country.
+Known gaps: `approvalVoteMultiplier.ts` has no dedicated test file (covered only through the accumulation tests); the sub-phase order of the registry has no test; no test pins the office-strength table per country.
 
 ## Known issues and history
 
 - **Stale comment in code:** The doc comment on `resolveTurnWindow` still describes a "75/25 closing surge". The live behaviour is the 50/20/30 three-tier surge documented here.
-- **Stale comment in code:** `calcCandidateVotePotential` (`voteCalculations.ts`) describes its appeal as "quadratic position only" with a 0 to 25 range; the live exponent is 1.5 and the ceiling is 50. That helper is a simplified estimator, not the live vote engine.
+- **Stale comment in code:** `calcCandidateVotePotential` (`voteCalculations.ts`) describes its appeal as "quadratic position only" with a 0 to 25 range; the live exponent is 1.5 and appeal is not clamped (it peaks at 35.5 with influence off). That helper is a simplified estimator, not the live vote engine.
 - **Contradiction recorded 2026-10-29 (election window in worked example):** the earlier version of this page (and the player page) computed the pool bands over a 48-turn general window, with 36 early turns at 1.389% each. The shipped general window is 24 turns (`DEFAULT_DURATIONS` in `src/lib/constants/electionDurations.ts`), so the engine window is 25 inclusive slices with 13 early turns at 3.846% each. The final band (7.5% per turn) and the ramp band (2.5% per turn) are unchanged. The player page's "1,389 votes against 7,500" example uses the 48-turn figure and does not match the live early band.
 - **Contradiction recorded 2026-10-29 (pool scaling):** the earlier version did not describe the registered-voter gate or the cumulative electorate ceiling, both of which change reported magnitudes (not shares).
 - **Contradiction recorded 2026-10-29 (lean multiplier):** the earlier Elections page presented the presidential state-lean multiplier as always on. It applies only to ruleset v1 and v2 races.
+- **Fixed 2026-10-30 (one-party spoiler, AHDGame #5198):** the swing-flow engine checked only for RCV before running the spoiler step, so one-party general elections still moved votes from the ruling party to approved parties. Both engines now share one gate that reads the runtime government type. Earlier versions of this page also claimed appeal was capped at 50, that position blending was swing-flow only, that missing demographics gave an equal split, and left the direction bonus out of the worked example. Those claims were wrong and have been corrected.
 - **Presidential coattail** is US-only; other heads of government are not yet wired in.
 - **Midterm opposition boost** is gated to UK Regional Council midterms only.
 - **History:** the partyOrgScalar retired 2026-06-18 in favour of `orgVoteWeight`; swing-flow became the presidential vote model on 2026-06-18; the three-tier closing surge replaced the bell curve; ticket #955 fixed the window anchor; the inclusive final slice fixed the over-100% turnout case; half-turn slices and the half-hour tick are the most recent addition. Exact dates for the surge and the half-tick are not recorded in the code.
 
-Last checked: 2026-10-29, version 1.18.0
+Last checked: 2026-10-30, version 1.18.0
