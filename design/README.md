@@ -37,6 +37,7 @@ snap-election rules, and vacancy handling.
 
 ## Documentation Structure
 
+- [Units, money and time (as shipped)](./units-and-money-as-shipped.md) - Which currency, period and era scale every money and quantity number uses
 - [Global Response Crises (as shipped)](./global-response-crises-as-shipped.md) - Persistent international campaigns, global tension, nuclear integration, and release seeding
 - [Technical Architecture](./technical-architecture.md) - Current implementation
   (Next.js, MongoDB, cron, collections)
