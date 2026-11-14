@@ -1,91 +1,70 @@
 # Elections
 
-Margin of Victory has 49 elections in six countries. Each one has its own candidates, parties, map, starting position and historical events. This page lists them, says how each country is won, and says which ones are free and which are not.
+Margin of Victory has 131 elections in 14 countries, from 1932 to 2027. Each one has its own candidates, parties, map, starting position and historical events. This page lists the countries, says how each is won, and says which elections are free and which are not.
 
 ## Access
 
+The store sets prices, and they can change, so this page describes how access works and the store shows the current price. At the time of writing:
+
 | What | Price | Includes |
 | --- | --- | --- |
-| Free | $0 | US 2024, US 2020 and the daily challenge |
-| Country bundle | $0.99 each | United States (15 more races, 1960 to 2016), United Kingdom (18), Canada (4), Germany (3), France (4), Australia (3) |
-| Complete Collection | $3.99 | Every country bundle, including elections added later |
-| Supporter+ and Supporter++ | Your plan | Include the Complete Collection while the plan is active |
+| Free elections | $0 | One election in every country (15 in all, since the United States has two) and the daily challenge |
+| Country pack | $0.99 each | Every other election of that country |
+| Complete Collection | $3.99 | All 131 elections, including every country and election added later |
+| Supporter, Supporter+ and Champion plans | Your plan | Include the Complete Collection while the plan is active |
 
-Prices are the web store's. Phone and Steam stores follow the same bundles and may show different local prices. Bundles are one-time purchases. Anyone who owned the retired Global pack keeps Canada, Germany, France and Australia. Locked elections show an Unlock prompt where you can buy or redeem a code (see [Getting started](getting-started.md)).
+The free election in each country is its newest one, so you can try every country before you buy anything: the United States 2020 and 2024, the United Kingdom 2024, Canada 2025, Germany 2025, France 2022, Australia 2025, New Zealand 2023, Brazil 2022, India 2024, Spain 2023, Ireland 2024, Japan 2024, Italy 2022 and Mexico 2024.
+
+Packs and the Complete Collection are one-time purchases that follow your Lakeside account across devices. Anyone who owned the retired Global pack keeps its elections. Locked elections show an Unlock prompt where you can buy or redeem a code (see [Getting started](getting-started.md)). The live catalog is at https://sim.ahousedividedgame.com/api/catalog.
 
 ## How each country is won
 
-| Country | Elections | How it is decided | Bar to win |
-| --- | --- | --- | --- |
-| United States | 17 | Electoral College, state by state | 270 of 538 electoral votes |
-| United Kingdom | 18 | First past the post, seat by seat | A Commons majority, 326 of 650 in recent elections |
-| Canada | 4 | First past the post across provinces and territories | 172 of 343 seats in 2025 |
-| Germany | 3 | Proportional representation in the Bundestag | 316 of 630 seats in 2025, usually through a coalition |
-| France | 4 | Two-round presidential election | A majority in the runoff |
-| Australia | 3 | Preferential voting for the House of Representatives | 76 of 150 seats in 2025 |
+| Country | Elections | Years | How it is decided | Free election |
+| --- | --- | --- | --- | --- |
+| United States | 24 | 1932 to 2024 | Electoral College, state by state, 270 of 538 electoral votes | 2020 and 2024 |
+| United Kingdom | 18 | 1951 to 2024 | First past the post, seat by seat | 2024 |
+| Canada | 12 | 1984 to 2025 | First past the post across provinces and territories | 2025 |
+| Germany | 10 | 1990 to 2025 | Mixed-member proportional representation, usually a coalition | 2025 |
+| France | 9 | 1981 to 2027 | Two-round presidential election, a majority in the runoff | 2022 |
+| Australia | 11 | 1996 to 2025 | Preferential voting for the House of Representatives | 2025 |
+| New Zealand | 6 | 2008 to 2023 | Mixed-member proportional representation | 2023 |
+| Brazil | 6 | 2002 to 2022 | Two-round presidential election | 2022 |
+| India | 6 | 1999 to 2024 | First past the post for the Lok Sabha | 2024 |
+| Spain | 6 | 2011 to 2023 | Proportional representation by province | 2023 |
+| Ireland | 5 | 2007 to 2024 | Single transferable vote | 2024 |
+| Japan | 8 | 2005 to 2026 | Parallel voting (single-member and list seats) | 2024 |
+| Italy | 5 | 2006 to 2022 | Electoral laws that change between elections | 2022 |
+| Mexico | 5 | 2000 to 2024 | President elected in one round, most votes wins | 2024 |
 
-Every state is winner-take-all in a US race except Maine and Nebraska, which give one vote to the winner of each congressional district and two to the statewide winner. Details are on [Polls and scoring](polls-and-scoring.md).
+The game has ten voting systems, and the Voting Systems tab in the in-game guide explains each once, with the countries that use it. Majority bars differ by election, because each election uses the chamber size of its year. Every state is winner-take-all in a US race except Maine and Nebraska, which give one vote to the winner of each congressional district and two to the statewide winner. Details are on [Polls and scoring](polls-and-scoring.md).
 
-## United States (17)
+## The elections by country
 
-1960 Kennedy v. Nixon, 1964 Johnson v. Goldwater, 1968 Humphrey v. Nixon, 1972 McGovern v. Nixon, 1976 Carter v. Ford, 1980 Carter v. Reagan, 1984 Mondale v. Reagan, 1988 Dukakis v. Bush, 1992 Clinton v. Bush, 1996 Clinton v. Dole, 2000 Gore v. Bush, 2004 Bush v. Kerry, 2008 Obama v. McCain, 2012 Obama v. Romney, 2016 Clinton v. Trump, 2020 Biden v. Trump, 2024 Harris v. Trump.
+- **United States (24):** 1932, 1936, 1940, 1944, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024.
+- **United Kingdom (18):** 1951, 1964, 1966, 1970, February 1974, October 1974, 1979, 1983, 1987, 1992, 1997, 2001, 2005, 2010, 2015, 2017, 2019, 2024.
+- **Canada (12):** 1984, 1988, 1993, 2000, 2004, 2006, 2008, 2011, 2015, 2019, 2021, 2025.
+- **Germany (10):** 1990, 1994, 1998, 2002, 2005, 2009, 2013, 2017, 2021, 2025.
+- **France (9):** 1981, 1988, 1995, 2002, 2007, 2012, 2017, 2022, 2027.
+- **Australia (11):** 1996, 1998, 2001, 2004, 2007, 2010, 2013, 2016, 2019, 2022, 2025.
+- **New Zealand (6):** 2008, 2011, 2014, 2017, 2020, 2023.
+- **Brazil (6):** 2002, 2006, 2010, 2014, 2018, 2022.
+- **India (6):** 1999, 2004, 2009, 2014, 2019, 2024.
+- **Spain (6):** 2011, 2015, 2016, April 2019, November 2019, 2023.
+- **Ireland (5):** 2007, 2011, 2016, 2020, 2024.
+- **Japan (8):** 2005, 2009, 2012, 2014, 2017, 2021, 2024, 2026.
+- **Italy (5):** 2006, 2008, 2013, 2018, 2022.
+- **Mexico (5):** 2000, 2006, 2012, 2018, 2024.
 
-## United Kingdom (18)
-
-1951 Churchill's comeback, 1964 Wilson v. Douglas-Home, 1966 Wilson's landslide, 1970 Heath's upset, February 1974 Who governs Britain?, October 1974 Wilson's slim majority, 1979 Winter of Discontent, 1983 The Falklands election, 1987 Thatcher's third, 1992 Major's surprise, 1997 Things Can Only Get Better, 2001 The quiet landslide, 2005 Blair's third act, 2010 The TV-debate election, 2015 Cameron v. Miliband, 2017 May's gamble, 2019 Get Brexit Done, 2024 Starmer's landslide.
-
-## Canada (4)
-
-2015 Trudeau v. Harper, 2019 Trudeau v. Scheer, 2021 Trudeau v. O'Toole, 2025 Carney v. Poilievre.
-
-## Germany (3)
-
-2017 Merkel v. Schulz, 2021 Scholz v. Laschet, 2025 Merz v. Scholz.
-
-## France (4)
-
-2012 Hollande v. Sarkozy, 2017 Macron v. Le Pen, 2022 Macron v. Le Pen, 2027 The Republic's runoff.
-
-## Australia (3)
-
-2019 Morrison v. Shorten, 2022 Albanese v. Morrison, 2025 Albanese v. Dutton.
+Each campaign has its own issues, named the way people talked about them that year, and its events happen in the weeks they really happened. Regional parties play as regional parties.
 
 ## Where to start
 
-Each election carries a difficulty tag showing how hard it is to rewrite history on Normal as the historical underdog. Easy means a genuine toss-up winnable from either side. Hard means a decisive result you are fighting.
-
-- **United States:** US 2020 is the original campaign and is free. Easy: 2020, 2016, 2012, 2000 and 1960. Landslide years such as 1964, 1972 and 1984 carry a "historical tide" warning.
-- **United Kingdom:** Easy: 1964, February 1974, 2010 and 2017. Medium: 1970 and October 1974. 1983, 1997, 2001 and 2024 are landslides.
-- **Canada:** 2025 and 2021 are easy, 2019 and 2015 are hard.
-- **Australia:** 2022 is medium, 2019 and 2025 are hard.
-- **Germany and France:** every election is hard, and France 2017 is a landslide.
+Each election carries a difficulty tag in the picker showing how hard it is to rewrite history on Normal as the historical underdog. Easy means a genuine toss-up winnable from either side. Hard means a decisive result you are fighting. Some decisive results carry a "historical tide" warning. Every country has a free election, so start with the one from a country you know.
 
 ## Related pages
 
 - [The campaign week](the-campaign-week.md): how a turn works in a US election. The chosen election sets the candidates' energy, running mates, events and map.
 - [Voter blocs](voter-blocs.md): the electorate each state starts from.
-- [Polls and scoring](polls-and-scoring.md): how the result and your score are counted in each country.
+- [Polls and scoring](polls-and-scoring.md): how the result and your score are counted.
 
-Last checked: 2026-10-29, version October 2026 release
-
-## Exact rules
-
-| Fact | Value | Source |
-| --- | --- | --- |
-| Free elections | `us-2024`, `us-2020` | `src/content/scenarioRegistry.ts` |
-| Country bundle price | 99 cents each | `src/content/packs.ts` |
-| Complete Collection price | 399 cents | `src/content/packs.ts` |
-| Paid US races in the bundle | 15 (1960 to 2016) | `src/content/packs.ts` |
-| UK, Canada, Germany, France, Australia | 18, 4, 3, 4, 3 | `src/content/packs.ts` |
-| Retired Global pack | Canada, Germany, France, Australia, no longer sold | `src/content/packs.ts` |
-| Supporter+ and Supporter++ | Complete Collection | `CHANGELOG.md` |
-| Electoral votes in total | 538 | `src/content/states.ts` |
-| UK 2024 majority | 326 of 650 | `src/content/uk/elections.ts` |
-| Canada 2025 majority | 172 of 343 | `src/content/countries/canada.ts` |
-| Germany 2025 majority | 316 of 630 | `src/content/countries/germany.ts` |
-| France runoff | 51 of 100 points | `src/content/countries/france.ts` |
-| Australia 2025 majority | 76 of 150 | `src/content/countries/australia.ts` |
-| Difficulty tags | Per election: easy, medium, hard | `src/content/scenarioRegistry.ts` |
-| Historical tide warning | us-1964, us-1972, us-1984, uk-1983, uk-1997, uk-2001, uk-2024, fr-2017 | `src/content/scenarioRegistry.ts` |
-
-Majority bars differ by election: UK elections range from 313 of 625 (1951) to 330 of 659 (1997 and 2001), the three Canadian elections before 2025 use 170 of 338, Germany 2021 uses 368 of 735 and 2017 uses 355 of 709, and the earlier Australian elections use 76 of 151. Each is set in the country's data file under `src/content/countries/` or, for the UK, `src/content/uk/elections.ts`.
+Last checked: 2026-11-14, version 2.0

@@ -57,7 +57,7 @@ export const SATELLITES = [
     logo: "games/corporate-warfare/logo.png",
     askGame: "corporate-warfare",
     tagline:
-      "An offline, single-player economic strategy game. Build a holding company, fight named rivals for every market, and ride business cycles, elections and world commodity prices across four historical scenarios. Free while in development.",
+      "An offline, single-player economic strategy game. Build a holding company, fight named rivals for every market, and ride business cycles, elections and world commodity prices across four historical scenarios. A paid game, $14.99 in the Lakeside store, installed through the Lakeside launcher.",
     excluded: [],
     sections: [
       {
@@ -70,6 +70,7 @@ export const SATELLITES = [
               "games/corporate-warfare/overview.md",
               "games/corporate-warfare/getting-started.md",
               "games/corporate-warfare/scenarios.md",
+              "games/corporate-warfare/careers.md",
             ],
           },
         ],
@@ -191,16 +192,16 @@ export const SATELLITES = [
     base: "/g/margin-of-victory",
     // The game repo's docs tree is release, store and port planning, not player
     // docs. The player guide lives here, sourced from the game's README,
-    // CHANGELOG, in-game guide and scenario registry. The web game keeps its
-    // old /games/electioneer/ address for saves and purchases.
+    // CHANGELOG, in-game guide and scenario registry. The web game moved to
+    // /games/margin-of-victory/ and the old /games/electioneer/ address redirects.
     repo: DOCS_REPO,
-    site: "https://lakesidegames.net/games/electioneer/",
+    site: "https://lakesidegames.net/games/margin-of-victory/",
     github: "https://github.com/lakesidegamedev/MOVGame",
     logo: "games/margin-of-victory/logo.png",
     // Ask still keys this game by its old id and shows it as Margin of Victory.
     askGame: "electioneer",
     tagline:
-      "A single-player, turn-based election campaign game: 49 real elections across six countries, 1951 to 2027. You are the campaign manager.",
+      "A single-player, turn-based election campaign game: 131 real elections across 14 countries, 1932 to 2027. You are the campaign manager. The newest election of every country is free.",
     excluded: [],
     sections: [
       {
