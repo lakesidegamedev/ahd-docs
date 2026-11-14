@@ -44,6 +44,17 @@ A good's price is set by its seller. On automatic pricing it follows sell-throug
 
 Local sellers therefore sit under the import price once freight is added, and local goods win. When local supply covers demand, the price eases back toward its reference.
 
+### Why prices move
+
+Version 2.0 made prices move for reasons you can read. The Markets screen can say in plain words why a good's price moved this quarter, such as a shortage with imports past the ports' normal room, a glut, buyers short of inputs, new plants or the world price. Behind that:
+
+- **The outside world.** Raw materials and manufactured goods follow the outside world's price and inflation instead of sitting at their opening price, so a world steel boom or an oil bust reaches the whole corridor.
+- **Weather in world prices.** In a game that plays history with variance (the default for every scenario and for custom games), oil, gas, coal, metals, grain, fertilizer, chemicals, timber, rare earths, building materials, components, power and manufactured goods each drift around their historical path week to week, commodities a lot and manufactured goods a little. A traded good's price now moves 15 to 21 percent within a typical year. The dated history still shows through: the 1986 oil collapse in Texas is a collapse in every game. When the world pushes a price well off its path, the price reason says why, for example "A cold winter lifts natural gas". The same seed always plays the same world.
+- **Ports have limits.** When the corridor leans hard on imports the last shipments cost more and home prices rise toward them. When it floods the ports with exports the last shipments sell cheap and home prices fall. Every firm exporting through the same port in a week is paid the same average price.
+- **Services and shops price on their street.** A region short of a service pays a little more and an overbuilt one pays less. Services may charge up to 30 percent over their usual price when households go without, and stores and other sellers with no import to compete with up to 50 percent. A new plant brings the price back down.
+- **Demand follows the economy.** In a recession, orders for steel, building materials, vehicles, machines and advertising drop hard, while food, care and utilities barely move. Goods bought to invest also follow how easy credit is. The market screen says why ("recession: orders for steel are down 14 percent").
+- **Building costs move too.** A new plant costs what building costs today, so a commodity boom makes new mills dearer for everyone, not just their output.
+
 ### World prices
 
 Eleven families of goods have a world price that moves every week: oil and fuel, natural gas, coal, iron ore and metals, steel, grain and farm output, fertilizer, chemicals and plastics, timber, rare earths and building materials. In Silicon Valley, chips and electronics follow a path too. The world price sets what gateways charge and pay. The path is chosen when you start a game:
@@ -106,7 +117,7 @@ Tips: store goods before an expected price rise and sell into a spike; spoilage 
 
 Live in every scenario and difficulty. What differs by scenario is the default world price path: Historical in Great Lakes 2000 and Ruhr and Rhine 1991, Historical with variance in Texas Oil Patch 1981 and Silicon Valley 1995 (see [Scenarios](scenarios.md)). The strategic reserve and production quotas depend on which party is in government.
 
-Last checked: 2026-10-29, version 1.8.0
+Last checked: 2026-11-14, version 2.0.2
 
 Technical detail: every constant, formula and source file is in [Exact rules](#exact-rules) at the end of this page.
 

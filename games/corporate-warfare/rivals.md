@@ -42,9 +42,17 @@ Each week a grudge loses 1 percent of its strength plus 1 point. It counts as ac
 
 A rival's dossier, on its stock page or a region board, lists its grudges, its friends and its recent moves.
 
+### How rivals grow and fail
+
+Rivals play by the same rules you do. They read the same sector board you see: for goods, the imports a home plant would replace, and for services and shops, the households in a region who found no seller. Cautious rivals wait for proof of room, builders move early, and a company with spare cash opens new businesses where a large gap stays open. A rival that sees room for several blocks builds one plant the size of the gap (up to eight blocks) instead of a string of small ones. Raiding is left to the aggressive temperaments, while builders and the cautious compete by building.
+
+Rivals also close plants that lose money and pay out cash they have no use for, so a company that stops investing stops growing. When a company goes bust, its plants that could still run are auctioned for four weeks (you can bid, or list your own), and a rival can fold in a company it owns nine tenths of, paying the last outside shareholders fair value in cash. See [Your holding company](companies.md).
+
 ### Raids
 
 A raid is a marketing campaign against a rival's division in a market you both serve, to take some of its plants.
+
+**Raids come with four weeks of warning.** A rival that wants part of your business has to announce it first. Its budget is locked up the day it announces, and the raid is decided four weeks later against the defence you have by then, so raising your marketing during the warning really does cut its chance. You get an alert naming the raider, the business and region, how many blocks are at stake, their chance today, the weeks left and what extra marketing would cost and do. Your own raids work the same way: you can see them waiting and call one off, though the budget is lost all the same. A company's only block is far harder to take, because the chance falls as the share of the whole company at stake grows.
 
 ![Line chart of raid success chance and share of the division at stake against the attack to defence ratio.](images/rivals-raid-odds.svg)
 
@@ -116,7 +124,7 @@ Tips: a whole-division raid wins only 15 percent as often as the base chance, so
 
 Live in every scenario. The roster of rivals depends on the scenario (see [Scenarios](scenarios.md)), and the cast has a home scenario for each person. Aggression depends on difficulty: Easy rivals never attack your markets, Standard rivals include some fighters and Hard rivals all fight. Raids and bids across a currency line are impossible (see [Currencies](currencies.md)).
 
-Last checked: 2026-10-29, version 1.8.0
+Last checked: 2026-11-14, version 2.0.2
 
 Technical detail: every constant, formula and source file is in [Exact rules](#exact-rules) at the end of this page.
 

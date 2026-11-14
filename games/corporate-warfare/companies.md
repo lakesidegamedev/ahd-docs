@@ -53,6 +53,15 @@ Two groups can co-own a division as a joint venture. The proposer takes 20 to 80
 
 Partners become allies, which rivals remember: a rival asks old partners first to share a project, and a rival skips raids and bids on a friend only while the tie is strong (see [Rivals](rivals.md)).
 
+### Plants change hands
+
+Plants are bought and sold for real money, and nothing is made out of thin air.
+
+- **When a company goes bust**, each plant that could still run is offered for four weeks, and the best sealed bid at the deadline buys it as a working plant with its staff. A plant nobody bids more than its scrap value for (40 percent of its book value) is scrapped. Everything a plant fetches goes to the failed company's lenders and other creditors in the usual order before shareholders see anything. You get a letter from the liquidator and an alert listing each plant, its book and scrap value, what it would earn your company a week and the deadline, and you can bid through one of your companies.
+- **You can list your own plant for sale.** It keeps running for the four weeks, then you see every bid and either accept the best or keep the plant. Rivals list plants they have kept closed for half a year the same way, so you can bid for those too.
+- **Selling needs a buyer.** A plant you sell is offered to the rival companies that could run it at a profit and can pay. The best offer buys it, the cash comes out of the buyer's pocket and the plant keeps running under its new owner. Before you sell you can see every offer and what the plant stands at on your books. If nobody wants it, it is written off for nothing.
+- **Mergers.** A company you own nine tenths of can be folded into its owner: the last outside shareholders are paid fair value in cash, and the plants, debts and contracts move over. Rivals do the same, at most once a year and only with cash to spare.
+
 ### Money
 
 - **Loans** from banks, priced by your credit.
@@ -88,7 +97,7 @@ Partners become allies, which rivals remember: a rival asks old partners first t
 - **Answer the board and activists** from the Inbox.
 - **Propose or leave a joint venture** from the Command Center or a rival's stock page.
 - **Issue and trade bonds** from Markets, bond list.
-- **If your last company fails.** Your career continues. With less than $25,000 in cash and no company, you can accept a management contract once every 260 weeks: a $100,000 signing bonus and a seat running an unowned company. Scores after it are marked as assisted.
+- **If your last company fails.** Your game continues, but a career can end (see [Careers and ambitions](careers.md)). With less than $25,000 in cash and no company, you can accept a management contract once every 260 weeks: a $100,000 signing bonus and a seat running an unowned company. Scores after it are marked as assisted.
 
 Tips: to get control back after dilution, buy shares on the exchange until you pass 50 percent; keep your stake above that before approving large share issues; and do not let your debt run past 60 percent of tangible assets if you want to avoid a board vote.
 
@@ -116,7 +125,7 @@ Tips: to get control back after dilution, buy shares on the exchange until you p
 
 Live in every scenario and difficulty. Rival behaviour changes with difficulty (see [Rivals](rivals.md)), but the rules on this page are the same everywhere. Merger review thresholds depend on which party is in government (see [Governments and market laws](governments.md)). Cross-currency limits matter only in Ruhr and Rhine.
 
-Last checked: 2026-10-29, version 1.8.0
+Last checked: 2026-11-14, version 2.0.2
 
 Technical detail: every constant, formula and source file is in [Exact rules](#exact-rules) at the end of this page.
 
